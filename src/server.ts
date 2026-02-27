@@ -1,0 +1,60 @@
+import app from './app';
+import envConfig from '@config/env.config';
+import databaseConfig from '@config/database.config';
+import logger from '@shared/utils/logger.util';
+
+const PORT = envConfig.get().port;
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error: Error) => {
+    logger.error('UNCAUGHT EXCEPTION! 💥 Shutting down...', error);
+    process.exit(1);
+});
+
+// Start server
+const startServer = async () => {
+    try {
+        // Connect to database
+        await databaseConfig.connect();
+
+        // Start Express server
+        const server = app.listen(PORT, () => {
+            logger.info(`
+        ╔═══════════════════════════════════════════════════════╗
+        ║                                                       ║
+        ║   🚀 Proactiv Fitness Platform API                   ║
+        ║                                                       ║
+        ║   Environment: ${envConfig.get().nodeEnv.padEnd(37)}║
+        ║   Port: ${PORT.toString().padEnd(44)}║
+        ║   API Version: ${envConfig.get().apiVersion.padEnd(38)}║
+        ║                                                       ║
+        ║   Server is running at:                              ║
+        ║   http://localhost:${PORT}                              ║
+        ║                                                       ║
+        ╚═══════════════════════════════════════════════════════╝
+      `);
+        });
+
+        // Handle unhandled promise rejections
+        process.on('unhandledRejection', (error: Error) => {
+            logger.error('UNHANDLED REJECTION! 💥 Shutting down...', error);
+            server.close(() => {
+                process.exit(1);
+            });
+        });
+
+        // Graceful shutdown
+        process.on('SIGTERM', () => {
+            logger.info('👋 SIGTERM received. Shutting down gracefully...');
+            server.close(async () => {
+                await databaseConfig.disconnect();
+                logger.info('Process terminated!');
+            });
+        });
+    } catch (error) {
+        logger.error('Failed to start server:', error);
+        process.exit(1);
+    }
+};
+
+startServer();
