@@ -32,6 +32,7 @@ Thumbs.db
 *.swo
 *~
 
+
 # Testing
 coverage/
 .nyc_output/
@@ -48,3 +49,8 @@ temp/
 *.pid
 *.seed
 *.pid.lock
+
+# Documentation files (remove from tracking)
+*.md
+**/*.md
+!README.md
