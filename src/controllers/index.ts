@@ -34,3 +34,6 @@ export { AutomationController } from './automation.controller';
 // Phase 5 Controllers
 export { StaffController } from './staff.controller';
 export { AttendanceController } from './attendance.controller';
+
+// Phase 6 Controllers
+export { SafetyController } from './safety.controller';

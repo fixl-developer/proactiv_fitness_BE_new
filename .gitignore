@@ -53,4 +53,4 @@ temp/
 # Documentation files (remove from tracking)
 *.md
 **/*.md
-!README.md
+

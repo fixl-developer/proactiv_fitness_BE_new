@@ -25,7 +25,8 @@ router.get('/', (_req: Request, res: Response) => {
             eventBus: 'active',
             automation: 'active',
             staff: 'active',
-            attendance: 'active'
+            attendance: 'active',
+            safety: 'active'
         },
         timestamp: new Date().toISOString()
     });
@@ -48,7 +49,8 @@ router.get('/health', (_req: Request, res: Response) => {
             eventBus: 'healthy',
             automation: 'healthy',
             staff: 'healthy',
-            attendance: 'healthy'
+            attendance: 'healthy',
+            safety: 'healthy'
         },
         timestamp: new Date().toISOString()
     });
@@ -128,6 +130,11 @@ router.get('/staff', (_req: Request, res: Response) => {
 
 router.get('/attendance', (_req: Request, res: Response) => {
     res.json({ message: 'Attendance routes - Phase 5 complete' });
+});
+
+// Phase 6 placeholder routes
+router.get('/safety', (_req: Request, res: Response) => {
+    res.json({ message: 'Safety routes - Phase 6 complete' });
 });
 
 export default router;
