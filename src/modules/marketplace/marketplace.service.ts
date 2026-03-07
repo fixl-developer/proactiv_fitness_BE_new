@@ -1,0 +1,1 @@
+﻿import { Product } from './marketplace.model'; export class MarketplaceService { async createProduct(data: any) { const product = new Product(data); return await product.save(); } async getProducts(filters: any = {}) { return await Product.find(filters); } async getProductById(id: string) { return await Product.findById(id); } }

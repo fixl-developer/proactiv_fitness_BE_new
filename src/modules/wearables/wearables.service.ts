@@ -1,0 +1,1 @@
+﻿import { WearableData } from './wearables.model'; export class WearablesService { async syncData(data: any) { const record = new WearableData(data); return await record.save(); } async getData(userId: string) { return await WearableData.find({ userId }).sort({ syncedAt: -1 }); } }

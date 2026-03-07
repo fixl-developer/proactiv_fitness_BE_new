@@ -1,0 +1,1 @@
+﻿import { Router } from 'express'; import { ApiPlatformController } from './api-platform.controller'; const router = Router(); const controller = new ApiPlatformController(); router.post('/api-keys', controller.createApiKey); router.get('/api-keys/:userId', controller.getApiKeys); export default router;
