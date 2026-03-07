@@ -1,1 +1,0 @@
-﻿import { Tenant } from './saas.model'; export class SaasService { async createTenant(data: any) { const tenant = new Tenant(data); return await tenant.save(); } async getTenants() { return await Tenant.find(); } async getTenantByDomain(domain: string) { return await Tenant.findOne({ domain }); } }

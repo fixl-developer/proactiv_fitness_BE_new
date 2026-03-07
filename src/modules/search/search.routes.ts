@@ -1,1 +1,0 @@
-﻿import { Router } from 'express'; import { SearchController } from './search.controller'; const router = Router(); const controller = new SearchController(); router.get('/search', controller.search); router.get('/history/:userId', controller.getHistory); export default router;

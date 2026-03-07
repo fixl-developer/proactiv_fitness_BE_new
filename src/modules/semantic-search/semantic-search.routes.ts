@@ -1,1 +1,0 @@
-﻿import { Router } from 'express'; import { SemanticSearchController } from './semantic-search.controller'; const router = Router(); const controller = new SemanticSearchController(); router.post('/search', controller.search); router.post('/embeddings', controller.createEmbedding); export default router;
