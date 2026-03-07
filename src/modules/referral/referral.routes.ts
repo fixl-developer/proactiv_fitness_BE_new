@@ -1,0 +1,1 @@
+﻿import { Router } from 'express'; import { ReferralController } from './referral.controller'; const router = Router(); const controller = new ReferralController(); router.post('/referrals', controller.createReferral); router.get('/referrals/:referrerId', controller.getReferrals); export default router;

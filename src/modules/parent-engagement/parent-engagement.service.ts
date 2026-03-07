@@ -1,0 +1,1 @@
+﻿import { ParentUpdate } from './parent-engagement.model'; export class ParentEngagementService { async createUpdate(data: any) { const update = new ParentUpdate(data); return await update.save(); } async getUpdates(parentId: string) { return await ParentUpdate.find({ parentId }).sort({ createdAt: -1 }); } }

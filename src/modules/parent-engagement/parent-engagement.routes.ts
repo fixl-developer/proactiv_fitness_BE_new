@@ -1,0 +1,1 @@
+﻿import { Router } from 'express'; import { ParentEngagementController } from './parent-engagement.controller'; const router = Router(); const controller = new ParentEngagementController(); router.post('/updates', controller.createUpdate); router.get('/updates/:parentId', controller.getUpdates); export default router;
