@@ -1,1 +1,0 @@
-﻿import { Translation } from './i18n.model'; export class I18nService { async getTranslations(language: string) { return await Translation.find({ language }); } async setTranslation(data: any) { return await Translation.findOneAndUpdate({ key: data.key, language: data.language }, data, { upsert: true, new: true }); } }
