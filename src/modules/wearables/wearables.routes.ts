@@ -1,1 +1,0 @@
-﻿import { Router } from 'express'; import { WearablesController } from './wearables.controller'; const router = Router(); const controller = new WearablesController(); router.post('/sync', controller.syncData); router.get('/:userId', controller.getData); export default router;

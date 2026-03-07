@@ -1,1 +1,0 @@
-﻿import Joi from 'joi'; export const createUpdateSchema = Joi.object({ athleteId: Joi.string().required(), parentId: Joi.string().required(), type: Joi.string().valid('video', 'photo', 'milestone').required(), content: Joi.string() });
