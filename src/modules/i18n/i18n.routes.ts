@@ -1,0 +1,1 @@
+﻿import { Router } from 'express'; import { I18nController } from './i18n.controller'; const router = Router(); const controller = new I18nController(); router.get('/:language', controller.getTranslations); router.post('/translations', controller.setTranslation); export default router;

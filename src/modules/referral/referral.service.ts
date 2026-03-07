@@ -1,0 +1,1 @@
+﻿import { Referral } from './referral.model'; export class ReferralService { async createReferral(data: any) { const referral = new Referral(data); return await referral.save(); } async getReferrals(referrerId: string) { return await Referral.find({ referrerId }); } }
