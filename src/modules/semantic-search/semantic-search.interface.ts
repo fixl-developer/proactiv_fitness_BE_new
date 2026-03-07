@@ -1,1 +1,0 @@
-﻿export interface ISemanticQuery { query: string; context?: string; topK?: number; } export interface IEmbedding { _id?: string; entityId: string; entityType: string; embedding: number[]; metadata?: any; }
