@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import authController from './auth.controller';
+import parentRegistrationController from './parent-registration.controller';
 import { validate } from '@middleware/validation.middleware';
 import { authLimiter } from '@middleware/rate-limit.middleware';
 import { authenticate } from './auth.middleware';
@@ -21,6 +22,25 @@ router.post(
     authLimiter,
     validate(registerValidation),
     authController.wrap(authController.register)
+);
+
+// Parent registration (multi-step from frontend)
+router.post(
+    '/register/parent',
+    authLimiter,
+    parentRegistrationController.wrap(parentRegistrationController.registerParent)
+);
+
+router.post(
+    '/register/check-email',
+    authLimiter,
+    parentRegistrationController.wrap(parentRegistrationController.checkEmailAvailability)
+);
+
+router.post(
+    '/register/save-progress',
+    authLimiter,
+    parentRegistrationController.wrap(parentRegistrationController.saveRegistrationProgress)
 );
 
 router.post(

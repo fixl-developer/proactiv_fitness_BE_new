@@ -54,3 +54,4 @@ temp/
 *.md
 **/*.md
 
+backend/.git/
