@@ -1,1 +1,0 @@
-﻿import { Router } from 'express'; import { MarketplaceController } from './marketplace.controller'; const router = Router(); const controller = new MarketplaceController(); router.post('/products', controller.createProduct); router.get('/products', controller.getProducts); export default router;
