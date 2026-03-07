@@ -1,1 +1,0 @@
-﻿import { Embedding } from './semantic-search.model'; export class SemanticSearchService { async createEmbedding(data: any) { return await Embedding.findOneAndUpdate({ entityId: data.entityId, entityType: data.entityType }, data, { upsert: true, new: true }); } async semanticSearch(query: ISemanticQuery) { return { results: [], scores: [] }; } }

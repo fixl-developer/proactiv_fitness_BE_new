@@ -1,1 +1,0 @@
-﻿import { Router } from 'express'; import { SaasController } from './saas.controller'; const router = Router(); const controller = new SaasController(); router.post('/tenants', controller.createTenant); router.get('/tenants', controller.getTenants); export default router;

@@ -1,1 +1,0 @@
-﻿import mongoose, { Schema } from 'mongoose'; const searchHistorySchema = new Schema({ userId: String, query: String, filters: Schema.Types.Mixed, resultCount: Number }, { timestamps: true }); export const SearchHistory = mongoose.model('SearchHistory', searchHistorySchema);
