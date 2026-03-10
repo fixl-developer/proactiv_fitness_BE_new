@@ -25,7 +25,7 @@ declare global {
 /**
  * Authenticate user using JWT token
  */
-export const authenticate = async (req: Request, res: Response, next: NextFunction) => {
+export const authenticate = async (req: Request, _res: Response, next: NextFunction) => {
     try {
         // Get token from header
         const authHeader = req.headers.authorization;
@@ -77,7 +77,7 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
  * Authorize user based on roles
  */
 export const authorize = (...roles: UserRole[]) => {
-    return (req: Request, res: Response, next: NextFunction) => {
+    return (req: Request, _res: Response, next: NextFunction) => {
         if (!req.user) {
             return next(new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED));
         }
@@ -95,7 +95,7 @@ export const authorize = (...roles: UserRole[]) => {
 /**
  * Optional authentication - doesn't fail if no token
  */
-export const optionalAuth = async (req: Request, res: Response, next: NextFunction) => {
+export const optionalAuth = async (req: Request, _res: Response, next: NextFunction) => {
     try {
         const authHeader = req.headers.authorization;
 
@@ -127,7 +127,7 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
  * Check if user owns the resource
  */
 export const checkOwnership = (userIdParam: string = 'id') => {
-    return (req: Request, res: Response, next: NextFunction) => {
+    return (req: Request, _res: Response, next: NextFunction) => {
         if (!req.user) {
             return next(new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED));
         }
@@ -156,7 +156,7 @@ export const checkOwnership = (userIdParam: string = 'id') => {
 /**
  * Check tenant access
  */
-export const checkTenantAccess = (req: Request, res: Response, next: NextFunction) => {
+export const checkTenantAccess = (req: Request, _res: Response, next: NextFunction) => {
     if (!req.user) {
         return next(new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED));
     }
@@ -181,8 +181,11 @@ export const checkTenantAccess = (req: Request, res: Response, next: NextFunctio
 /**
  * Rate limit for authentication endpoints
  */
-export const authRateLimit = (req: Request, res: Response, next: NextFunction) => {
+export const authRateLimit = (_req: Request, _res: Response, next: NextFunction) => {
     // This is a placeholder - actual rate limiting is handled by express-rate-limit
     // You can add custom logic here if needed
     next();
 };
+
+// Alias for backward compatibility
+export const authMiddleware = authenticate;

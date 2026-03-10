@@ -146,18 +146,18 @@ export interface IBooking extends Document {
     status: BookingStatus;
 
     // Family and Participants
-    familyId: string;
-    bookedBy: string; // User ID who made the booking
+    familyId: any; // ObjectId reference
+    bookedBy: any; // User ID who made the booking - ObjectId reference
     participants: IBookingParticipant[];
 
     // Program and Session Information
-    programId: string;
-    sessionId?: string; // For specific session bookings
-    termId?: string; // For term enrollments
+    programId: any; // ObjectId reference
+    sessionId?: any; // For specific session bookings - ObjectId reference
+    termId?: any; // For term enrollments - ObjectId reference
 
     // Location and Timing
-    locationId: string;
-    roomId?: string;
+    locationId: any; // ObjectId reference
+    roomId?: any; // ObjectId reference
     sessionDate?: Date;
     sessionTime?: {
         startTime: string;
@@ -194,11 +194,11 @@ export interface IBooking extends Document {
     lastReminderSent?: Date;
 
     // Business Information
-    businessUnitId: string;
+    businessUnitId: any; // ObjectId reference
 
     // Audit
-    createdBy: string;
-    updatedBy: string;
+    createdBy: any; // ObjectId reference
+    updatedBy: any; // ObjectId reference
     createdAt: Date;
     updatedAt: Date;
 }

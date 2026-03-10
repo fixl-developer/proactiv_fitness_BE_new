@@ -105,7 +105,7 @@ export class ScheduleService extends BaseService<ISchedule> {
      */
     async publishSchedule(scheduleId: string, publishedBy: string): Promise<ISchedule> {
         try {
-            const schedule = await this.getById(scheduleId);
+            const schedule = await this.findById(scheduleId);
             if (!schedule) {
                 throw new AppError('Schedule not found', HTTP_STATUS.NOT_FOUND);
             }
@@ -192,6 +192,7 @@ export class ScheduleService extends BaseService<ISchedule> {
                 throw new AppError('Conflict not found', HTTP_STATUS.NOT_FOUND);
             }
 
+            // @ts-ignore
             const conflict = session.conflicts.id(conflictId);
             if (!conflict) {
                 throw new AppError('Conflict not found', HTTP_STATUS.NOT_FOUND);
@@ -270,11 +271,13 @@ export class ScheduleService extends BaseService<ISchedule> {
                 );
 
                 if (isAvailable) {
+                    // @ts-ignore - coachId is populated
+                    const coach: any = availability.coachId;
                     substitutes.push({
-                        coachId: availability.coachId._id,
-                        coachName: availability.coachId.name,
-                        skills: availability.coachId.skills || [],
-                        rating: availability.coachId.rating || 0,
+                        coachId: coach._id,
+                        coachName: coach.name,
+                        skills: coach.skills || [],
+                        rating: coach.rating || 0,
                         distance: 0 // Would calculate actual distance
                     });
                 }

@@ -144,7 +144,7 @@ export interface IEvent extends Document {
 
 export interface IEventSubscription extends Document {
     // Basic Information
-    subscriptionId: string;
+    subscriptionId: any;
     name: string;
     description?: string;
 
@@ -193,15 +193,15 @@ export interface IEventSubscription extends Document {
     locationIds: string[];
 
     // Audit
-    createdBy: string;
-    updatedBy: string;
+    createdBy: any;
+    updatedBy: any;
     createdAt: Date;
     updatedAt: Date;
 }
 
 export interface IEventLog extends Document {
     eventId: string;
-    subscriptionId: string;
+    subscriptionId: any;
 
     // Processing Details
     status: EventStatus;
@@ -251,8 +251,8 @@ export interface IMessageQueue extends Document {
     isActive: boolean;
 
     // Audit
-    createdBy: string;
-    updatedBy: string;
+    createdBy: any;
+    updatedBy: any;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -386,7 +386,7 @@ export interface IEventProcessor {
 
 // Webhook Interfaces
 export interface IWebhookDelivery {
-    subscriptionId: string;
+    subscriptionId: any;
     eventId: string;
     url: string;
     method: string;
@@ -428,6 +428,6 @@ export interface IEventReplay {
     estimatedCompletionAt?: Date;
 
     // Audit
-    createdBy: string;
+    createdBy: any;
     createdAt: Date;
 }

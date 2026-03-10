@@ -29,26 +29,18 @@ export class ScheduleController {
      * Get all schedules
      */
     getSchedules = asyncHandler(async (req: Request, res: Response) => {
-        const { page, limit, skip } = PaginationUtil.getPaginationParams(req.query);
         const filters = this.buildScheduleFilters(req.query);
 
-        const { data, total } = await this.scheduleService.getAll(filters, {
-            page,
-            limit,
-            skip,
-            sort: { createdAt: -1 }
-        });
+        const result = await this.scheduleService.findWithPagination(filters, req.query);
 
-        const meta = PaginationUtil.buildMeta(total, page, limit);
-
-        ResponseUtil.success(res, data, 'Schedules retrieved successfully', HTTP_STATUS.OK, meta);
+        ResponseUtil.success(res, result, 'Schedules retrieved successfully');
     });
 
     /**
      * Get schedule by ID
      */
     getScheduleById = asyncHandler(async (req: Request, res: Response) => {
-        const schedule = await this.scheduleService.getById(req.params.id);
+        const schedule = await this.scheduleService.findById(req.params.id);
         if (!schedule) {
             throw new AppError('Schedule not found', HTTP_STATUS.NOT_FOUND);
         }

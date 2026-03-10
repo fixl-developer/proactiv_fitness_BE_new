@@ -4,7 +4,6 @@ import { BaseController } from '../../shared/base/base.controller';
 import { asyncHandler } from '../../shared/utils/async-handler.util';
 import { AppError } from '../../shared/utils/app-error.util';
 import { HTTP_STATUS } from '../../shared/constants';
-import { successResponse } from '../../shared/utils/response.util';
 
 export class StaffController extends BaseController {
     private staffService: StaffService;
@@ -29,10 +28,10 @@ export class StaffController extends BaseController {
 
         const staff = await this.staffService.createStaff(req.body, userId);
 
-        return successResponse(res, {
+        return this.sendSuccess(res, {
             message: 'Staff member created successfully',
             data: staff
-        }, HTTP_STATUS.CREATED);
+        });
     });
 
     /**
@@ -62,12 +61,12 @@ export class StaffController extends BaseController {
         };
 
         const staffMembers = await this.staffService.getStaffMembers(
-            filter,
+            filter as any,
             Number(page),
             Number(limit)
         );
 
-        return successResponse(res, {
+        return this.sendSuccess(res, {
             message: 'Staff members retrieved successfully',
             data: staffMembers
         });
@@ -84,7 +83,7 @@ export class StaffController extends BaseController {
             throw new AppError('Staff member not found', HTTP_STATUS.NOT_FOUND);
         }
 
-        return successResponse(res, {
+        return this.sendSuccess(res, {
             message: 'Staff member retrieved successfully',
             data: staff
         });
@@ -103,7 +102,7 @@ export class StaffController extends BaseController {
 
         const staff = await this.staffService.updateStaff(staffId, req.body, userId);
 
-        return successResponse(res, {
+        return this.sendSuccess(res, {
             message: 'Staff member updated successfully',
             data: staff
         });
@@ -120,17 +119,14 @@ export class StaffController extends BaseController {
             throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
         }
 
-        const staff = await this.staffService.findOneAndUpdate(
-            { staffId },
-            { isActive: false, updatedBy: userId },
-            { new: true }
+        const staff = await this.staffService.updateStaff(staffId, { isActive: false } as any, userId
         );
 
         if (!staff) {
             throw new AppError('Staff member not found', HTTP_STATUS.NOT_FOUND);
         }
 
-        return successResponse(res, {
+        return this.sendSuccess(res, {
             message: 'Staff member deleted successfully'
         });
     });
@@ -146,7 +142,7 @@ export class StaffController extends BaseController {
 
         const staff = await this.staffService.updateStaffAvailability(req.body, userId);
 
-        return successResponse(res, {
+        return this.sendSuccess(res, {
             message: 'Staff availability updated successfully',
             data: staff
         });
@@ -163,10 +159,10 @@ export class StaffController extends BaseController {
 
         const schedule = await this.staffService.createStaffSchedule(req.body, userId);
 
-        return successResponse(res, {
+        return this.sendSuccess(res, {
             message: 'Staff schedule created successfully',
             data: schedule
-        }, HTTP_STATUS.CREATED);
+        });
     });
 
     /**
@@ -191,7 +187,7 @@ export class StaffController extends BaseController {
             locationId as string
         );
 
-        return successResponse(res, {
+        return this.sendSuccess(res, {
             message: 'Staff schedules retrieved successfully',
             data: schedules
         });
@@ -211,7 +207,7 @@ export class StaffController extends BaseController {
 
         const schedule = await this.scheduleService.updateScheduleStatus(scheduleId, status, userId);
 
-        return successResponse(res, {
+        return this.sendSuccess(res, {
             message: 'Schedule status updated successfully',
             data: schedule
         });
@@ -228,10 +224,10 @@ export class StaffController extends BaseController {
 
         const staff = await this.staffService.submitTimeOffRequest(req.body, userId);
 
-        return successResponse(res, {
+        return this.sendSuccess(res, {
             message: 'Time off request submitted successfully',
             data: staff
-        }, HTTP_STATUS.CREATED);
+        });
     });
 
     /**
@@ -258,7 +254,7 @@ export class StaffController extends BaseController {
             userId
         );
 
-        return successResponse(res, {
+        return this.sendSuccess(res, {
             message: `Time off request ${action}d successfully`,
             data: staff
         });
@@ -275,10 +271,10 @@ export class StaffController extends BaseController {
 
         const attendance = await this.attendanceService.checkIn(req.body, userId);
 
-        return successResponse(res, {
+        return this.sendSuccess(res, {
             message: 'Staff member checked in successfully',
             data: attendance
-        }, HTTP_STATUS.CREATED);
+        });
     });
 
     /**
@@ -294,7 +290,7 @@ export class StaffController extends BaseController {
 
         const attendance = await this.attendanceService.checkOut(staffId, req.body, userId);
 
-        return successResponse(res, {
+        return this.sendSuccess(res, {
             message: 'Staff member checked out successfully',
             data: attendance
         });
@@ -329,15 +325,11 @@ export class StaffController extends BaseController {
             filter,
             {
                 page: Number(page),
-                limit: Number(limit),
-                sort: { date: -1 },
-                populate: [
-                    { path: 'locationId', select: 'name address' }
-                ]
-            }
+                limit: Number(limit)
+            } as any
         );
 
-        return successResponse(res, {
+        return this.sendSuccess(res, {
             message: 'Staff attendance retrieved successfully',
             data: attendance
         });
@@ -351,7 +343,7 @@ export class StaffController extends BaseController {
 
         const statistics = await this.staffService.getStaffStatistics(businessUnitId as string);
 
-        return successResponse(res, {
+        return this.sendSuccess(res, {
             message: 'Staff statistics retrieved successfully',
             data: statistics
         });
@@ -373,7 +365,7 @@ export class StaffController extends BaseController {
             locationId as string
         );
 
-        return successResponse(res, {
+        return this.sendSuccess(res, {
             message: 'Attendance statistics retrieved successfully',
             data: statistics
         });
@@ -405,10 +397,10 @@ export class StaffController extends BaseController {
         staff.updatedBy = userId;
         await staff.save();
 
-        return successResponse(res, {
+        return this.sendSuccess(res, {
             message: 'Certification added successfully',
             data: staff
-        }, HTTP_STATUS.CREATED);
+        });
     });
 
     /**
@@ -436,7 +428,7 @@ export class StaffController extends BaseController {
         staff.updatedBy = userId;
         await staff.save();
 
-        return successResponse(res, {
+        return this.sendSuccess(res, {
             message: 'Certification updated successfully',
             data: staff
         });
@@ -469,10 +461,10 @@ export class StaffController extends BaseController {
         staff.updatedBy = userId;
         await staff.save();
 
-        return successResponse(res, {
+        return this.sendSuccess(res, {
             message: 'Background check added successfully',
             data: staff
-        }, HTTP_STATUS.CREATED);
+        });
     });
 
     /**
@@ -493,7 +485,7 @@ export class StaffController extends BaseController {
             performanceMetrics = performanceMetrics.filter(metric => metric.period === period);
         }
 
-        return successResponse(res, {
+        return this.sendSuccess(res, {
             message: 'Staff performance retrieved successfully',
             data: {
                 staffId,
@@ -533,7 +525,7 @@ export class StaffController extends BaseController {
         staff.updatedBy = userId;
         await staff.save();
 
-        return successResponse(res, {
+        return this.sendSuccess(res, {
             message: 'Staff performance updated successfully',
             data: staff
         });

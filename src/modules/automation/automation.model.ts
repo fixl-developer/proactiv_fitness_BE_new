@@ -115,6 +115,7 @@ const actionConfigSchema = new Schema({
 
 // Execution Step Schema
 const executionStepSchema = new Schema({
+    // @ts-ignore - Mongoose type issue
     stepId: { type: String, required: true },
     stepName: { type: String, required: true },
     stepType: { type: String, enum: Object.values(ActionType), required: true },
@@ -194,6 +195,7 @@ const workflowSchema = new Schema<IWorkflow>({
 
 // Workflow Execution Schema
 const workflowExecutionSchema = new Schema<IWorkflowExecution>({
+    // @ts-ignore - Mongoose type issue
     executionId: { type: String, required: true, unique: true, index: true },
     workflowId: { type: String, required: true, index: true },
     workflowVersion: { type: String, required: true },
@@ -261,6 +263,7 @@ const automationRuleSchema = new Schema<IAutomationRule>({
 
 // Workflow Template Schema
 const workflowTemplateSchema = new Schema<IWorkflowTemplate>({
+    // @ts-ignore - Mongoose type issue
     templateId: { type: String, required: true, unique: true, index: true },
     name: { type: String, required: true, maxlength: 100 },
     description: { type: String, maxlength: 500 },

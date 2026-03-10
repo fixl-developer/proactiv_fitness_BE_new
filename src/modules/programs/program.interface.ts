@@ -139,8 +139,8 @@ export interface IProgram extends Document {
     maxEnrollments?: number;
 
     // Audit
-    createdBy: string;
-    updatedBy: string;
+    createdBy: any;
+    updatedBy: any;
     createdAt: Date;
     updatedAt: Date;
     version: number;

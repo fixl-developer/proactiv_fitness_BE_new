@@ -131,7 +131,7 @@ export class BookingService extends BaseService<IBooking> {
      */
     async cancelBooking(bookingId: string, reason: string, cancelledBy: string): Promise<IBooking> {
         try {
-            const booking = await this.getById(bookingId);
+            const booking = await this.findById(bookingId);
             if (!booking) {
                 throw new AppError('Booking not found', HTTP_STATUS.NOT_FOUND);
             }
@@ -181,8 +181,8 @@ export class BookingService extends BaseService<IBooking> {
 
             return {
                 totalBookings: stats[0]?.totalBookings || 0,
-                bookingsByType: {},
-                bookingsByStatus: {},
+                bookingsByType: {} as Record<BookingType, number>,
+                bookingsByStatus: {} as Record<BookingStatus, number>,
                 conversionRate: 85,
                 cancellationRate: 15,
                 noShowRate: 5,

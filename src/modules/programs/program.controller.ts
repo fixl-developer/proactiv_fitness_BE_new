@@ -26,10 +26,7 @@ export class ProgramController extends BaseController {
 
             const program = await this.programService.createProgram(req.body, userId);
 
-            ResponseUtil.success(res, {
-                message: SUCCESS_MESSAGES.CREATED,
-                data: program
-            }, HTTP_STATUS.CREATED);
+            ResponseUtil.created(res, program, SUCCESS_MESSAGES.CREATED);
         } catch (error) {
             next(error);
         }
@@ -98,17 +95,7 @@ export class ProgramController extends BaseController {
                 sortOrder as 'asc' | 'desc'
             );
 
-            ResponseUtil.success(res, {
-                message: SUCCESS_MESSAGES.RETRIEVED,
-                data: result.programs,
-                meta: {
-                    totalCount: result.totalCount,
-                    page: parseInt(page as string),
-                    limit: parseInt(limit as string),
-                    totalPages: Math.ceil(result.totalCount / parseInt(limit as string))
-                },
-                filters: result.filters
-            });
+            ResponseUtil.success(res, result, SUCCESS_MESSAGES.RETRIEVED);
         } catch (error) {
             next(error);
         }
@@ -120,16 +107,13 @@ export class ProgramController extends BaseController {
     public getProgramById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const { id } = req.params;
-            const program = await this.programService.getById(id);
+            const program = await this.programService.findById(id);
 
             if (!program) {
                 throw new AppError('Program not found', HTTP_STATUS.NOT_FOUND);
             }
 
-            ResponseUtil.success(res, {
-                message: SUCCESS_MESSAGES.RETRIEVED,
-                data: program
-            });
+            ResponseUtil.success(res, program, SUCCESS_MESSAGES.RETRIEVED);
         } catch (error) {
             next(error);
         }
@@ -149,10 +133,7 @@ export class ProgramController extends BaseController {
 
             const program = await this.programService.updateProgram(id, req.body, userId);
 
-            ResponseUtil.success(res, {
-                message: SUCCESS_MESSAGES.UPDATED,
-                data: program
-            });
+            ResponseUtil.success(res, program, SUCCESS_MESSAGES.UPDATED);
         } catch (error) {
             next(error);
         }
@@ -166,9 +147,7 @@ export class ProgramController extends BaseController {
             const { id } = req.params;
             await this.programService.delete(id);
 
-            ResponseUtil.success(res, {
-                message: SUCCESS_MESSAGES.DELETED
-            });
+            ResponseUtil.success(res, null, SUCCESS_MESSAGES.DELETED);
         } catch (error) {
             next(error);
         }
@@ -188,10 +167,7 @@ export class ProgramController extends BaseController {
                 locationId as string
             );
 
-            ResponseUtil.success(res, {
-                message: SUCCESS_MESSAGES.RETRIEVED,
-                data: programs
-            });
+            ResponseUtil.success(res, programs, SUCCESS_MESSAGES.RETRIEVED);
         } catch (error) {
             next(error);
         }
@@ -212,10 +188,7 @@ export class ProgramController extends BaseController {
                 locationId as string
             );
 
-            ResponseUtil.success(res, {
-                message: SUCCESS_MESSAGES.RETRIEVED,
-                data: programs
-            });
+            ResponseUtil.success(res, programs, SUCCESS_MESSAGES.RETRIEVED);
         } catch (error) {
             next(error);
         }
@@ -237,10 +210,7 @@ export class ProgramController extends BaseController {
                 prerequisitePrograms
             );
 
-            ResponseUtil.success(res, {
-                message: 'Eligibility check completed',
-                data: eligibility
-            });
+            ResponseUtil.success(res, eligibility, 'Eligibility check completed');
         } catch (error) {
             next(error);
         }
@@ -260,10 +230,7 @@ export class ProgramController extends BaseController {
                 siblingCount ? parseInt(siblingCount as string) : undefined
             );
 
-            ResponseUtil.success(res, {
-                message: 'Pricing calculated successfully',
-                data: pricing
-            });
+            ResponseUtil.success(res, pricing, 'Pricing calculated successfully');
         } catch (error) {
             next(error);
         }
@@ -280,10 +247,7 @@ export class ProgramController extends BaseController {
                 businessUnitId as string
             );
 
-            ResponseUtil.success(res, {
-                message: 'Statistics retrieved successfully',
-                data: statistics
-            });
+            ResponseUtil.success(res, statistics, 'Statistics retrieved successfully');
         } catch (error) {
             next(error);
         }
@@ -312,10 +276,7 @@ export class ProgramController extends BaseController {
                 userId
             );
 
-            ResponseUtil.success(res, {
-                message: 'Program duplicated successfully',
-                data: duplicatedProgram
-            }, HTTP_STATUS.CREATED);
+            ResponseUtil.created(res, duplicatedProgram, 'Program duplicated successfully');
         } catch (error) {
             next(error);
         }
@@ -333,22 +294,11 @@ export class ProgramController extends BaseController {
             }
 
             const programs = await this.programService.findWithPagination(
-                { $text: { $search: q as string } },
-                parseInt(page as string),
-                parseInt(limit as string),
-                { score: { $meta: 'textScore' } }
+                { $text: { $search: q as string } } as any,
+                { page: parseInt(page as string), limit: parseInt(limit as string) }
             );
 
-            ResponseUtil.success(res, {
-                message: SUCCESS_MESSAGES.RETRIEVED,
-                data: programs.data,
-                meta: {
-                    totalCount: programs.totalCount,
-                    page: parseInt(page as string),
-                    limit: parseInt(limit as string),
-                    totalPages: Math.ceil(programs.totalCount / parseInt(limit as string))
-                }
-            });
+            ResponseUtil.success(res, programs, SUCCESS_MESSAGES.RETRIEVED);
         } catch (error) {
             next(error);
         }
@@ -360,28 +310,10 @@ export class ProgramController extends BaseController {
     public getCategories = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const { businessUnitId } = req.query;
-            const matchStage: any = { isActive: true };
 
-            if (businessUnitId) {
-                matchStage.businessUnitId = businessUnitId;
-            }
+            const categories = await this.programService.getCategories(businessUnitId as string);
 
-            const categories = await this.programService.model.aggregate([
-                { $match: matchStage },
-                {
-                    $group: {
-                        _id: '$category',
-                        count: { $sum: 1 },
-                        subcategories: { $addToSet: '$subcategory' }
-                    }
-                },
-                { $sort: { _id: 1 } }
-            ]);
-
-            ResponseUtil.success(res, {
-                message: SUCCESS_MESSAGES.RETRIEVED,
-                data: categories
-            });
+            ResponseUtil.success(res, categories, SUCCESS_MESSAGES.RETRIEVED);
         } catch (error) {
             next(error);
         }
@@ -406,10 +338,7 @@ export class ProgramController extends BaseController {
                 userId
             );
 
-            ResponseUtil.success(res, {
-                message: `Program ${isActive ? 'activated' : 'deactivated'} successfully`,
-                data: program
-            });
+            ResponseUtil.success(res, program, `Program ${isActive ? 'activated' : 'deactivated'} successfully`);
         } catch (error) {
             next(error);
         }

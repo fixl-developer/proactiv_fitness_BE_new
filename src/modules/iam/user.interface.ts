@@ -50,6 +50,10 @@ export interface IUser extends Document {
     // Metadata
     metadata?: Record<string, any>;
 
+    // Timestamps (from Mongoose)
+    createdAt?: Date;
+    updatedAt?: Date;
+
     // Methods
     comparePassword(candidatePassword: string): Promise<boolean>;
     generateAuthToken(): string;
@@ -140,8 +144,8 @@ export interface IUserResponse {
     isEmailVerified: boolean;
     isPhoneVerified: boolean;
     lastLogin?: Date;
-    createdAt: Date;
-    updatedAt: Date;
+    createdAt?: Date;
+    updatedAt?: Date;
 }
 
 export interface IUserQuery {

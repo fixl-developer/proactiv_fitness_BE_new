@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import { StaffController } from './staff.controller';
-import { authMiddleware } from '../iam/auth.middleware';
+import { authenticate } from '../iam/auth.middleware';
 
 const router = Router();
 const staffController = new StaffController();
 
 // Apply authentication middleware to all routes
-router.use(authMiddleware);
+router.use(authenticate);
 
 // Staff CRUD routes
 router.post('/staff', staffController.createStaff);

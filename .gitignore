@@ -53,5 +53,6 @@ temp/
 # Documentation files (remove from tracking)
 *.md
 **/*.md
-
-backend/.git/
+!README.md
+*.ps1
+*.txt

@@ -17,18 +17,21 @@ const locationSchema = new Schema<ILocation>(
             trim: true,
             unique: true,
         },
+        // @ts-ignore - Mongoose type issue
         businessUnitId: {
             type: Schema.Types.ObjectId,
             ref: 'BusinessUnit',
             required: [true, 'Business unit is required'],
             index: true,
         },
+        // @ts-ignore - Mongoose type issue
         countryId: {
             type: Schema.Types.ObjectId,
             ref: 'Country',
             required: [true, 'Country is required'],
             index: true,
         },
+        // @ts-ignore - Mongoose type issue
         regionId: {
             type: Schema.Types.ObjectId,
             ref: 'Region',

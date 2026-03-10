@@ -19,13 +19,13 @@ router.use(authenticate);
 // User profile routes (accessible by the user themselves)
 router.get(
     '/profile',
-    userController.wrap(userController.getProfile)
+    userController.getProfile
 );
 
 router.put(
     '/profile',
     validate(updateUserValidation),
-    userController.wrap(userController.updateProfile)
+    userController.updateProfile
 );
 
 // Admin routes
@@ -33,7 +33,7 @@ router.post(
     '/',
     authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
     validate(createUserValidation),
-    userController.wrap(userController.create)
+    userController.create
 );
 
 router.get(
@@ -45,35 +45,35 @@ router.get(
         UserRole.LOCATION_MANAGER
     ),
     validate(getUsersQueryValidation),
-    userController.wrap(userController.getAll)
+    userController.getAll
 );
 
 router.get(
     '/:id',
     validate(idParamValidation),
     checkOwnership('id'),
-    userController.wrap(userController.getById)
+    userController.getById
 );
 
 router.put(
     '/:id',
     validate(updateUserValidation),
     checkOwnership('id'),
-    userController.wrap(userController.update)
+    userController.update
 );
 
 router.delete(
     '/:id',
     authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN),
     validate(idParamValidation),
-    userController.wrap(userController.delete)
+    userController.delete
 );
 
 router.patch(
     '/:id/status',
     authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
     validate(updateUserStatusValidation),
-    userController.wrap(userController.updateStatus)
+    userController.updateStatus
 );
 
 export default router;

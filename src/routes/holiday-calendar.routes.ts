@@ -13,32 +13,32 @@ router.post(
     '/',
     authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
     validate(createHolidayCalendarValidation),
-    holidayCalendarController.wrap(holidayCalendarController.create)
+    holidayCalendarController.create.bind(holidayCalendarController)
 );
 
 router.get(
     '/',
-    holidayCalendarController.wrap(holidayCalendarController.getAll)
+    holidayCalendarController.getAll.bind(holidayCalendarController)
 );
 
 router.get(
     '/:id',
     validate(idParamValidation),
-    holidayCalendarController.wrap(holidayCalendarController.getById)
+    holidayCalendarController.getById.bind(holidayCalendarController)
 );
 
 router.put(
     '/:id',
     authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
     validate(updateHolidayCalendarValidation),
-    holidayCalendarController.wrap(holidayCalendarController.update)
+    holidayCalendarController.update.bind(holidayCalendarController)
 );
 
 router.delete(
     '/:id',
     authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
     validate(idParamValidation),
-    holidayCalendarController.wrap(holidayCalendarController.delete)
+    holidayCalendarController.delete.bind(holidayCalendarController)
 );
 
 export default router;
