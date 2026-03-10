@@ -93,7 +93,7 @@ export interface ITravelTime {
 export interface ISession extends Document {
     // Basic Information
     sessionId: string; // Unique identifier
-    programId: string;
+    programId: any;
     termId: string;
     scheduleId: string;
 
@@ -132,8 +132,8 @@ export interface ISession extends Document {
     specialRequirements?: string[];
 
     // Audit
-    createdBy: string;
-    updatedBy: string;
+    createdBy: any;
+    updatedBy: any;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -153,7 +153,7 @@ export interface ISchedule extends Document {
     // Status
     status: ScheduleStatus;
     publishedAt?: Date;
-    publishedBy?: string;
+    publishedBy?: any;
 
     // Sessions
     sessions: string[]; // Session IDs
@@ -179,8 +179,8 @@ export interface ISchedule extends Document {
     };
 
     // Audit
-    createdBy: string;
-    updatedBy: string;
+    createdBy: any;
+    updatedBy: any;
     createdAt: Date;
     updatedAt: Date;
     version: number;
@@ -216,8 +216,8 @@ export interface ICoachAvailability extends Document {
     effectiveTo?: Date;
 
     // Audit
-    createdBy: string;
-    updatedBy: string;
+    createdBy: any;
+    updatedBy: any;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -225,7 +225,7 @@ export interface ICoachAvailability extends Document {
 export interface IRosterTemplate extends Document {
     name: string;
     description?: string;
-    programId: string;
+    programId: any;
 
     // Template Structure
     sessionsPerWeek: number;
@@ -255,8 +255,8 @@ export interface IRosterTemplate extends Document {
     isActive: boolean;
 
     // Audit
-    createdBy: string;
-    updatedBy: string;
+    createdBy: any;
+    updatedBy: any;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -338,3 +338,4 @@ export interface ISubstituteSearchCriteria {
     maxTravelTime?: number;
     excludeCoaches?: string[];
 }
+

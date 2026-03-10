@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { RuleController, PolicyController, RuleTemplateController } from './rule.controller';
-import { authMiddleware } from '../iam/auth.middleware';
-import { validateRequest } from '../../shared/utils/validation.util';
+import { authenticate } from '../iam/auth.middleware';
+import { validate } from '../../middleware/validation.middleware';
 import { body, param, query } from 'express-validator';
 
 const router = Router();
@@ -19,7 +19,7 @@ const createRuleValidation = [
     body('actions').isArray({ min: 1 }).withMessage('At least one action is required'),
     body('priority').isInt({ min: 1, max: 1000 }).withMessage('Priority must be between 1-1000'),
     body('effectiveFrom').isISO8601().withMessage('Valid effective from date is required'),
-    validateRequest
+    validate
 ];
 
 const updateRuleValidation = [
@@ -27,7 +27,7 @@ const updateRuleValidation = [
     body('name').optional().isString().trim().isLength({ min: 1, max: 100 }),
     body('description').optional().isString().trim().isLength({ min: 1, max: 500 }),
     body('priority').optional().isInt({ min: 1, max: 1000 }),
-    validateRequest
+    validate
 ];
 
 const createPolicyValidation = [
@@ -37,14 +37,14 @@ const createPolicyValidation = [
     body('ruleIds').isArray({ min: 1 }).withMessage('At least one rule ID is required'),
     body('defaultAction').isString().withMessage('Default action is required'),
     body('effectiveFrom').isISO8601().withMessage('Valid effective from date is required'),
-    validateRequest
+    validate
 ];
 
 const evaluateRulesValidation = [
     body('ruleType').isString().withMessage('Rule type is required'),
     body('context').isObject().withMessage('Context object is required'),
     body('context.timestamp').isISO8601().withMessage('Valid timestamp is required'),
-    validateRequest
+    validate
 ];
 
 const evaluatePolicyValidation = [
@@ -53,7 +53,7 @@ const evaluatePolicyValidation = [
     body('programId').optional().isMongoId(),
     body('sessionId').optional().isMongoId(),
     body('timestamp').isISO8601().withMessage('Valid timestamp is required'),
-    validateRequest
+    validate
 ];
 
 // Rule Routes
@@ -64,7 +64,7 @@ const evaluatePolicyValidation = [
  * @access  Private
  */
 router.get('/',
-    authMiddleware,
+    authenticate,
     ruleController.getRules
 );
 
@@ -74,9 +74,9 @@ router.get('/',
  * @access  Private
  */
 router.get('/:id',
-    authMiddleware,
+    authenticate,
     param('id').isMongoId().withMessage('Valid rule ID is required'),
-    validateRequest,
+    validate,
     ruleController.getRuleById
 );
 
@@ -86,7 +86,7 @@ router.get('/:id',
  * @access  Private (Admin, Manager)
  */
 router.post('/',
-    authMiddleware,
+    authenticate,
     createRuleValidation,
     ruleController.createRule
 );
@@ -97,7 +97,7 @@ router.post('/',
  * @access  Private (Admin, Manager)
  */
 router.put('/:id',
-    authMiddleware,
+    authenticate,
     updateRuleValidation,
     ruleController.updateRule
 );
@@ -108,9 +108,9 @@ router.put('/:id',
  * @access  Private (Admin, Manager)
  */
 router.delete('/:id',
-    authMiddleware,
+    authenticate,
     param('id').isMongoId().withMessage('Valid rule ID is required'),
-    validateRequest,
+    validate,
     ruleController.deleteRule
 );
 
@@ -120,10 +120,10 @@ router.delete('/:id',
  * @access  Private (Admin, Manager)
  */
 router.patch('/:id/status',
-    authMiddleware,
+    authenticate,
     param('id').isMongoId().withMessage('Valid rule ID is required'),
     body('status').isIn(['active', 'inactive', 'draft', 'expired']).withMessage('Valid status is required'),
-    validateRequest,
+    validate,
     ruleController.toggleRuleStatus
 );
 
@@ -133,7 +133,7 @@ router.patch('/:id/status',
  * @access  Private
  */
 router.post('/evaluate',
-    authMiddleware,
+    authenticate,
     evaluateRulesValidation,
     ruleController.evaluateRules
 );
@@ -144,9 +144,9 @@ router.post('/evaluate',
  * @access  Private (Admin, Manager)
  */
 router.get('/:id/statistics',
-    authMiddleware,
+    authenticate,
     param('id').isMongoId().withMessage('Valid rule ID is required'),
-    validateRequest,
+    validate,
     ruleController.getRuleStatistics
 );
 
@@ -158,7 +158,7 @@ router.get('/:id/statistics',
  * @access  Private
  */
 router.get('/policies',
-    authMiddleware,
+    authenticate,
     policyController.getPolicies
 );
 
@@ -168,9 +168,9 @@ router.get('/policies',
  * @access  Private
  */
 router.get('/policies/:id',
-    authMiddleware,
+    authenticate,
     param('id').isMongoId().withMessage('Valid policy ID is required'),
-    validateRequest,
+    validate,
     policyController.getPolicyById
 );
 
@@ -180,7 +180,7 @@ router.get('/policies/:id',
  * @access  Private (Admin, Manager)
  */
 router.post('/policies',
-    authMiddleware,
+    authenticate,
     createPolicyValidation,
     policyController.createPolicy
 );
@@ -191,9 +191,9 @@ router.post('/policies',
  * @access  Private (Admin, Manager)
  */
 router.put('/policies/:id',
-    authMiddleware,
+    authenticate,
     param('id').isMongoId().withMessage('Valid policy ID is required'),
-    validateRequest,
+    validate,
     policyController.updatePolicy
 );
 
@@ -203,9 +203,9 @@ router.put('/policies/:id',
  * @access  Private (Admin, Manager)
  */
 router.delete('/policies/:id',
-    authMiddleware,
+    authenticate,
     param('id').isMongoId().withMessage('Valid policy ID is required'),
-    validateRequest,
+    validate,
     policyController.deletePolicy
 );
 
@@ -215,7 +215,7 @@ router.delete('/policies/:id',
  * @access  Private
  */
 router.post('/policies/:id/evaluate',
-    authMiddleware,
+    authenticate,
     evaluatePolicyValidation,
     policyController.evaluatePolicy
 );
@@ -226,9 +226,9 @@ router.post('/policies/:id/evaluate',
  * @access  Private (Admin, Manager)
  */
 router.get('/policies/:id/statistics',
-    authMiddleware,
+    authenticate,
     param('id').isMongoId().withMessage('Valid policy ID is required'),
-    validateRequest,
+    validate,
     policyController.getPolicyStatistics
 );
 
@@ -240,7 +240,7 @@ router.get('/policies/:id/statistics',
  * @access  Private
  */
 router.get('/templates',
-    authMiddleware,
+    authenticate,
     ruleTemplateController.getRuleTemplates
 );
 
@@ -250,9 +250,9 @@ router.get('/templates',
  * @access  Private
  */
 router.get('/templates/:id',
-    authMiddleware,
+    authenticate,
     param('id').isMongoId().withMessage('Valid template ID is required'),
-    validateRequest,
+    validate,
     ruleTemplateController.getRuleTemplateById
 );
 
@@ -262,10 +262,10 @@ router.get('/templates/:id',
  * @access  Private (Admin, Manager)
  */
 router.post('/templates',
-    authMiddleware,
+    authenticate,
     body('name').isString().trim().isLength({ min: 1, max: 100 }).withMessage('Template name is required'),
     body('ruleType').isString().withMessage('Rule type is required'),
-    validateRequest,
+    validate,
     ruleTemplateController.createRuleTemplate
 );
 
@@ -275,10 +275,10 @@ router.post('/templates',
  * @access  Private (Admin, Manager)
  */
 router.post('/templates/:templateId/create-rule',
-    authMiddleware,
+    authenticate,
     param('templateId').isMongoId().withMessage('Valid template ID is required'),
     body('name').isString().trim().isLength({ min: 1, max: 100 }).withMessage('Rule name is required'),
-    validateRequest,
+    validate,
     ruleController.createRuleFromTemplate
 );
 

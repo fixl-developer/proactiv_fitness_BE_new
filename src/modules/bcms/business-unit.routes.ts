@@ -13,32 +13,32 @@ router.post(
     '/',
     authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
     validate(createBusinessUnitValidation),
-    businessUnitController.wrap(businessUnitController.create)
+    businessUnitController.create
 );
 
 router.get(
     '/',
-    businessUnitController.wrap(businessUnitController.getAll)
+    businessUnitController.getAll
 );
 
 router.get(
     '/:id',
     validate(idParamValidation),
-    businessUnitController.wrap(businessUnitController.getById)
+    businessUnitController.getById
 );
 
 router.put(
     '/:id',
     authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
     validate(updateBusinessUnitValidation),
-    businessUnitController.wrap(businessUnitController.update)
+    businessUnitController.update
 );
 
 router.delete(
     '/:id',
     authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN),
     validate(idParamValidation),
-    businessUnitController.wrap(businessUnitController.delete)
+    businessUnitController.delete
 );
 
 export default router;

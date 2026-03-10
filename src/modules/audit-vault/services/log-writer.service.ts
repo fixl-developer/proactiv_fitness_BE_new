@@ -1,6 +1,6 @@
 import { Db } from 'mongodb';
 import { v4 as uuidv4 } from 'uuid';
-import { BaseAuditLog, ConsentLog, CustodyLog, FinancialLog, CertificationLog, AutomationLog, ImpersonationLog } from '../interfaces';
+import { AuditLog, ConsentLog, CustodyLog, FinancialLog, CertificationLog, AutomationLog, ImpersonationLog } from '../interfaces';
 import { HashChainService } from './hash-chain.service';
 import logger from '../../../shared/utils/logger.util';
 
@@ -30,7 +30,7 @@ export interface AuditLogInput {
 export class LogWriterService {
     private db: Db;
     private hashChainService: HashChainService;
-    private buffer: BaseAuditLog[] = [];
+    private buffer: AuditLog[] = [];
     private bufferSize = 100;
     private flushInterval = 5000; // 5 seconds
     private flushTimer?: NodeJS.Timeout;
@@ -56,7 +56,7 @@ export class LogWriterService {
         ]);
 
         // Create log entry
-        const logEntry: Partial<BaseAuditLog> = {
+        const logEntry: Partial<AuditLog> = {
             logId,
             tenantId: input.tenantId,
             sequenceNumber,
@@ -87,12 +87,12 @@ export class LogWriterService {
 
         // Add to buffer or write immediately
         if (this.bufferSize > 1) {
-            this.buffer.push(logEntry as BaseAuditLog);
+            this.buffer.push(logEntry as AuditLog);
             if (this.buffer.length >= this.bufferSize) {
                 await this.flushBuffer();
             }
         } else {
-            await this.writeLogToDatabase(logEntry as BaseAuditLog);
+            await this.writeLogToDatabase(logEntry as AuditLog);
         }
 
         logger.debug('Audit log created', {
@@ -125,7 +125,7 @@ export class LogWriterService {
             this.hashChainService.getNextSequenceNumber(tenantId),
         ]);
 
-        const logs: BaseAuditLog[] = [];
+        const logs: AuditLog[] = [];
         let previousHash = initialPreviousHash;
         let sequenceNumber = initialSequenceNumber;
 
@@ -134,7 +134,7 @@ export class LogWriterService {
             const now = new Date();
             const timestampNanos = now.getTime() * 1000000 + (now.getMilliseconds() % 1000) * 1000;
 
-            const logEntry: Partial<BaseAuditLog> = {
+            const logEntry: Partial<AuditLog> = {
                 logId,
                 tenantId: input.tenantId,
                 sequenceNumber,
@@ -163,7 +163,7 @@ export class LogWriterService {
             const currentHash = this.hashChainService.computeLogHash(logEntry, previousHash);
             logEntry.currentHash = currentHash;
 
-            logs.push(logEntry as BaseAuditLog);
+            logs.push(logEntry as AuditLog);
             logIds.push(logId);
 
             // Update for next iteration
@@ -372,12 +372,12 @@ export class LogWriterService {
      * Private methods
      */
 
-    private async writeLogToDatabase(log: BaseAuditLog): Promise<void> {
+    private async writeLogToDatabase(log: AuditLog): Promise<void> {
         const collection = this.db.collection('audit_logs');
         await collection.insertOne(log);
     }
 
-    private async writeBatchToDatabase(logs: BaseAuditLog[]): Promise<void> {
+    private async writeBatchToDatabase(logs: AuditLog[]): Promise<void> {
         if (logs.length === 0) return;
 
         const collection = this.db.collection('audit_logs');

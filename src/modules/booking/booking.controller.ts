@@ -41,39 +41,18 @@ export class BookingController {
      * Get all bookings
      */
     getBookings = asyncHandler(async (req: Request, res: Response) => {
-        const { page, limit, skip } = PaginationUtil.getPaginationParams(req.query);
         const filters = this.buildBookingFilters(req.query);
 
-        const { data, total } = await this.bookingService.getAll(filters, {
-            page,
-            limit,
-            skip,
-            sort: { createdAt: -1 },
-            populate: [
-                { path: 'familyId', select: 'familyName familyCode' },
-                { path: 'programId', select: 'name category' },
-                { path: 'locationId', select: 'name' },
-                { path: 'participants.childId', select: 'firstName lastName' }
-            ]
-        });
+        const result = await this.bookingService.findWithPagination(filters, req.query);
 
-        const meta = PaginationUtil.buildMeta(total, page, limit);
-        ResponseUtil.success(res, data, 'Bookings retrieved successfully', HTTP_STATUS.OK, meta);
+        ResponseUtil.success(res, result, 'Bookings retrieved successfully');
     });
 
     /**
      * Get booking by ID
      */
     getBookingById = asyncHandler(async (req: Request, res: Response) => {
-        const booking = await this.bookingService.getById(req.params.id, {
-            populate: [
-                { path: 'familyId' },
-                { path: 'programId' },
-                { path: 'sessionId' },
-                { path: 'locationId' },
-                { path: 'participants.childId' }
-            ]
-        });
+        const booking = await this.bookingService.findById(req.params.id);
 
         if (!booking) {
             throw new AppError('Booking not found', HTTP_STATUS.NOT_FOUND);
@@ -134,3 +113,4 @@ export class BookingController {
         return filters;
     }
 }
+

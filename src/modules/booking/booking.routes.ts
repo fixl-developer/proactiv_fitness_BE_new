@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { BookingController } from './booking.controller';
-import { authMiddleware } from '../iam/auth.middleware';
-import { validateRequest } from '../../shared/utils/validation.util';
+import { authenticate } from '../iam/auth.middleware';
+import { validate } from '../../middleware/validation.middleware';
 import { body, param } from 'express-validator';
 
 const router = Router();
@@ -22,7 +22,7 @@ router.post('/search',
  * @access  Private
  */
 router.post('/validate',
-    authMiddleware,
+    authenticate,
     bookingController.validateBooking
 );
 
@@ -32,7 +32,7 @@ router.post('/validate',
  * @access  Private
  */
 router.get('/',
-    authMiddleware,
+    authenticate,
     bookingController.getBookings
 );
 
@@ -42,7 +42,7 @@ router.get('/',
  * @access  Private (Admin, Manager)
  */
 router.get('/statistics',
-    authMiddleware,
+    authenticate,
     bookingController.getBookingStatistics
 );
 
@@ -52,9 +52,9 @@ router.get('/statistics',
  * @access  Private
  */
 router.get('/:id',
-    authMiddleware,
+    authenticate,
     param('id').isMongoId().withMessage('Valid booking ID is required'),
-    validateRequest,
+    validate,
     bookingController.getBookingById
 );
 
@@ -64,13 +64,13 @@ router.get('/:id',
  * @access  Private
  */
 router.post('/',
-    authMiddleware,
+    authenticate,
     body('bookingType').isString().withMessage('Booking type is required'),
     body('familyId').isMongoId().withMessage('Valid family ID is required'),
     body('participants').isArray({ min: 1 }).withMessage('At least one participant is required'),
     body('programId').isMongoId().withMessage('Valid program ID is required'),
     body('locationId').isMongoId().withMessage('Valid location ID is required'),
-    validateRequest,
+    validate,
     bookingController.createBooking
 );
 
@@ -80,10 +80,10 @@ router.post('/',
  * @access  Private
  */
 router.patch('/:id/cancel',
-    authMiddleware,
+    authenticate,
     param('id').isMongoId().withMessage('Valid booking ID is required'),
     body('reason').isString().withMessage('Cancellation reason is required'),
-    validateRequest,
+    validate,
     bookingController.cancelBooking
 );
 

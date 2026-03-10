@@ -1,4 +1,4 @@
-import { body, param, query } from 'express-validator';
+import { body, param } from 'express-validator';
 import { BusinessUnitType, LocationStatus, Currency, Language } from '@shared/enums';
 
 // Country validations

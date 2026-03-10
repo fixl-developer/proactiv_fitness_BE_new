@@ -13,32 +13,32 @@ router.post(
     '/',
     authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN, UserRole.LOCATION_MANAGER),
     validate(createRoomValidation),
-    roomController.wrap(roomController.create)
+    roomController.create
 );
 
 router.get(
     '/',
-    roomController.wrap(roomController.getAll)
+    roomController.getAll
 );
 
 router.get(
     '/:id',
     validate(idParamValidation),
-    roomController.wrap(roomController.getById)
+    roomController.getById
 );
 
 router.put(
     '/:id',
     authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN, UserRole.LOCATION_MANAGER),
     validate(updateRoomValidation),
-    roomController.wrap(roomController.update)
+    roomController.update
 );
 
 router.delete(
     '/:id',
     authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN, UserRole.LOCATION_MANAGER),
     validate(idParamValidation),
-    roomController.wrap(roomController.delete)
+    roomController.delete
 );
 
 export default router;

@@ -137,12 +137,9 @@ export class StaffService extends BaseService<IStaff> {
             return await this.findWithPagination(query, {
                 page,
                 limit,
-                sort: { createdAt: -1 },
-                populate: [
-                    { path: 'businessUnitId', select: 'name type' },
-                    { path: 'primaryLocationId', select: 'name address' }
-                ]
-            });
+                sortBy: 'createdAt',
+                sortOrder: 'desc'
+            } as any);
         } catch (error: any) {
             throw new AppError(
                 error.message || 'Failed to get staff members',

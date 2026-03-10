@@ -21,7 +21,7 @@ router.post(
     '/register',
     authLimiter,
     validate(registerValidation),
-    authController.wrap(authController.register)
+    authController.register
 );
 
 // Parent registration (multi-step from frontend)
@@ -47,59 +47,59 @@ router.post(
     '/login',
     authLimiter,
     validate(loginValidation),
-    authController.wrap(authController.login)
+    authController.login
 );
 
 router.post(
     '/forgot-password',
     authLimiter,
     validate(passwordResetRequestValidation),
-    authController.wrap(authController.forgotPassword)
+    authController.forgotPassword
 );
 
 router.post(
     '/reset-password',
     authLimiter,
     validate(passwordResetValidation),
-    authController.wrap(authController.resetPassword)
+    authController.resetPassword
 );
 
 router.post(
     '/verify-email',
     validate(emailVerificationValidation),
-    authController.wrap(authController.verifyEmail)
+    authController.verifyEmail
 );
 
 router.post(
     '/refresh-token',
     validate(refreshTokenValidation),
-    authController.wrap(authController.refreshToken)
+    authController.refreshToken
 );
 
 // Protected routes (require authentication)
 router.post(
     '/logout',
     authenticate,
-    authController.wrap(authController.logout)
+    authController.logout
 );
 
 router.post(
     '/change-password',
     authenticate,
     validate(changePasswordValidation),
-    authController.wrap(authController.changePassword)
+    authController.changePassword
 );
 
 router.post(
     '/resend-verification',
     authenticate,
-    authController.wrap(authController.resendVerification)
+    authController.resendVerification
 );
 
 router.get(
     '/me',
     authenticate,
-    authController.wrap(authController.getCurrentUser)
+    authController.getCurrentUser
 );
 
 export default router;

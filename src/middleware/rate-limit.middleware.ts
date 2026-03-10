@@ -21,3 +21,6 @@ export const strictLimiter = rateLimit({
     max: 10, // 10 requests per minute
     message: 'Rate limit exceeded',
 });
+
+// Alias for backward compatibility
+export const rateLimitMiddleware = apiLimiter;

@@ -13,32 +13,32 @@ router.post(
     '/',
     authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN),
     validate(createCountryValidation),
-    countryController.wrap(countryController.create)
+    countryController.create
 );
 
 router.get(
     '/',
-    countryController.wrap(countryController.getAll)
+    countryController.getAll
 );
 
 router.get(
     '/:id',
     validate(idParamValidation),
-    countryController.wrap(countryController.getById)
+    countryController.getById
 );
 
 router.put(
     '/:id',
     authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN),
     validate(updateCountryValidation),
-    countryController.wrap(countryController.update)
+    countryController.update
 );
 
 router.delete(
     '/:id',
     authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN),
     validate(idParamValidation),
-    countryController.wrap(countryController.delete)
+    countryController.delete
 );
 
 export default router;

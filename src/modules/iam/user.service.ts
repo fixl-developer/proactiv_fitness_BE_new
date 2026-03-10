@@ -53,7 +53,7 @@ export class UserService extends BaseService<IUser> {
     async getUserByEmailWithPassword(email: string): Promise<IUser | null> {
         return await User.findOne({ email: email.toLowerCase(), isDeleted: false }).select(
             '+password +refreshToken +refreshTokenExpires'
-        );
+        ) as IUser | null;
     }
 
     /**

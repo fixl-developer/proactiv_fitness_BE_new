@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { ProgramController } from './program.controller';
 import { authenticate, authorize } from '../iam/auth.middleware';
-import { validate } from '../../middleware/validation.middleware';
+import { validateBody, validateParams } from '../../middleware/joi-validation.middleware';
 import { UserRole } from '../../shared/enums';
 import {
     createProgramValidation,
@@ -35,7 +35,7 @@ router.get(
 
 router.get(
     '/statistics',
-    authorize([UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]),
+    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN, UserRole.LOCATION_MANAGER),
     programController.getProgramStatistics
 );
 
@@ -51,59 +51,59 @@ router.get(
 
 router.get(
     '/:id',
-    validate(idParamValidation),
+    validateParams(idParamValidation),
     programController.getProgramById
 );
 
 router.get(
     '/:id/pricing',
-    validate(idParamValidation),
+    validateParams(idParamValidation),
     programController.getProgramPricing
 );
 
 // Protected routes (admin/manager only)
 router.post(
     '/',
-    authorize([UserRole.ADMIN, UserRole.MANAGER]),
-    validate(createProgramValidation),
+    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+    validateBody(createProgramValidation),
     programController.createProgram
 );
 
 router.put(
     '/:id',
-    authorize([UserRole.ADMIN, UserRole.MANAGER]),
-    validate(idParamValidation),
-    validate(updateProgramValidation),
+    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+    validateParams(idParamValidation),
+    validateBody(updateProgramValidation),
     programController.updateProgram
 );
 
 router.delete(
     '/:id',
-    authorize([UserRole.ADMIN, UserRole.MANAGER]),
-    validate(idParamValidation),
+    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+    validateParams(idParamValidation),
     programController.deleteProgram
 );
 
 router.post(
     '/:id/duplicate',
-    authorize([UserRole.ADMIN, UserRole.MANAGER]),
-    validate(idParamValidation),
-    validate(duplicateProgramValidation),
+    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+    validateParams(idParamValidation),
+    validateBody(duplicateProgramValidation),
     programController.duplicateProgram
 );
 
 router.patch(
     '/:id/status',
-    authorize([UserRole.ADMIN, UserRole.MANAGER]),
-    validate(idParamValidation),
+    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+    validateParams(idParamValidation),
     programController.toggleProgramStatus
 );
 
 // Enrollment eligibility check
 router.post(
     '/:id/check-eligibility',
-    validate(idParamValidation),
-    validate(programEligibilityValidation),
+    validateParams(idParamValidation),
+    validateBody(programEligibilityValidation),
     programController.checkEligibility
 );
 
