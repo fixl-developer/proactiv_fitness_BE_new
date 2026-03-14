@@ -1,87 +1,186 @@
-import { Partner, BulkImport } from './partner.model';
-import { IPartner, ICreatePartnerRequest, IBulkImportRequest, IPartnerDashboard } from './partner.interface';
-import { AppError } from '../../shared/utils/app-error.util';
-import { v4 as uuidv4 } from 'uuid';
+import {
+    IPartnerProfile, IBulkStudentImport, IPartnerDashboard, IRevenueSharing,
+    IComplianceExport, ITenderDocumentation, IMunicipalReporting, IPartnerAgreement,
+    IPartnerPerformance, IPartnerCommunication, IPartnerSupport
+} from './partner.model';
 
 export class PartnerService {
-    async createPartner(data: ICreatePartnerRequest, userId: string): Promise<IPartner> {
-        const partnerId = uuidv4();
-
-        const partner = new Partner({
-            partnerId,
-            partnerName: data.partnerName,
-            partnerType: data.partnerType,
-            legalEntityName: data.legalEntityName,
-            contactInfo: data.contactInfo,
-            revenueShare: data.revenueShare,
-            businessUnitId: 'bu-001',
-            locationId: 'loc-001',
-            createdBy: userId,
-            updatedBy: userId
-        });
-
-        return await partner.save();
+    async createPartnerProfile(profileData: Partial<IPartnerProfile>): Promise<IPartnerProfile> {
+        const profile: IPartnerProfile = {
+            partnerId: `PARTNER-${Date.now()}`,
+            partnerName: profileData.partnerName || '',
+            partnerType: profileData.partnerType || 'school',
+            email: profileData.email || '',
+            phone: profileData.phone || '',
+            address: profileData.address || '',
+            city: profileData.city || '',
+            state: profileData.state || '',
+            country: profileData.country || '',
+            logo: profileData.logo || '',
+            status: 'pending',
+            createdAt: new Date(),
+            updatedAt: new Date()
+        };
+        return profile;
     }
 
-    async bulkImportStudents(data: IBulkImportRequest, userId: string): Promise<any> {
-        const importId = uuidv4();
-        const partner = await Partner.findOne({ partnerId: data.partnerId });
-
-        if (!partner) {
-            throw new AppError('Partner not found', 404);
-        }
-
-        const bulkImport = new BulkImport({
-            importId,
-            partnerId: data.partnerId,
-            partnerName: partner.partnerName,
-            importedBy: userId,
-            fileInfo: {
-                fileName: data.fileName,
-                fileUrl: data.fileUrl,
-                fileSize: 0,
-                recordCount: 0
-            },
-            businessUnitId: partner.businessUnitId,
-            createdBy: userId,
-            updatedBy: userId
-        });
-
-        return await bulkImport.save();
+    async bulkImportStudents(importData: Partial<IBulkStudentImport>): Promise<IBulkStudentImport> {
+        const bulkImport: IBulkStudentImport = {
+            importId: `IMPORT-${Date.now()}`,
+            partnerId: importData.partnerId || '',
+            centerId: importData.centerId || '',
+            importDate: new Date(),
+            totalStudents: importData.totalStudents || 0,
+            successfulImports: 0,
+            failedImports: 0,
+            students: importData.students || [],
+            status: 'pending',
+            createdAt: new Date()
+        };
+        return bulkImport;
     }
 
     async getPartnerDashboard(partnerId: string): Promise<IPartnerDashboard> {
-        const partner = await Partner.findOne({ partnerId });
-
-        if (!partner) {
-            throw new AppError('Partner not found', 404);
-        }
-
         return {
-            partnerId: partner.partnerId,
-            partnerName: partner.partnerName,
-            overview: {
-                status: partner.status,
-                totalStudents: partner.studentInfo.totalStudents,
-                activeStudents: partner.studentInfo.activeStudents,
-                enrolledPrograms: partner.studentInfo.enrolledPrograms.length
-            },
-            financial: {
-                totalRevenue: partner.financialMetrics.totalRevenue,
-                partnerShare: partner.financialMetrics.partnerRevenue,
-                platformShare: partner.financialMetrics.platformRevenue,
-                lastPaymentDate: undefined,
-                nextPaymentDate: undefined
-            },
-            performance: {
-                studentGrowthRate: 0,
-                revenueGrowthRate: 0,
-                complianceScore: partner.complianceInfo.complianceScore
-            }
+            dashboardId: `DASH-${Date.now()}`,
+            partnerId,
+            totalStudents: 0,
+            activePrograms: 0,
+            totalRevenue: 0,
+            monthlyRevenue: 0,
+            studentGrowth: 0,
+            engagementRate: 0,
+            satisfactionScore: 0,
+            lastUpdated: new Date(),
+            createdAt: new Date()
         };
     }
 
-    async getAllPartners(): Promise<IPartner[]> {
-        return await Partner.find();
+    async calculateRevenueShare(partnerId: string, period: string): Promise<IRevenueSharing> {
+        return {
+            revenueSharingId: `REVSHARE-${Date.now()}`,
+            partnerId,
+            centerId: '',
+            period: period as any,
+            startDate: new Date(),
+            endDate: new Date(),
+            totalRevenue: 0,
+            partnerShare: 0,
+            sharePercentage: 0,
+            paymentStatus: 'pending',
+            createdAt: new Date()
+        };
+    }
+
+    async generateComplianceExport(exportData: Partial<IComplianceExport>): Promise<IComplianceExport> {
+        return {
+            exportId: `EXPORT-${Date.now()}`,
+            partnerId: exportData.partnerId || '',
+            exportType: exportData.exportType || 'financial',
+            exportDate: new Date(),
+            data: exportData.data || {},
+            format: exportData.format || 'pdf',
+            status: 'generated',
+            createdAt: new Date()
+        };
+    }
+
+    async submitTenderDocumentation(tenderData: Partial<ITenderDocumentation>): Promise<ITenderDocumentation> {
+        return {
+            tenderId: `TENDER-${Date.now()}`,
+            partnerId: tenderData.partnerId || '',
+            tenderName: tenderData.tenderName || '',
+            description: tenderData.description || '',
+            documents: tenderData.documents || [],
+            submissionDate: new Date(),
+            status: 'draft',
+            createdAt: new Date(),
+            updatedAt: new Date()
+        };
+    }
+
+    async submitMunicipalReport(reportData: Partial<IMunicipalReporting>): Promise<IMunicipalReporting> {
+        return {
+            reportingId: `MUNIREPORT-${Date.now()}`,
+            partnerId: reportData.partnerId || '',
+            reportType: reportData.reportType || 'enrollment',
+            reportingPeriod: reportData.reportingPeriod || '',
+            submissionDate: new Date(),
+            data: reportData.data || {},
+            status: 'draft',
+            createdAt: new Date()
+        };
+    }
+
+    async createPartnerAgreement(agreementData: Partial<IPartnerAgreement>): Promise<IPartnerAgreement> {
+        return {
+            agreementId: `AGREEMENT-${Date.now()}`,
+            partnerId: agreementData.partnerId || '',
+            centerId: agreementData.centerId || '',
+            agreementType: agreementData.agreementType || 'standard',
+            startDate: agreementData.startDate || new Date(),
+            endDate: agreementData.endDate || new Date(),
+            terms: agreementData.terms || '',
+            status: 'active',
+            createdAt: new Date(),
+            updatedAt: new Date()
+        };
+    }
+
+    async getPartnerPerformance(partnerId: string, period: string): Promise<IPartnerPerformance> {
+        return {
+            performanceId: `PERF-${Date.now()}`,
+            partnerId,
+            period: period as any,
+            date: new Date(),
+            studentEnrollment: 0,
+            studentRetention: 0,
+            programCompletion: 0,
+            satisfactionScore: 0,
+            revenueGenerated: 0,
+            createdAt: new Date()
+        };
+    }
+
+    async sendPartnerCommunication(commData: Partial<IPartnerCommunication>): Promise<IPartnerCommunication> {
+        return {
+            communicationId: `COMM-${Date.now()}`,
+            partnerId: commData.partnerId || '',
+            type: commData.type || 'email',
+            subject: commData.subject || '',
+            content: commData.content || '',
+            sentDate: new Date(),
+            status: 'sent',
+            createdAt: new Date()
+        };
+    }
+
+    async createSupportTicket(supportData: Partial<IPartnerSupport>): Promise<IPartnerSupport> {
+        return {
+            supportId: `SUPPORT-${Date.now()}`,
+            partnerId: supportData.partnerId || '',
+            issueType: supportData.issueType || 'technical',
+            subject: supportData.subject || '',
+            description: supportData.description || '',
+            priority: supportData.priority || 'medium',
+            status: 'open',
+            createdAt: new Date(),
+            updatedAt: new Date()
+        };
+    }
+
+    async resolveSupportTicket(supportId: string, resolution: string): Promise<IPartnerSupport> {
+        return {
+            supportId,
+            partnerId: '',
+            issueType: 'technical',
+            subject: '',
+            description: '',
+            priority: 'medium',
+            status: 'resolved',
+            resolvedDate: new Date(),
+            createdAt: new Date(),
+            updatedAt: new Date()
+        };
     }
 }

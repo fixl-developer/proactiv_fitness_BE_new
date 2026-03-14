@@ -68,9 +68,10 @@ export class ParentRegistrationController extends BaseController {
             const userResult = await authService.register({
                 email: data.email,
                 password: data.password,
+                confirmPassword: data.confirmPassword,
                 firstName: data.parentFirstName,
                 lastName: data.parentLastName,
-                role: 'parent',
+                role: 'PARENT' as any,
                 phone: data.phone,
             });
 
@@ -130,15 +131,14 @@ export class ParentRegistrationController extends BaseController {
             return this.sendCreated(
                 res,
                 {
-                    accessToken: userResult.accessToken,
-                    refreshToken: userResult.refreshToken,
+                    token: (userResult as any).token || (userResult as any).accessToken,
                     user: {
                         id: userResult.user.id,
                         email: userResult.user.email,
                         firstName: userResult.user.firstName,
                         lastName: userResult.user.lastName,
                         role: userResult.user.role,
-                        emailVerified: userResult.user.emailVerified,
+                        isEmailVerified: userResult.user.isEmailVerified,
                     },
                     family: familyProfile
                         ? {
@@ -167,11 +167,13 @@ export class ParentRegistrationController extends BaseController {
                 return this.sendBadRequest(res, 'Email is required');
             }
 
-            const exists = await userService.checkEmailExists(email);
+            // Check if email exists
+            const user = await userService.getUserByEmail(email);
+            const available = !user;
 
             return this.sendSuccess(res, {
-                available: !exists,
-                message: exists ? 'Email already registered' : 'Email available',
+                available,
+                message: available ? 'Email available' : 'Email already registered',
             });
         } catch (error: any) {
             return this.sendError(res, error.message || 'Email check failed');

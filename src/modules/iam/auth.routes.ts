@@ -28,19 +28,19 @@ router.post(
 router.post(
     '/register/parent',
     authLimiter,
-    parentRegistrationController.wrap(parentRegistrationController.registerParent)
+    parentRegistrationController.registerParent.bind(parentRegistrationController)
 );
 
 router.post(
     '/register/check-email',
     authLimiter,
-    parentRegistrationController.wrap(parentRegistrationController.checkEmailAvailability)
+    parentRegistrationController.checkEmailAvailability.bind(parentRegistrationController)
 );
 
 router.post(
     '/register/save-progress',
     authLimiter,
-    parentRegistrationController.wrap(parentRegistrationController.saveRegistrationProgress)
+    parentRegistrationController.saveRegistrationProgress.bind(parentRegistrationController)
 );
 
 router.post(
