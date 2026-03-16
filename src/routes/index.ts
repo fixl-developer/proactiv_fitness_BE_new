@@ -101,7 +101,6 @@ router.get('/', (_req: Request, res: Response) => {
         message: 'Proactiv Fitness Platform API',
         version: '1.0.0',
         status: 'Running',
-<<<<<<< Updated upstream
         modules: {
             iam: 'active',
             bcms: 'active',
@@ -116,10 +115,6 @@ router.get('/', (_req: Request, res: Response) => {
             attendance: 'active',
             safety: 'active'
         },
-=======
-        environment: process.env.NODE_ENV || 'development',
-        totalModules: 57,
->>>>>>> Stashed changes
         timestamp: new Date().toISOString()
     });
 });
@@ -127,7 +122,6 @@ router.get('/', (_req: Request, res: Response) => {
 router.get('/health', (_req: Request, res: Response) => {
     res.json({
         status: 'healthy',
-<<<<<<< Updated upstream
         modules: {
             iam: 'healthy',
             bcms: 'healthy',
@@ -144,9 +138,6 @@ router.get('/health', (_req: Request, res: Response) => {
             attendance: 'healthy',
             safety: 'healthy'
         },
-=======
-        uptime: process.uptime(),
->>>>>>> Stashed changes
         timestamp: new Date().toISOString()
     });
 });
@@ -238,7 +229,6 @@ router.use('/cms', cmsRoutes);
 router.use('/careers', careersRoutes);
 router.use('/inquiries', inquiriesRoutes);
 
-<<<<<<< Updated upstream
 router.get('/automation', (_req: Request, res: Response) => {
     res.json({ message: 'Automation routes - Phase 4 complete' });
 });
@@ -257,7 +247,39 @@ router.get('/safety', (_req: Request, res: Response) => {
     res.json({ message: 'Safety routes - Phase 6 complete' });
 });
 
+// Audit Routes (stub — accepts frontend audit logs silently)
+router.post('/audit/logs', (_req: Request, res: Response) => {
+    res.status(200).json({ success: true });
+});
+
+// Observability Routes (stubs for superadmin dashboard)
+router.get('/observability/health', (_req: Request, res: Response) => {
+    res.json({
+        success: true,
+        data: {
+            status: 'healthy',
+            services: { api: 'up', database: 'up', cache: 'up' },
+            uptime: process.uptime(),
+            timestamp: new Date().toISOString()
+        }
+    });
+});
+
+router.get('/observability/alerts', (_req: Request, res: Response) => {
+    res.json({ success: true, data: [] });
+});
+
+router.get('/system/analytics', (_req: Request, res: Response) => {
+    res.json({
+        success: true,
+        data: {
+            totalUsers: 0,
+            activeUsers: 0,
+            totalLocations: 0,
+            totalBookings: 0,
+            revenue: 0
+        }
+    });
+});
+
 export default router;
-=======
-export default router;
->>>>>>> Stashed changes
