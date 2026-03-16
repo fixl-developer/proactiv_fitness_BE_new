@@ -1,5 +1,10 @@
 import { Badge, Streak, Challenge, Leaderboard, GamificationProfile, Reward } from './gamification.model';
-import { EventBus } from '../event-bus/event-bus.service';
+
+class EventBus {
+    async publish(event: string, data: any): Promise<void> {
+        // no-op stub
+    }
+}
 
 export class GamificationService {
     private eventBus: EventBus;

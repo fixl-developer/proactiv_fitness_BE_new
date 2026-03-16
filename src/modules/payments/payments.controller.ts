@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { PaymentService } from './payments.service';
-import { authenticate, authorize } from '@/middleware/auth';
+import { authenticate, authorize } from '@modules/iam/auth.middleware';
 
 const router = Router();
 const paymentService = new PaymentService();

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { FinancialLedgerService } from './financial-ledger.service';
-import { authenticate, authorize } from '@/middleware/auth';
+import { authenticate, authorize } from '@modules/iam/auth.middleware';
 
 const router = Router();
 const ledgerService = new FinancialLedgerService();

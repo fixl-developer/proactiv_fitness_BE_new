@@ -302,10 +302,11 @@ export class UserService extends BaseService<IUser> {
     /**
      * Format user response (remove sensitive data)
      */
-    formatUserResponse(user: IUser): IUserResponse {
+    formatUserResponse(user: IUser): any {
         return {
             id: user._id.toString(),
             email: user.email,
+            name: user.fullName || `${user.firstName} ${user.lastName}`,
             firstName: user.firstName,
             lastName: user.lastName,
             fullName: user.fullName,

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { NotificationService } from './notifications.service';
-import { authenticate } from '@/middleware/auth';
+import { authenticate } from '@modules/iam/auth.middleware';
 
 const router = Router();
 const notificationService = new NotificationService();

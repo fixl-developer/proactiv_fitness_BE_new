@@ -36,7 +36,12 @@ const startServer = async () => {
         });
 
         // Handle unhandled promise rejections
-        process.on('unhandledRejection', (error: Error) => {
+        process.on('unhandledRejection', (error: any) => {
+            // Don't crash on operational errors (e.g. 4xx responses)
+            if (error?.isOperational) {
+                logger.warn('Unhandled operational rejection:', error?.message);
+                return;
+            }
             logger.error('UNHANDLED REJECTION! 💥 Shutting down...', error);
             server.close(() => {
                 process.exit(1);
