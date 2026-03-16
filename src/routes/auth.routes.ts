@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import authController from '../controllers/auth.controller';
 import { validate } from '../middleware/validation.middleware';
-import { rateLimitMiddleware } from '../middleware/rate-limit.middleware';
+import { createRateLimitMiddleware } from '../middleware/rate-limit.middleware';
 import { authenticate } from '../modules/iam/auth.middleware';
 import {
     registerValidation,
@@ -18,28 +18,28 @@ const router = Router();
 // Public routes (with rate limiting)
 router.post(
     '/register',
-    rateLimitMiddleware({ windowMs: 15 * 60 * 1000, max: 5 }),
+    createRateLimitMiddleware({ windowMs: 15 * 60 * 1000, max: 5 }),
     validate(registerValidation),
     authController.register.bind(authController)
 );
 
 router.post(
     '/login',
-    rateLimitMiddleware({ windowMs: 15 * 60 * 1000, max: 5 }),
+    createRateLimitMiddleware({ windowMs: 15 * 60 * 1000, max: 5 }),
     validate(loginValidation),
     authController.login.bind(authController)
 );
 
 router.post(
     '/forgot-password',
-    rateLimitMiddleware({ windowMs: 15 * 60 * 1000, max: 3 }),
+    createRateLimitMiddleware({ windowMs: 15 * 60 * 1000, max: 3 }),
     validate(passwordResetRequestValidation),
     authController.forgotPassword.bind(authController)
 );
 
 router.post(
     '/reset-password',
-    rateLimitMiddleware({ windowMs: 15 * 60 * 1000, max: 3 }),
+    createRateLimitMiddleware({ windowMs: 15 * 60 * 1000, max: 3 }),
     validate(passwordResetValidation),
     authController.resetPassword.bind(authController)
 );

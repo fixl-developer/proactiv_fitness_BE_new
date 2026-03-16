@@ -22,5 +22,16 @@ export const strictLimiter = rateLimit({
     message: 'Rate limit exceeded',
 });
 
-// Alias for backward compatibility
+// Alias for backward compatibility (instance)
 export const rateLimitMiddleware = apiLimiter;
+
+// Factory function for custom rate limit options
+export const createRateLimitMiddleware = (options: { windowMs: number; max: number }) => {
+    return rateLimit({
+        windowMs: options.windowMs,
+        max: options.max,
+        message: 'Too many requests from this IP, please try again later.',
+        standardHeaders: true,
+        legacyHeaders: false,
+    });
+};
