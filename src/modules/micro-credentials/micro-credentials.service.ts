@@ -165,265 +165,265 @@ export class MicroCredentialService extends BaseService<IMicroCredential> {
     private generateIssuedCredentialId(): string {
         return `issued_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
-}
+
     /**
      * Verify credential
      */
-    async verifyCredential(verifyRequest: IVerifyCredentialRequest): Promise < IVerificationResult > {
-    try {
-        const issuedCredential = await IssuedCredential.findOne({
-            issuedCredentialId: verifyRequest.credentialId
-        });
+    async verifyCredential(verifyRequest: IVerifyCredentialRequest): Promise<IVerificationResult> {
+        try {
+            const issuedCredential = await IssuedCredential.findOne({
+                issuedCredentialId: verifyRequest.credentialId
+            });
 
-        if(!issuedCredential) {
-            return {
-                isValid: false,
-                verificationDate: new Date(),
-                verificationMethod: verifyRequest.verificationMethod,
-                errorMessage: 'Credential not found'
-            };
-        }
+            if (!issuedCredential) {
+                return {
+                    isValid: false,
+                    verificationDate: new Date(),
+                    verificationMethod: verifyRequest.verificationMethod,
+                    errorMessage: 'Credential not found'
+                };
+            }
 
             // Check verification code
             const credential = await MicroCredential.findOne({
-            credentialId: issuedCredential.credentialId
-        });
+                credentialId: issuedCredential.credentialId
+            });
 
-        if(!credential || credential.verificationSystem.verificationCode !== verifyRequest.verificationCode) {
-    return {
-        isValid: false,
-        verificationDate: new Date(),
-        verificationMethod: verifyRequest.verificationMethod,
-        errorMessage: 'Invalid verification code'
-    };
-}
+            if (!credential || credential.verificationSystem.verificationCode !== verifyRequest.verificationCode) {
+                return {
+                    isValid: false,
+                    verificationDate: new Date(),
+                    verificationMethod: verifyRequest.verificationMethod,
+                    errorMessage: 'Invalid verification code'
+                };
+            }
 
-// Check if expired
-if (issuedCredential.isExpired) {
-    return {
-        isValid: false,
-        verificationDate: new Date(),
-        verificationMethod: verifyRequest.verificationMethod,
-        errorMessage: 'Credential has expired'
-    };
-}
+            // Check if expired
+            if (issuedCredential.isExpired) {
+                return {
+                    isValid: false,
+                    verificationDate: new Date(),
+                    verificationMethod: verifyRequest.verificationMethod,
+                    errorMessage: 'Credential has expired'
+                };
+            }
 
-// Check if revoked
-if (issuedCredential.status === CertificationStatus.REVOKED) {
-    return {
-        isValid: false,
-        verificationDate: new Date(),
-        verificationMethod: verifyRequest.verificationMethod,
-        errorMessage: 'Credential has been revoked'
-    };
-}
+            // Check if revoked
+            if (issuedCredential.status === CertificationStatus.REVOKED) {
+                return {
+                    isValid: false,
+                    verificationDate: new Date(),
+                    verificationMethod: verifyRequest.verificationMethod,
+                    errorMessage: 'Credential has been revoked'
+                };
+            }
 
-// Record verification
-const verificationId = this.generateVerificationId();
-issuedCredential.verificationHistory.push({
-    verificationId,
-    verifiedBy: 'Public Verification',
-    verifiedDate: new Date(),
-    verificationMethod: verifyRequest.verificationMethod,
-    status: VerificationStatus.VERIFIED
-});
+            // Record verification
+            const verificationId = this.generateVerificationId();
+            issuedCredential.verificationHistory.push({
+                verificationId,
+                verifiedBy: 'Public Verification',
+                verifiedDate: new Date(),
+                verificationMethod: verifyRequest.verificationMethod,
+                status: VerificationStatus.VERIFIED
+            });
 
-await issuedCredential.save();
+            await issuedCredential.save();
 
-return {
-    isValid: true,
-    credentialInfo: {
-        name: issuedCredential.credentialName,
-        recipientName: issuedCredential.recipientName,
-        issuedDate: issuedCredential.issuedDate,
-        issuedBy: issuedCredential.issuedByName,
-        status: issuedCredential.status,
-        expirationDate: issuedCredential.expirationDate
-    },
-    verificationDate: new Date(),
-    verificationMethod: verifyRequest.verificationMethod
-};
+            return {
+                isValid: true,
+                credentialInfo: {
+                    name: issuedCredential.credentialName,
+                    recipientName: issuedCredential.recipientName,
+                    issuedDate: issuedCredential.issuedDate,
+                    issuedBy: issuedCredential.issuedByName,
+                    status: issuedCredential.status,
+                    expirationDate: issuedCredential.expirationDate
+                },
+                verificationDate: new Date(),
+                verificationMethod: verifyRequest.verificationMethod
+            };
         } catch (error: any) {
-    throw new AppError(
-        error.message || 'Failed to verify credential',
-        HTTP_STATUS.INTERNAL_SERVER_ERROR
-    );
-}
+            throw new AppError(
+                error.message || 'Failed to verify credential',
+                HTTP_STATUS.INTERNAL_SERVER_ERROR
+            );
+        }
     }
 
     /**
      * Get credential portfolio for recipient
      */
-    async getCredentialPortfolio(recipientId: string): Promise < ICredentialPortfolio > {
-    try {
-        const credentials = await IssuedCredential.find({ recipientId });
-        const recipientName = await this.getRecipientName(recipientId);
+    async getCredentialPortfolio(recipientId: string): Promise<ICredentialPortfolio> {
+        try {
+            const credentials = await IssuedCredential.find({ recipientId });
+            const recipientName = await this.getRecipientName(recipientId);
 
-        const activeCredentials = credentials.filter(c =>
-            c.status === CertificationStatus.EARNED && !c.isExpired
-        );
-        const expiredCredentials = credentials.filter(c => c.isExpired);
+            const activeCredentials = credentials.filter(c =>
+                c.status === CertificationStatus.EARNED && !c.isExpired
+            );
+            const expiredCredentials = credentials.filter(c => c.isExpired);
 
-        // Group by level
-        const credentialsByLevel = await this.groupCredentialsByLevel(credentials);
+            // Group by level
+            const credentialsByLevel = await this.groupCredentialsByLevel(credentials);
 
-        // Group by category
-        const credentialsByCategory = await this.groupCredentialsByCategory(credentials);
+            // Group by category
+            const credentialsByCategory = await this.groupCredentialsByCategory(credentials);
 
-        // Get recent credentials (last 30 days)
-        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-        const recentCredentials = credentials
-            .filter(c => c.issuedDate >= thirtyDaysAgo)
-            .map(c => this.mapToCredentialSummary(c))
-            .slice(0, 5);
+            // Get recent credentials (last 30 days)
+            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+            const recentCredentials = credentials
+                .filter(c => c.issuedDate >= thirtyDaysAgo)
+                .map(c => this.mapToCredentialSummary(c))
+                .slice(0, 5);
 
-        // Get expiring credentials (next 30 days)
-        const thirtyDaysFromNow = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-        const expiringCredentials = credentials
-            .filter(c => c.expirationDate && c.expirationDate <= thirtyDaysFromNow && !c.isExpired)
-            .map(c => this.mapToCredentialSummary(c));
+            // Get expiring credentials (next 30 days)
+            const thirtyDaysFromNow = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+            const expiringCredentials = credentials
+                .filter(c => c.expirationDate && c.expirationDate <= thirtyDaysFromNow && !c.isExpired)
+                .map(c => this.mapToCredentialSummary(c));
 
-        return {
-            recipientId,
-            recipientName,
-            totalCredentials: credentials.length,
-            activeCredentials: activeCredentials.length,
-            expiredCredentials: expiredCredentials.length,
-            credentialsByLevel,
-            credentialsByCategory,
-            recentCredentials,
-            expiringCredentials
-        };
-    } catch(error: any) {
-        throw new AppError(
-            error.message || 'Failed to get credential portfolio',
-            HTTP_STATUS.INTERNAL_SERVER_ERROR
-        );
+            return {
+                recipientId,
+                recipientName,
+                totalCredentials: credentials.length,
+                activeCredentials: activeCredentials.length,
+                expiredCredentials: expiredCredentials.length,
+                credentialsByLevel,
+                credentialsByCategory,
+                recentCredentials,
+                expiringCredentials
+            };
+        } catch (error: any) {
+            throw new AppError(
+                error.message || 'Failed to get credential portfolio',
+                HTTP_STATUS.INTERNAL_SERVER_ERROR
+            );
+        }
     }
-}
 
     // Private helper methods
-    private async generateBadgeImage(credentialRequest: ICreateCredentialRequest): Promise < string > {
-    // Implementation to generate badge image
-    return `https://storage.example.com/badges/${credentialRequest.badgeType}_${credentialRequest.level}.png`;
-}
+    private async generateBadgeImage(credentialRequest: ICreateCredentialRequest): Promise<string> {
+        // Implementation to generate badge image
+        return `https://storage.example.com/badges/${credentialRequest.badgeType}_${credentialRequest.level}.png`;
+    }
 
-    private async generateColorScheme(level: any): Promise < any > {
-    const colorSchemes = {
-        bronze: { primary: '#CD7F32', secondary: '#8B4513', accent: '#FFD700' },
-        silver: { primary: '#C0C0C0', secondary: '#808080', accent: '#FFFFFF' },
-        gold: { primary: '#FFD700', secondary: '#FFA500', accent: '#FFFF00' },
-        platinum: { primary: '#E5E4E2', secondary: '#B8860B', accent: '#F0F8FF' },
-        diamond: { primary: '#B9F2FF', secondary: '#4169E1', accent: '#00BFFF' }
-    };
-    return colorSchemes[level] || colorSchemes.bronze;
-}
+    private async generateColorScheme(level: any): Promise<any> {
+        const colorSchemes = {
+            bronze: { primary: '#CD7F32', secondary: '#8B4513', accent: '#FFD700' },
+            silver: { primary: '#C0C0C0', secondary: '#808080', accent: '#FFFFFF' },
+            gold: { primary: '#FFD700', secondary: '#FFA500', accent: '#FFFF00' },
+            platinum: { primary: '#E5E4E2', secondary: '#B8860B', accent: '#F0F8FF' },
+            diamond: { primary: '#B9F2FF', secondary: '#4169E1', accent: '#00BFFF' }
+        };
+        return colorSchemes[level] || colorSchemes.bronze;
+    }
 
-    private async generateCertificateTemplate(credentialRequest: ICreateCredentialRequest): Promise < any > {
-    return {
-        templateId: `template_${credentialRequest.level}`,
-        layout: 'standard',
-        includeQRCode: true,
-        includeBlockchain: false,
-        customFields: [
-            { fieldName: 'credentialName', fieldValue: credentialRequest.name, isVariable: false },
-            { fieldName: 'recipientName', fieldValue: '{{recipientName}}', isVariable: true },
-            { fieldName: 'issuedDate', fieldValue: '{{issuedDate}}', isVariable: true }
-        ]
-    };
-}
+    private async generateCertificateTemplate(credentialRequest: ICreateCredentialRequest): Promise<any> {
+        return {
+            templateId: `template_${credentialRequest.level}`,
+            layout: 'standard',
+            includeQRCode: true,
+            includeBlockchain: false,
+            customFields: [
+                { fieldName: 'credentialName', fieldValue: credentialRequest.name, isVariable: false },
+                { fieldName: 'recipientName', fieldValue: '{{recipientName}}', isVariable: true },
+                { fieldName: 'issuedDate', fieldValue: '{{issuedDate}}', isVariable: true }
+            ]
+        };
+    }
 
-    private async generateDigitalCertificate(credential: IMicroCredential, issueRequest: IIssueCredentialRequest): Promise < any > {
-    const certificateId = this.generateCertificateId();
-    return {
-        certificateUrl: `https://certificates.proactiv.com/${certificateId}.pdf`,
-        certificateHash: this.generateCertificateHash(certificateId),
-        qrCodeUrl: `https://qr.proactiv.com/${certificateId}.png`,
-        verificationUrl: `https://verify.proactiv.com/${certificateId}`
-    };
-}
+    private async generateDigitalCertificate(credential: IMicroCredential, issueRequest: IIssueCredentialRequest): Promise<any> {
+        const certificateId = this.generateCertificateId();
+        return {
+            certificateUrl: `https://certificates.proactiv.com/${certificateId}.pdf`,
+            certificateHash: this.generateCertificateHash(certificateId),
+            qrCodeUrl: `https://qr.proactiv.com/${certificateId}.png`,
+            verificationUrl: `https://verify.proactiv.com/${certificateId}`
+        };
+    }
 
-    private async validateRequirements(credential: IMicroCredential, achievementData: any): Promise < void> {
-    // Implementation to validate all requirements are met
-    // This would check skills, attendance, behavior, performance requirements
-}
+    private async validateRequirements(credential: IMicroCredential, achievementData: any): Promise<void> {
+        // Implementation to validate all requirements are met
+        // This would check skills, attendance, behavior, performance requirements
+    }
 
     private calculateExpirationDate(expirationRules: any): Date | undefined {
-    if (!expirationRules.hasExpiration) return undefined;
+        if (!expirationRules.hasExpiration) return undefined;
 
-    const now = new Date();
-    const expirationDate = new Date(now);
-    expirationDate.setMonth(expirationDate.getMonth() + expirationRules.validityPeriod);
+        const now = new Date();
+        const expirationDate = new Date(now);
+        expirationDate.setMonth(expirationDate.getMonth() + expirationRules.validityPeriod);
 
-    return expirationDate;
-}
+        return expirationDate;
+    }
 
-    private async updateCredentialStatistics(credentialId: string): Promise < void> {
-    const credential = await MicroCredential.findOne({ credentialId });
-    if(!credential) return;
+    private async updateCredentialStatistics(credentialId: string): Promise<void> {
+        const credential = await MicroCredential.findOne({ credentialId });
+        if (!credential) return;
 
-    const issuedCredentials = await IssuedCredential.find({ credentialId });
+        const issuedCredentials = await IssuedCredential.find({ credentialId });
 
-    credential.statistics.totalIssued = issuedCredentials.length;
-    credential.statistics.totalActive = issuedCredentials.filter(c =>
-        c.status === CertificationStatus.EARNED && !c.isExpired
-    ).length;
-    credential.statistics.totalExpired = issuedCredentials.filter(c => c.isExpired).length;
+        credential.statistics.totalIssued = issuedCredentials.length;
+        credential.statistics.totalActive = issuedCredentials.filter(c =>
+            c.status === CertificationStatus.EARNED && !c.isExpired
+        ).length;
+        credential.statistics.totalExpired = issuedCredentials.filter(c => c.isExpired).length;
 
-    await credential.save();
-}
+        await credential.save();
+    }
 
-    private async groupCredentialsByLevel(credentials: IIssuedCredential[]): Promise < any[] > {
-    // Implementation to group credentials by level
-    return [];
-}
+    private async groupCredentialsByLevel(credentials: IIssuedCredential[]): Promise<any[]> {
+        // Implementation to group credentials by level
+        return [];
+    }
 
-    private async groupCredentialsByCategory(credentials: IIssuedCredential[]): Promise < any[] > {
-    // Implementation to group credentials by category
-    return [];
-}
+    private async groupCredentialsByCategory(credentials: IIssuedCredential[]): Promise<any[]> {
+        // Implementation to group credentials by category
+        return [];
+    }
 
     private mapToCredentialSummary(credential: IIssuedCredential): ICredentialSummary {
-    return {
-        credentialId: credential.issuedCredentialId,
-        name: credential.credentialName,
-        level: 'bronze' as any, // Would get from credential definition
-        status: credential.status,
-        issuedDate: credential.issuedDate,
-        expirationDate: credential.expirationDate,
-        isExpired: credential.isExpired,
-        verificationUrl: credential.digitalCertificate.verificationUrl,
-        badgeImageUrl: 'badge_url' // Would get from credential definition
-    };
-}
+        return {
+            credentialId: credential.issuedCredentialId,
+            name: credential.credentialName,
+            level: 'bronze' as any, // Would get from credential definition
+            status: credential.status,
+            issuedDate: credential.issuedDate,
+            expirationDate: credential.expirationDate,
+            isExpired: credential.isExpired,
+            verificationUrl: credential.digitalCertificate.verificationUrl,
+            badgeImageUrl: 'badge_url' // Would get from credential definition
+        };
+    }
 
-    private async getBusinessUnitId(): Promise < string > {
-    return 'business_unit_id'; // Placeholder
-}
+    private async getBusinessUnitId(): Promise<string> {
+        return 'business_unit_id'; // Placeholder
+    }
 
-    private async getRecipientName(recipientId: string): Promise < string > {
-    return `Recipient ${recipientId}`;
-}
+    private async getRecipientName(recipientId: string): Promise<string> {
+        return `Recipient ${recipientId}`;
+    }
 
-    private async getStaffName(staffId: string): Promise < string > {
-    return `Staff ${staffId}`;
-}
+    private async getStaffName(staffId: string): Promise<string> {
+        return `Staff ${staffId}`;
+    }
 
-    private async getLocationId(recipientId: string): Promise < string > {
-    return 'location_id'; // Placeholder
-}
+    private async getLocationId(recipientId: string): Promise<string> {
+        return 'location_id'; // Placeholder
+    }
 
     private generateVerificationId(): string {
-    return `verify_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-}
+        return `verify_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
 
     private generateCertificateId(): string {
-    return `cert_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-}
+        return `cert_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
 
     private generateCertificateHash(certificateId: string): string {
-    return `hash_${certificateId}_${Math.random().toString(36).substr(2, 16)}`;
-}
+        return `hash_${certificateId}_${Math.random().toString(36).substr(2, 16)}`;
+    }
 }
 
 export class BadgeService extends BaseService<IBadgeSystem> {
