@@ -103,7 +103,7 @@ class EnvConfig {
             jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
 
             // CORS
-            corsOrigin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000'],
+            corsOrigin: process.env.CORS_ORIGIN?.split(',').map(o => o.trim()) || ['http://localhost:3000'],
 
             // Rate Limiting
             rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10),
