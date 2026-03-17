@@ -1,12 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { AdvancedAnalyticsService } from './advanced-analytics.service';
-import { authMiddleware, roleMiddleware } from '../../middleware';
+import { authenticate, authorize } from '@modules/iam/auth.middleware';
 
 const router = Router();
 const service = new AdvancedAnalyticsService();
 
 // Get predictive analytics
-router.get('/predictive/:entityId', authMiddleware, async (req: Request, res: Response) => {
+router.get('/predictive/:entityId', authenticate, async (req: Request, res: Response) => {
     try {
         const analytics = await service.getPredictiveAnalytics(req.params.entityId);
         res.json({ success: true, data: analytics });
@@ -16,7 +16,7 @@ router.get('/predictive/:entityId', authMiddleware, async (req: Request, res: Re
 });
 
 // Get ML models
-router.get('/models', authMiddleware, roleMiddleware(['ADMIN']), async (req: Request, res: Response) => {
+router.get('/models', authenticate, authorize(['ADMIN']), async (req: Request, res: Response) => {
     try {
         const models = await service.getMLModels();
         res.json({ success: true, data: models });
@@ -26,7 +26,7 @@ router.get('/models', authMiddleware, roleMiddleware(['ADMIN']), async (req: Req
 });
 
 // Get advanced dashboards
-router.get('/dashboards/:userId', authMiddleware, async (req: Request, res: Response) => {
+router.get('/dashboards/:userId', authenticate, async (req: Request, res: Response) => {
     try {
         const dashboards = await service.getAdvancedDashboards(req.params.userId);
         res.json({ success: true, data: dashboards });
@@ -36,7 +36,7 @@ router.get('/dashboards/:userId', authMiddleware, async (req: Request, res: Resp
 });
 
 // Get real-time insights
-router.get('/insights', authMiddleware, async (req: Request, res: Response) => {
+router.get('/insights', authenticate, async (req: Request, res: Response) => {
     try {
         const insights = await service.getRealTimeInsights();
         res.json({ success: true, data: insights });
@@ -46,7 +46,7 @@ router.get('/insights', authMiddleware, async (req: Request, res: Response) => {
 });
 
 // Get trend analysis
-router.get('/trends/:metric', authMiddleware, async (req: Request, res: Response) => {
+router.get('/trends/:metric', authenticate, async (req: Request, res: Response) => {
     try {
         const trends = await service.getTrendAnalysis(req.params.metric);
         res.json({ success: true, data: trends });
@@ -56,7 +56,7 @@ router.get('/trends/:metric', authMiddleware, async (req: Request, res: Response
 });
 
 // Detect anomalies
-router.post('/anomalies/detect', authMiddleware, roleMiddleware(['ADMIN']), async (req: Request, res: Response) => {
+router.post('/anomalies/detect', authenticate, authorize(['ADMIN']), async (req: Request, res: Response) => {
     try {
         const anomalies = await service.detectAnomalies(req.body);
         res.json({ success: true, data: anomalies });
@@ -66,7 +66,7 @@ router.post('/anomalies/detect', authMiddleware, roleMiddleware(['ADMIN']), asyn
 });
 
 // Get custom visualizations
-router.post('/visualizations', authMiddleware, async (req: Request, res: Response) => {
+router.post('/visualizations', authenticate, async (req: Request, res: Response) => {
     try {
         const visualization = await service.createCustomVisualization(req.body);
         res.json({ success: true, data: visualization });

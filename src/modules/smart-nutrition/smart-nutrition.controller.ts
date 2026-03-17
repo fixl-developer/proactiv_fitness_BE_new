@@ -1,12 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { SmartNutritionService } from './smart-nutrition.service';
-import { authMiddleware, roleMiddleware } from '../../middleware';
+import { authenticate, authorize } from '@modules/iam/auth.middleware';
 
 const router = Router();
 const service = new SmartNutritionService();
 
 // Generate meal plan
-router.post('/meal-plans', authMiddleware, roleMiddleware(['PARENT', 'COACH']), async (req: Request, res: Response) => {
+router.post('/meal-plans', authenticate, authorize(['PARENT', 'COACH']), async (req: Request, res: Response) => {
     try {
         const plan = await service.generateMealPlan(req.body);
         res.json({ success: true, data: plan });
@@ -16,7 +16,7 @@ router.post('/meal-plans', authMiddleware, roleMiddleware(['PARENT', 'COACH']), 
 });
 
 // Get meal plans
-router.get('/meal-plans/:childId', authMiddleware, async (req: Request, res: Response) => {
+router.get('/meal-plans/:childId', authenticate, async (req: Request, res: Response) => {
     try {
         const plans = await service.getMealPlans(req.params.childId);
         res.json({ success: true, data: plans });
@@ -26,7 +26,7 @@ router.get('/meal-plans/:childId', authMiddleware, async (req: Request, res: Res
 });
 
 // Track nutrition
-router.post('/tracking', authMiddleware, roleMiddleware(['PARENT']), async (req: Request, res: Response) => {
+router.post('/tracking', authenticate, authorize(['PARENT']), async (req: Request, res: Response) => {
     try {
         const tracking = await service.trackNutrition(req.body);
         res.json({ success: true, data: tracking });
@@ -36,7 +36,7 @@ router.post('/tracking', authMiddleware, roleMiddleware(['PARENT']), async (req:
 });
 
 // Get nutrition recommendations
-router.get('/recommendations/:childId', authMiddleware, async (req: Request, res: Response) => {
+router.get('/recommendations/:childId', authenticate, async (req: Request, res: Response) => {
     try {
         const recommendations = await service.getNutritionRecommendations(req.params.childId);
         res.json({ success: true, data: recommendations });
@@ -46,7 +46,7 @@ router.get('/recommendations/:childId', authMiddleware, async (req: Request, res
 });
 
 // Generate grocery list
-router.post('/grocery-list', authMiddleware, roleMiddleware(['PARENT']), async (req: Request, res: Response) => {
+router.post('/grocery-list', authenticate, authorize(['PARENT']), async (req: Request, res: Response) => {
     try {
         const list = await service.generateGroceryList(req.body.mealPlanId);
         res.json({ success: true, data: list });
@@ -56,7 +56,7 @@ router.post('/grocery-list', authMiddleware, roleMiddleware(['PARENT']), async (
 });
 
 // Get recipes
-router.get('/recipes', authMiddleware, async (req: Request, res: Response) => {
+router.get('/recipes', authenticate, async (req: Request, res: Response) => {
     try {
         const recipes = await service.getRecipes(req.query.dietary as string);
         res.json({ success: true, data: recipes });

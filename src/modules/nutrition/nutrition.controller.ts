@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import nutritionService from './nutrition.service';
-import { asyncHandler } from '@/middleware/asyncHandler';
+import { asyncHandler } from '../../shared/utils/async-handler.util';
 
 class NutritionController {
     getNutritionPlans = asyncHandler(async (req: Request, res: Response) => {

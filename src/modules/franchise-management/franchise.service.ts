@@ -1,4 +1,3 @@
-import { injectable } from 'tsyringe';
 import {
     IFranchiseProfile,
     IRoyaltyCalculation,
@@ -10,7 +9,6 @@ import {
     IFranchiseAgreement
 } from './franchise.model';
 
-@injectable()
 export class FranchiseService {
     private franchises: Map<string, IFranchiseProfile> = new Map();
     private royalties: Map<string, IRoyaltyCalculation[]> = new Map();

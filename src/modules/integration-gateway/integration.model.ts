@@ -70,6 +70,6 @@ const WebhookSchema = new Schema<IWebhook>({
     createdAt: { type: Date, default: Date.now, index: true }
 });
 
-export const Integration = mongoose.model<IIntegration>('Integration', IntegrationSchema);
-export const IntegrationLog = mongoose.model<IIntegrationLog>('IntegrationLog', IntegrationLogSchema);
-export const Webhook = mongoose.model<IWebhook>('Webhook', WebhookSchema);
+export const Integration = (mongoose.models['Integration'] as any) || mongoose.model<IIntegration>('Integration', IntegrationSchema);
+export const IntegrationLog = (mongoose.models['IntegrationLog'] as any) || mongoose.model<IIntegrationLog>('IntegrationLog', IntegrationLogSchema);
+export const Webhook = (mongoose.models['Webhook'] as any) || mongoose.model<IWebhook>('Webhook', WebhookSchema);

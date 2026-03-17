@@ -1,5 +1,5 @@
 import ApiKey from './api-developer-platform.model';
-import logger from '@/utils/logger';
+import logger from '@/shared/utils/logger.util';
 
 class ApiDeveloperService {
     async getApiDocs() {

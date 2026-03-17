@@ -1,9 +1,8 @@
 import { Router } from 'express';
-import { container } from 'tsyringe';
 import { SearchController } from './search.controller';
 
 const router = Router();
-const controller = container.resolve(SearchController);
+const controller = new SearchController();
 
 // Basic Search
 router.get('/search', (req, res) => controller.search(req, res));

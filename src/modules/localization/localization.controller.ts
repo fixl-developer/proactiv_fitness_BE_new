@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import localizationService from './localization.service';
-import { asyncHandler } from '@/middleware/asyncHandler';
+import { asyncHandler } from '../../shared/utils/async-handler.util';
 
 class LocalizationController {
     getLanguages = asyncHandler(async (req: Request, res: Response) => {

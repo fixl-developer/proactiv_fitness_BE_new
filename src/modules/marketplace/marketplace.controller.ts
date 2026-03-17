@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import marketplaceService from './marketplace.service';
-import { asyncHandler } from '@/middleware/asyncHandler';
+import { asyncHandler } from '../../shared/utils/async-handler.util';
 
 class MarketplaceController {
     getProducts = asyncHandler(async (req: Request, res: Response) => {

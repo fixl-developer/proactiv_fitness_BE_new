@@ -1,5 +1,5 @@
 import NutritionPlan from './nutrition.model';
-import logger from '@/utils/logger';
+import logger from '@/shared/utils/logger.util';
 
 class NutritionService {
     async getNutritionPlans(userId: string) {

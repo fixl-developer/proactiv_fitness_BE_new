@@ -1,10 +1,12 @@
 import { Request, Response } from 'express';
-import { injectable, inject } from 'tsyringe';
 import { SearchService } from './search.service';
 
-@injectable()
 export class SearchController {
-    constructor(@inject(SearchService) private searchService: SearchService) { }
+    private searchService: SearchService;
+
+    constructor() {
+        this.searchService = new SearchService();
+    }
 
     // Basic Search
     async search(req: Request, res: Response): Promise<void> {

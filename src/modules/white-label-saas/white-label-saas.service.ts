@@ -1,5 +1,5 @@
 import Tenant from './white-label-saas.model';
-import logger from '@/utils/logger';
+import logger from '@/shared/utils/logger.util';
 
 class WhiteLabelService {
     async getTenants() {

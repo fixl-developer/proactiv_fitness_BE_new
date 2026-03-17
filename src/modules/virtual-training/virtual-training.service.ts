@@ -1,5 +1,5 @@
 import VirtualClass from './virtual-training.model';
-import logger from '@/utils/logger';
+import logger from '@/shared/utils/logger.util';
 
 class VirtualTrainingService {
     async getVirtualClasses(filters: any) {

@@ -1,9 +1,8 @@
 import { Router } from 'express';
-import { container } from 'tsyringe';
 import { CommunityController } from './community.controller';
 
 const router = Router();
-const controller = container.resolve(CommunityController);
+const controller = new CommunityController();
 
 // Post Management
 router.post('/users/:userId/posts', (req, res) => controller.createPost(req, res));

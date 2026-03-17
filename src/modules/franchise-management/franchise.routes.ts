@@ -1,9 +1,8 @@
 import { Router } from 'express';
-import { container } from 'tsyringe';
 import { FranchiseController } from './franchise.controller';
 
 const router = Router();
-const controller = container.resolve(FranchiseController);
+const controller = new FranchiseController();
 
 // Franchise Profile Management
 router.post('/franchises', (req, res) => controller.createFranchise(req, res));

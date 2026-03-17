@@ -1,12 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { ReferralLoyaltyService } from './referral-loyalty.service';
-import { authMiddleware, roleMiddleware } from '../../middleware';
+import { authenticate, authorize } from '@modules/iam/auth.middleware';
 
 const router = Router();
 const service = new ReferralLoyaltyService();
 
 // Create referral link
-router.post('/referrals/create', authMiddleware, roleMiddleware(['PARENT']), async (req: Request, res: Response) => {
+router.post('/referrals/create', authenticate, authorize(['PARENT']), async (req: Request, res: Response) => {
     try {
         const referral = await service.createReferralLink(req.body.parentId);
         res.json({ success: true, data: referral });
@@ -16,7 +16,7 @@ router.post('/referrals/create', authMiddleware, roleMiddleware(['PARENT']), asy
 });
 
 // Get referral link
-router.get('/referrals/:parentId', authMiddleware, async (req: Request, res: Response) => {
+router.get('/referrals/:parentId', authenticate, async (req: Request, res: Response) => {
     try {
         const referral = await service.getReferralLink(req.params.parentId);
         res.json({ success: true, data: referral });
@@ -36,7 +36,7 @@ router.post('/referrals/track', async (req: Request, res: Response) => {
 });
 
 // Get referral rewards
-router.get('/rewards/:parentId', authMiddleware, async (req: Request, res: Response) => {
+router.get('/rewards/:parentId', authenticate, async (req: Request, res: Response) => {
     try {
         const rewards = await service.getReferralRewards(req.params.parentId);
         res.json({ success: true, data: rewards });
@@ -46,7 +46,7 @@ router.get('/rewards/:parentId', authMiddleware, async (req: Request, res: Respo
 });
 
 // Redeem reward
-router.post('/rewards/redeem', authMiddleware, roleMiddleware(['PARENT']), async (req: Request, res: Response) => {
+router.post('/rewards/redeem', authenticate, authorize(['PARENT']), async (req: Request, res: Response) => {
     try {
         const result = await service.redeemReward(req.body.parentId, req.body.rewardId);
         res.json({ success: true, data: result });
@@ -56,7 +56,7 @@ router.post('/rewards/redeem', authMiddleware, roleMiddleware(['PARENT']), async
 });
 
 // Get loyalty points
-router.get('/points/:parentId', authMiddleware, async (req: Request, res: Response) => {
+router.get('/points/:parentId', authenticate, async (req: Request, res: Response) => {
     try {
         const points = await service.getLoyaltyPoints(req.params.parentId);
         res.json({ success: true, data: points });
@@ -66,7 +66,7 @@ router.get('/points/:parentId', authMiddleware, async (req: Request, res: Respon
 });
 
 // Add loyalty points
-router.post('/points/add', authMiddleware, roleMiddleware(['ADMIN', 'COACH']), async (req: Request, res: Response) => {
+router.post('/points/add', authenticate, authorize(['ADMIN', 'COACH']), async (req: Request, res: Response) => {
     try {
         const result = await service.addLoyaltyPoints(req.body.parentId, req.body.points, req.body.reason);
         res.json({ success: true, data: result });
@@ -76,7 +76,7 @@ router.post('/points/add', authMiddleware, roleMiddleware(['ADMIN', 'COACH']), a
 });
 
 // Get leaderboard
-router.get('/leaderboard', authMiddleware, async (req: Request, res: Response) => {
+router.get('/leaderboard', authenticate, async (req: Request, res: Response) => {
     try {
         const leaderboard = await service.getLeaderboard(req.query.period as string);
         res.json({ success: true, data: leaderboard });
@@ -86,7 +86,7 @@ router.get('/leaderboard', authMiddleware, async (req: Request, res: Response) =
 });
 
 // Create challenge
-router.post('/challenges', authMiddleware, roleMiddleware(['ADMIN', 'COACH']), async (req: Request, res: Response) => {
+router.post('/challenges', authenticate, authorize(['ADMIN', 'COACH']), async (req: Request, res: Response) => {
     try {
         const challenge = await service.createChallenge(req.body);
         res.json({ success: true, data: challenge });
@@ -96,7 +96,7 @@ router.post('/challenges', authMiddleware, roleMiddleware(['ADMIN', 'COACH']), a
 });
 
 // Get challenges
-router.get('/challenges', authMiddleware, async (req: Request, res: Response) => {
+router.get('/challenges', authenticate, async (req: Request, res: Response) => {
     try {
         const challenges = await service.getChallenges();
         res.json({ success: true, data: challenges });
@@ -106,7 +106,7 @@ router.get('/challenges', authMiddleware, async (req: Request, res: Response) =>
 });
 
 // Join challenge
-router.post('/challenges/:challengeId/join', authMiddleware, roleMiddleware(['PARENT']), async (req: Request, res: Response) => {
+router.post('/challenges/:challengeId/join', authenticate, authorize(['PARENT']), async (req: Request, res: Response) => {
     try {
         const result = await service.joinChallenge(req.params.challengeId, req.body.parentId);
         res.json({ success: true, data: result });
@@ -116,7 +116,7 @@ router.post('/challenges/:challengeId/join', authMiddleware, roleMiddleware(['PA
 });
 
 // Get tier status
-router.get('/tier/:parentId', authMiddleware, async (req: Request, res: Response) => {
+router.get('/tier/:parentId', authenticate, async (req: Request, res: Response) => {
     try {
         const tier = await service.getTierStatus(req.params.parentId);
         res.json({ success: true, data: tier });
@@ -126,7 +126,7 @@ router.get('/tier/:parentId', authMiddleware, async (req: Request, res: Response
 });
 
 // Get exclusive perks
-router.get('/perks/:parentId', authMiddleware, async (req: Request, res: Response) => {
+router.get('/perks/:parentId', authenticate, async (req: Request, res: Response) => {
     try {
         const perks = await service.getExclusivePerks(req.params.parentId);
         res.json({ success: true, data: perks });

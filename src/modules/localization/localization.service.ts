@@ -1,5 +1,5 @@
 import Language from './localization.model';
-import logger from '@/utils/logger';
+import logger from '@/shared/utils/logger.util';
 
 class LocalizationService {
     async getLanguages() {

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { ExitProtocolService } from './exit-protocol.service';
-import { authenticate, authorize } from '@/middleware/auth';
+import { authenticate, authorize } from '@modules/iam/auth.middleware';
 
 const router = Router();
 const exitProtocolService = new ExitProtocolService();

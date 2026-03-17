@@ -1,10 +1,12 @@
 import { Request, Response } from 'express';
-import { injectable, inject } from 'tsyringe';
 import { FranchiseService } from './franchise.service';
 
-@injectable()
 export class FranchiseController {
-    constructor(@inject(FranchiseService) private franchiseService: FranchiseService) { }
+    private franchiseService: FranchiseService;
+
+    constructor() {
+        this.franchiseService = new FranchiseService();
+    }
 
     // Franchise Profile Management
     async createFranchise(req: Request, res: Response): Promise<void> {

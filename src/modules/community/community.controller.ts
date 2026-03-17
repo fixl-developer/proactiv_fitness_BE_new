@@ -1,10 +1,12 @@
 import { Request, Response } from 'express';
-import { injectable, inject } from 'tsyringe';
 import { CommunityService } from './community.service';
 
-@injectable()
 export class CommunityController {
-    constructor(@inject(CommunityService) private communityService: CommunityService) { }
+    private communityService: CommunityService;
+
+    constructor() {
+        this.communityService = new CommunityService();
+    }
 
     // Post Management
     async createPost(req: Request, res: Response): Promise<void> {

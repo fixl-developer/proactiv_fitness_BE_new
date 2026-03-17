@@ -1,4 +1,3 @@
-import { injectable } from 'tsyringe';
 import {
     IPost,
     IComment,
@@ -17,7 +16,6 @@ import {
     ICommunityNotification
 } from './community.model';
 
-@injectable()
 export class CommunityService {
     private posts: Map<string, IPost> = new Map();
     private comments: Map<string, IComment> = new Map();

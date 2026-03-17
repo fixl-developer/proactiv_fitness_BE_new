@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { AICoachAssistantService } from './ai-coach-assistant.service';
-import { authenticate } from '@/middleware/auth';
+import { authenticate } from '@modules/iam/auth.middleware';
 
 const router = Router();
 const assistantService = new AICoachAssistantService();

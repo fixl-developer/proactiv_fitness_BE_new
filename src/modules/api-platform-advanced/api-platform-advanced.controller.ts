@@ -1,12 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { APIPlatformAdvancedService } from './api-platform-advanced.service';
-import { authMiddleware, roleMiddleware } from '../../middleware';
+import { authenticate, authorize } from '@modules/iam/auth.middleware';
 
 const router = Router();
 const service = new APIPlatformAdvancedService();
 
 // Create API key
-router.post('/keys', authMiddleware, roleMiddleware(['DEVELOPER']), async (req: Request, res: Response) => {
+router.post('/keys', authenticate, authorize(['DEVELOPER']), async (req: Request, res: Response) => {
     try {
         const key = await service.createAPIKey(req.body);
         res.json({ success: true, data: key });
@@ -16,7 +16,7 @@ router.post('/keys', authMiddleware, roleMiddleware(['DEVELOPER']), async (req: 
 });
 
 // Get API keys
-router.get('/keys', authMiddleware, async (req: Request, res: Response) => {
+router.get('/keys', authenticate, async (req: Request, res: Response) => {
     try {
         const keys = await service.getAPIKeys(req.body.developerId);
         res.json({ success: true, data: keys });
@@ -46,7 +46,7 @@ router.get('/sdks', async (req: Request, res: Response) => {
 });
 
 // Create OAuth app
-router.post('/oauth/apps', authMiddleware, roleMiddleware(['DEVELOPER']), async (req: Request, res: Response) => {
+router.post('/oauth/apps', authenticate, authorize(['DEVELOPER']), async (req: Request, res: Response) => {
     try {
         const app = await service.createOAuthApp(req.body);
         res.json({ success: true, data: app });
@@ -56,7 +56,7 @@ router.post('/oauth/apps', authMiddleware, roleMiddleware(['DEVELOPER']), async 
 });
 
 // Get rate limits
-router.get('/rate-limits', authMiddleware, async (req: Request, res: Response) => {
+router.get('/rate-limits', authenticate, async (req: Request, res: Response) => {
     try {
         const limits = await service.getRateLimits(req.body.apiKey);
         res.json({ success: true, data: limits });
@@ -66,7 +66,7 @@ router.get('/rate-limits', authMiddleware, async (req: Request, res: Response) =
 });
 
 // Get API analytics
-router.get('/analytics', authMiddleware, async (req: Request, res: Response) => {
+router.get('/analytics', authenticate, async (req: Request, res: Response) => {
     try {
         const analytics = await service.getAPIAnalytics(req.body.developerId);
         res.json({ success: true, data: analytics });
@@ -76,7 +76,7 @@ router.get('/analytics', authMiddleware, async (req: Request, res: Response) => 
 });
 
 // Get developer portal
-router.get('/portal', authMiddleware, async (req: Request, res: Response) => {
+router.get('/portal', authenticate, async (req: Request, res: Response) => {
     try {
         const portal = await service.getDeveloperPortal(req.body.developerId);
         res.json({ success: true, data: portal });

@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import virtualTrainingService from './virtual-training.service';
-import { asyncHandler } from '@/middleware/asyncHandler';
+import { asyncHandler } from '../../shared/utils/async-handler.util';
 
 class VirtualTrainingController {
     getVirtualClasses = asyncHandler(async (req: Request, res: Response) => {

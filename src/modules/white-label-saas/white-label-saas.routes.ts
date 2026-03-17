@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import whiteLabelController from './white-label-saas.controller';
-import { authenticate } from '@/middleware/auth';
+import { authenticate, authorize } from '@modules/iam/auth.middleware';
 
 const router = Router();
 

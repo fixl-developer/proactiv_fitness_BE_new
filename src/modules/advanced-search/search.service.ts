@@ -1,4 +1,3 @@
-import { injectable } from 'tsyringe';
 import {
     ISearchProgram,
     ISearchFilter,
@@ -17,7 +16,6 @@ import {
     ISearchMetrics
 } from './search.model';
 
-@injectable()
 export class SearchService {
     private programs: Map<string, ISearchProgram> = new Map();
     private searchHistory: Map<string, ISearchHistory[]> = new Map();

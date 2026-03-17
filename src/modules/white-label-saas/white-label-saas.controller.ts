@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import whiteLabelService from './white-label-saas.service';
-import { asyncHandler } from '@/middleware/asyncHandler';
+import { asyncHandler } from '../../shared/utils/async-handler.util';
 
 class WhiteLabelController {
     getTenants = asyncHandler(async (req: Request, res: Response) => {

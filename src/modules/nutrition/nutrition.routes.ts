@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import nutritionController from './nutrition.controller';
-import { authenticate } from '@/middleware/auth';
+import { authenticate, authorize } from '@modules/iam/auth.middleware';
 
 const router = Router();
 

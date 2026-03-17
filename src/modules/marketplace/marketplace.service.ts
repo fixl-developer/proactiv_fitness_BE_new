@@ -1,5 +1,5 @@
 import Product from './marketplace.model';
-import logger from '@/utils/logger';
+import logger from '@/shared/utils/logger.util';
 
 class MarketplaceService {
     async getProducts(filters: any) {

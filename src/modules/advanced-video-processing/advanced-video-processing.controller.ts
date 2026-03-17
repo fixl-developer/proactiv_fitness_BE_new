@@ -1,12 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { AdvancedVideoProcessingService } from './advanced-video-processing.service';
-import { authMiddleware, roleMiddleware } from '../../middleware';
+import { authenticate, authorize } from '@modules/iam/auth.middleware';
 
 const router = Router();
 const service = new AdvancedVideoProcessingService();
 
 // Upload video
-router.post('/upload', authMiddleware, roleMiddleware(['COACH']), async (req: Request, res: Response) => {
+router.post('/upload', authenticate, authorize(['COACH']), async (req: Request, res: Response) => {
     try {
         const video = await service.uploadVideo(req.body);
         res.json({ success: true, data: video });
@@ -16,7 +16,7 @@ router.post('/upload', authMiddleware, roleMiddleware(['COACH']), async (req: Re
 });
 
 // Process video
-router.post('/process/:videoId', authMiddleware, roleMiddleware(['ADMIN']), async (req: Request, res: Response) => {
+router.post('/process/:videoId', authenticate, authorize(['ADMIN']), async (req: Request, res: Response) => {
     try {
         const result = await service.processVideo(req.params.videoId, req.body);
         res.json({ success: true, data: result });
@@ -26,7 +26,7 @@ router.post('/process/:videoId', authMiddleware, roleMiddleware(['ADMIN']), asyn
 });
 
 // Get video
-router.get('/:videoId', authMiddleware, async (req: Request, res: Response) => {
+router.get('/:videoId', authenticate, async (req: Request, res: Response) => {
     try {
         const video = await service.getVideo(req.params.videoId);
         res.json({ success: true, data: video });
@@ -36,7 +36,7 @@ router.get('/:videoId', authMiddleware, async (req: Request, res: Response) => {
 });
 
 // Transcode video
-router.post('/:videoId/transcode', authMiddleware, roleMiddleware(['ADMIN']), async (req: Request, res: Response) => {
+router.post('/:videoId/transcode', authenticate, authorize(['ADMIN']), async (req: Request, res: Response) => {
     try {
         const result = await service.transcodeVideo(req.params.videoId, req.body.format);
         res.json({ success: true, data: result });
@@ -46,7 +46,7 @@ router.post('/:videoId/transcode', authMiddleware, roleMiddleware(['ADMIN']), as
 });
 
 // Get video analytics
-router.get('/:videoId/analytics', authMiddleware, async (req: Request, res: Response) => {
+router.get('/:videoId/analytics', authenticate, async (req: Request, res: Response) => {
     try {
         const analytics = await service.getVideoAnalytics(req.params.videoId);
         res.json({ success: true, data: analytics });

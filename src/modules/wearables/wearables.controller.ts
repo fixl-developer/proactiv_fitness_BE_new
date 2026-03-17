@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import wearablesService from './wearables.service';
-import { asyncHandler } from '@/middleware/asyncHandler';
+import { asyncHandler } from '../../shared/utils/async-handler.util';
 
 class WearablesController {
     getConnectedDevices = asyncHandler(async (req: Request, res: Response) => {

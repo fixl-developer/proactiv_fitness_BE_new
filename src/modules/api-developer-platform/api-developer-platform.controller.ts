@@ -1,9 +1,8 @@
 import { Router, Request, Response } from 'express';
-import { APIDeveloperService } from './api-developer-platform.service';
-import { authenticate, authorize } from '@/middleware/auth';
+import apiService from './api-developer-platform.service';
+import { authenticate, authorize } from '@modules/iam/auth.middleware';
 
 const router = Router();
-const apiService = new APIDeveloperService();
 
 // Create API key
 router.post('/keys/create', authenticate, authorize(['admin']), async (req: Request, res: Response) => {
