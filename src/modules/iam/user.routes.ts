@@ -19,13 +19,13 @@ router.use(authenticate);
 // User profile routes (accessible by the user themselves)
 router.get(
     '/profile',
-    userController.getProfile
+    userController.getProfile.bind(userController)
 );
 
 router.put(
     '/profile',
     validate(updateUserValidation),
-    userController.updateProfile
+    userController.updateProfile.bind(userController)
 );
 
 // Admin routes

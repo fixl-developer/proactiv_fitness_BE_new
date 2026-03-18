@@ -5,6 +5,13 @@ import { Router, Request, Response } from 'express';
 import authRoutes from '../modules/iam/auth.routes';
 import userRoutes from '../modules/iam/user.routes';
 
+// === User Modules ===
+import { userProfileRoutes } from '../modules/user-profile';
+import { userProgressRoutes } from '../modules/user-progress';
+import { userDashboardRoutes } from '../modules/user-dashboard';
+import { userClassesRoutes } from '../modules/user-classes';
+import { userAchievementsRoutes } from '../modules/user-achievements';
+
 // === Already mounted modules ===
 import aiChatbotRoutes from '../modules/ai-chatbot/ai-chatbot.routes';
 import observabilityRoutes from '../modules/observability/observability.routes';
@@ -114,6 +121,15 @@ router.get('/health', (_req: Request, res: Response) => {
 // =============================================
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
+
+// =============================================
+// USER MODULES
+// =============================================
+router.use('/user/profile', userProfileRoutes);
+router.use('/user/progress', userProgressRoutes);
+router.use('/user/dashboard', userDashboardRoutes);
+router.use('/user/classes', userClassesRoutes);
+router.use('/user/achievements', userAchievementsRoutes);
 
 // =============================================
 // OPERATIONS (existing)
