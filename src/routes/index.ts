@@ -247,4 +247,139 @@ router.get('/system/analytics', (_req: Request, res: Response) => {
 // AI Chatbot
 router.use('/', aiChatbotRoutes);
 
+// =============================================
+// DASHBOARD & ANALYTICS STUBS
+// =============================================
+
+// Analytics dashboard endpoint (used by admin dashboard)
+router.get('/analytics/dashboard', (_req: Request, res: Response) => {
+    res.json({
+        success: true,
+        data: {
+            totalStudents: 0,
+            activeClasses: 0,
+            totalRevenue: 0,
+            attendanceRate: 0,
+            enrollmentTrend: 0,
+            revenueGrowth: 0,
+            totalLocations: 0,
+            customerSatisfaction: 0
+        }
+    });
+});
+
+router.get('/analytics/students', (_req: Request, res: Response) => {
+    res.json({ success: true, data: { labels: [], datasets: [] } });
+});
+
+router.get('/analytics/revenue', (_req: Request, res: Response) => {
+    res.json({ success: true, data: { labels: [], datasets: [] } });
+});
+
+router.get('/analytics/attendance', (_req: Request, res: Response) => {
+    res.json({ success: true, data: { labels: [], datasets: [] } });
+});
+
+router.get('/analytics/enrollment-trends', (_req: Request, res: Response) => {
+    res.json({ success: true, data: { labels: [], datasets: [] } });
+});
+
+// IAM endpoints (used by users page)
+router.get('/iam/users', (_req: Request, res: Response) => {
+    res.json({ success: true, data: [] });
+});
+
+router.get('/iam/roles', (_req: Request, res: Response) => {
+    res.json({ success: true, data: [] });
+});
+
+router.get('/iam/permissions', (_req: Request, res: Response) => {
+    res.json({ success: true, data: [] });
+});
+
+// Audit logs endpoint
+router.get('/audit/logs', (_req: Request, res: Response) => {
+    res.json({ success: true, data: [] });
+});
+
+router.post('/audit/logs', (_req: Request, res: Response) => {
+    res.json({ success: true, data: { id: 'stub' } });
+});
+
+// HQ dashboard overview
+router.get('/admin/hq/dashboard', (_req: Request, res: Response) => {
+    res.json({
+        success: true,
+        data: {
+            totalLocations: 0, totalFranchises: 0, totalUsers: 0,
+            totalRevenue: 0, monthlyRevenue: 0, revenueGrowth: 0,
+            activeStudents: 0, conversionRate: 0, pendingApprovals: 0,
+            criticalAlerts: 0, warnings: 0
+        }
+    });
+});
+
+router.get('/admin/hq/health', (_req: Request, res: Response) => {
+    res.json({ success: true, data: { uptime: 99.9, status: 'healthy' } });
+});
+
+// Regional dashboard overview
+router.get('/admin/regional/dashboard', (_req: Request, res: Response) => {
+    res.json({
+        success: true,
+        data: {
+            regionName: 'Default Region', totalLocations: 0, totalStaff: 0,
+            totalStudents: 0, totalRevenue: 0, monthlyRevenue: 0, revenueGrowth: 0,
+            occupancyRate: 0, staffUtilization: 0, customerSatisfaction: 0,
+            pendingApprovals: 0, criticalAlerts: 0, warnings: 0
+        }
+    });
+});
+
+router.get('/admin/regional/analytics', (_req: Request, res: Response) => {
+    res.json({ success: true, data: {} });
+});
+
+// Franchise dashboard overview
+router.get('/admin/franchise/dashboard', (_req: Request, res: Response) => {
+    res.json({
+        success: true,
+        data: {
+            franchiseName: 'Default Franchise', totalLocations: 0, totalStaff: 0,
+            totalStudents: 0, totalRevenue: 0, monthlyRevenue: 0, revenueGrowth: 0,
+            occupancyRate: 0, staffUtilization: 0, customerSatisfaction: 0,
+            pendingApprovals: 0, criticalAlerts: 0, warnings: 0
+        }
+    });
+});
+
+router.get('/admin/franchise/analytics', (_req: Request, res: Response) => {
+    res.json({ success: true, data: {} });
+});
+
+// Location dashboard overview
+router.get('/admin/location/dashboard', (_req: Request, res: Response) => {
+    res.json({
+        success: true,
+        data: {
+            locationName: 'Default Location', totalClasses: 0, totalStaff: 0,
+            totalStudents: 0, monthlyRevenue: 0, revenueGrowth: 0, occupancyRate: 0,
+            staffUtilization: 0, customerSatisfaction: 0, todayClasses: 0,
+            todayAttendance: 0, pendingApprovals: 0, criticalAlerts: 0, warnings: 0
+        }
+    });
+});
+
+router.get('/admin/location/analytics', (_req: Request, res: Response) => {
+    res.json({ success: true, data: {} });
+});
+
+// Payments stats endpoint
+router.get('/payments/stats', (_req: Request, res: Response) => {
+    res.json({
+        success: true,
+        data: { totalPayments: 0, totalAmount: 0, pendingPayments: 0, completedPayments: 0 }
+    });
+});
+
 export default router;
