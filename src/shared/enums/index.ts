@@ -1,6 +1,5 @@
 // User & Authentication Enums
 export enum UserRole {
-    SUPER_ADMIN = 'SUPER_ADMIN',
     HQ_ADMIN = 'HQ_ADMIN',
     REGIONAL_ADMIN = 'REGIONAL_ADMIN',
     FRANCHISE_OWNER = 'FRANCHISE_OWNER',

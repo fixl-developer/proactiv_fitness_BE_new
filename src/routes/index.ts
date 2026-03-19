@@ -33,7 +33,6 @@ import parentEngagementRoutes from '../modules/parent-engagement/parent-engageme
 import parentRoiRoutes from '../modules/parent-roi/parent-roi.routes';
 import financialLedgerRoutes from '../modules/financial-ledger/financial-ledger.routes';
 import integrationsRoutes from '../modules/integrations/integrations.routes';
-import { superAdminRoutes as superadminRoutes } from '../modules/superadmin/superadmin.routes';
 
 // === Newly mounted modules (default exports) ===
 import advancedAnalyticsRoutes from '../modules/advanced-analytics/advanced-analytics.routes';
@@ -152,7 +151,6 @@ router.use('/parent-engagement', parentEngagementRoutes);
 router.use('/parent-roi', parentRoiRoutes);
 router.use('/financial-ledger', financialLedgerRoutes);
 router.use('/integrations', integrationsRoutes);
-router.use('/superadmin', superadminRoutes);
 
 // =============================================
 // NEWLY MOUNTED MODULES
@@ -222,7 +220,7 @@ router.use('/observations', classToRouter(ObservationRoutes));
 // =============================================
 router.use('/observability', observabilityRoutes);
 
-// Stubs for superadmin dashboard
+// Health & system stubs
 router.get('/observability/health', (_req: Request, res: Response) => {
     res.json({
         success: true,
