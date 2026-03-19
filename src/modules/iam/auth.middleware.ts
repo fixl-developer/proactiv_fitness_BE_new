@@ -134,11 +134,8 @@ export const checkOwnership = (userIdParam: string = 'id') => {
 
         const resourceUserId = req.params[userIdParam];
 
-        // Super admin and HQ admin can access any resource
-        if (
-            req.user.role === UserRole.SUPER_ADMIN ||
-            req.user.role === UserRole.HQ_ADMIN
-        ) {
+        // Admin can access any resource
+        if (req.user.role === UserRole.ADMIN) {
             return next();
         }
 
@@ -163,8 +160,8 @@ export const checkTenantAccess = (req: Request, _res: Response, next: NextFuncti
 
     const tenantId = req.params.tenantId || req.body.tenantId || req.query.tenantId;
 
-    // Super admin can access all tenants
-    if (req.user.role === UserRole.SUPER_ADMIN) {
+    // Admin can access all tenants
+    if (req.user.role === UserRole.ADMIN) {
         return next();
     }
 

@@ -31,7 +31,7 @@ router.put(
 // Admin routes
 router.post(
     '/',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+    authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN),
     validate(createUserValidation),
     userController.create
 );
@@ -39,8 +39,7 @@ router.post(
 router.get(
     '/',
     authorize(
-        UserRole.SUPER_ADMIN,
-        UserRole.HQ_ADMIN,
+        UserRole.ADMIN,
         UserRole.REGIONAL_ADMIN,
         UserRole.LOCATION_MANAGER
     ),
@@ -64,14 +63,14 @@ router.put(
 
 router.delete(
     '/:id',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN),
+    authorize(UserRole.ADMIN),
     validate(idParamValidation),
     userController.delete
 );
 
 router.patch(
     '/:id/status',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+    authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN),
     validate(updateUserStatusValidation),
     userController.updateStatus
 );

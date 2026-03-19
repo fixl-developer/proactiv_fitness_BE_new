@@ -35,7 +35,7 @@ router.get(
 
 router.get(
     '/statistics',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN, UserRole.LOCATION_MANAGER),
+    authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN, UserRole.LOCATION_MANAGER),
     programController.getProgramStatistics
 );
 
@@ -64,14 +64,14 @@ router.get(
 // Protected routes (admin/manager only)
 router.post(
     '/',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+    authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN),
     validateBody(createProgramValidation),
     programController.createProgram
 );
 
 router.put(
     '/:id',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+    authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN),
     validateParams(idParamValidation),
     validateBody(updateProgramValidation),
     programController.updateProgram
@@ -79,14 +79,14 @@ router.put(
 
 router.delete(
     '/:id',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+    authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN),
     validateParams(idParamValidation),
     programController.deleteProgram
 );
 
 router.post(
     '/:id/duplicate',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+    authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN),
     validateParams(idParamValidation),
     validateBody(duplicateProgramValidation),
     programController.duplicateProgram
@@ -94,7 +94,7 @@ router.post(
 
 router.patch(
     '/:id/status',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+    authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN),
     validateParams(idParamValidation),
     programController.toggleProgramStatus
 );

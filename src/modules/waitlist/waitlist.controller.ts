@@ -29,7 +29,7 @@ export class WaitlistController {
     constructor(private readonly waitlistService: WaitlistService) { }
 
     @Post()
-    @Roles(UserRole.LOCATION_MANAGER, UserRole.SUPER_ADMIN, UserRole.STAFF)
+    @Roles(UserRole.LOCATION_MANAGER, UserRole.ADMIN, UserRole.SUPPORT_STAFF)
     @ApiOperation({ summary: 'Add student to waitlist' })
     @ApiResponse({ status: 201, description: 'Student added to waitlist successfully' })
     async createWaitlistEntry(
@@ -44,7 +44,7 @@ export class WaitlistController {
         };
     }
     @Get('location/:locationId')
-    @Roles(UserRole.LOCATION_MANAGER, UserRole.SUPER_ADMIN, UserRole.STAFF)
+    @Roles(UserRole.LOCATION_MANAGER, UserRole.ADMIN, UserRole.SUPPORT_STAFF)
     @ApiOperation({ summary: 'Get waitlist entries for location' })
     @ApiResponse({ status: 200, description: 'Waitlist entries retrieved successfully' })
     async getLocationWaitlist(
@@ -60,7 +60,7 @@ export class WaitlistController {
     }
 
     @Put(':id/offer')
-    @Roles(UserRole.LOCATION_MANAGER, UserRole.SUPER_ADMIN)
+    @Roles(UserRole.LOCATION_MANAGER, UserRole.ADMIN)
     @ApiOperation({ summary: 'Offer spot to waitlisted student' })
     @ApiResponse({ status: 200, description: 'Spot offered successfully' })
     async offerSpot(
@@ -76,7 +76,7 @@ export class WaitlistController {
     }
 
     @Put(':id/accept')
-    @Roles(UserRole.PARENT, UserRole.LOCATION_MANAGER, UserRole.SUPER_ADMIN)
+    @Roles(UserRole.PARENT, UserRole.LOCATION_MANAGER, UserRole.ADMIN)
     @ApiOperation({ summary: 'Accept waitlist offer' })
     @ApiResponse({ status: 200, description: 'Offer accepted successfully' })
     async acceptOffer(@Param('id') entryId: string) {
@@ -89,7 +89,7 @@ export class WaitlistController {
     }
 
     @Delete(':id')
-    @Roles(UserRole.LOCATION_MANAGER, UserRole.SUPER_ADMIN, UserRole.PARENT)
+    @Roles(UserRole.LOCATION_MANAGER, UserRole.ADMIN, UserRole.PARENT)
     @ApiOperation({ summary: 'Remove from waitlist' })
     @ApiResponse({ status: 200, description: 'Removed from waitlist successfully' })
     async removeFromWaitlist(

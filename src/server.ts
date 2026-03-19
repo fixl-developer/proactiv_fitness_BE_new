@@ -23,11 +23,15 @@ const startServer = async () => {
         try {
             let seeded = 0;
             for (const userData of demoUsers) {
-                const exists = await User.findOne({ email: userData.email });
-                if (!exists) {
-                    await User.create(userData);
-                    seeded++;
-                    logger.info(`Demo user seeded: ${userData.email} (${userData.role})`);
+                try {
+                    const exists = await User.findOne({ email: userData.email });
+                    if (!exists) {
+                        await User.create(userData);
+                        seeded++;
+                        logger.info(`Demo user seeded: ${userData.email} (${userData.role})`);
+                    }
+                } catch (userSeedError: any) {
+                    logger.warn(`Failed to seed ${userData.email}: ${userSeedError.message}`);
                 }
             }
             if (seeded > 0) {

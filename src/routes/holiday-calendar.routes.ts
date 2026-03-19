@@ -11,7 +11,7 @@ router.use(authenticate);
 
 router.post(
     '/',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+    authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN),
     validate(createHolidayCalendarValidation),
     holidayCalendarController.create.bind(holidayCalendarController)
 );
@@ -29,14 +29,14 @@ router.get(
 
 router.put(
     '/:id',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+    authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN),
     validate(updateHolidayCalendarValidation),
     holidayCalendarController.update.bind(holidayCalendarController)
 );
 
 router.delete(
     '/:id',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+    authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN),
     validate(idParamValidation),
     holidayCalendarController.delete.bind(holidayCalendarController)
 );
