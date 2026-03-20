@@ -3,6 +3,6 @@ import paymentController from './payments.controller';
 
 const router = Router();
 
-router.use('/payments', paymentController);
+router.use('/', paymentController);
 
 export default router;

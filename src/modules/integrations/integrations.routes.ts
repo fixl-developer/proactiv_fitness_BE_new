@@ -3,6 +3,6 @@ import integrationsController from './integrations.controller';
 
 const router = Router();
 
-router.use('/integrations', integrationsController);
+router.use('/', integrationsController);
 
 export default router;

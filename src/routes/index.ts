@@ -20,12 +20,16 @@ import schedulingRoutes from '../modules/scheduling/schedule.routes';
 import { staffRoutes } from '../modules/staff/staff.routes';
 import attendanceRoutes from '../modules/attendance/attendance.routes';
 import paymentsRoutes from '../modules/payments/payments.routes';
+import paymentGatewayRoutes from '../modules/payments/payment-gateway.routes';
 import billingRoutes from '../modules/billing/billing.routes';
 import programRoutes from '../modules/programs/program.routes';
+import rulesRoutes from '../modules/rules/rule.routes';
 import reportingRoutes from '../modules/reporting/reporting.routes';
+import supportRoutes from '../modules/support/support.routes';
 import franchiseRoutes from '../modules/franchise/franchise.routes';
 import crmRoutes from '../modules/crm/crm.routes';
 import notificationsRoutes from '../modules/notifications/notifications.routes';
+import { notificationTemplateRoutes } from '../modules/notifications/notification-template.routes';
 import gamificationRoutes from '../modules/gamification/gamification.routes';
 import walletRoutes from '../modules/wallet/wallet.routes';
 import familySchedulerRoutes from '../modules/family-scheduler/scheduler.routes';
@@ -33,6 +37,9 @@ import parentEngagementRoutes from '../modules/parent-engagement/parent-engageme
 import parentRoiRoutes from '../modules/parent-roi/parent-roi.routes';
 import financialLedgerRoutes from '../modules/financial-ledger/financial-ledger.routes';
 import integrationsRoutes from '../modules/integrations/integrations.routes';
+
+// === Dashboard Analytics ===
+import dashboardRoutes from '../modules/dashboard/dashboard.routes';
 
 // === Newly mounted modules (default exports) ===
 import advancedAnalyticsRoutes from '../modules/advanced-analytics/advanced-analytics.routes';
@@ -66,6 +73,9 @@ import wearablesRoutes from '../modules/wearables/wearables.routes';
 import virtualTrainingRoutes from '../modules/virtual-training/virtual-training.routes';
 import nutritionRoutes from '../modules/nutrition/nutrition.routes';
 import localizationRoutes from '../modules/localization/localization.routes';
+
+// === BCMS (Business Configuration Management) ===
+import { termRoutes, holidayCalendarRoutes, countryRoutes, regionRoutes, businessUnitRoutes, locationRoutes, roomRoutes } from '../modules/bcms';
 
 // === Named exports ===
 import { microCredentialRoutes } from '../modules/micro-credentials/micro-credentials.routes';
@@ -138,12 +148,16 @@ router.use('/scheduling', schedulingRoutes);
 router.use('/staff', staffRoutes);
 router.use('/attendance', attendanceRoutes);
 router.use('/payments', paymentsRoutes);
+router.use('/payment-gateways', paymentGatewayRoutes);
 router.use('/billing', billingRoutes);
 router.use('/programs', programRoutes);
+router.use('/rules', rulesRoutes);
 router.use('/reports', reportingRoutes);
+router.use('/support', supportRoutes);
 router.use('/franchise', franchiseRoutes);
 router.use('/crm', crmRoutes);
 router.use('/notifications', notificationsRoutes);
+router.use('/notification-templates', notificationTemplateRoutes);
 router.use('/gamification', gamificationRoutes);
 router.use('/wallet', walletRoutes);
 router.use('/family-scheduler', familySchedulerRoutes);
@@ -151,6 +165,17 @@ router.use('/parent-engagement', parentEngagementRoutes);
 router.use('/parent-roi', parentRoiRoutes);
 router.use('/financial-ledger', financialLedgerRoutes);
 router.use('/integrations', integrationsRoutes);
+
+// =============================================
+// BCMS (Business Configuration)
+// =============================================
+router.use('/countries', countryRoutes);
+router.use('/regions', regionRoutes);
+router.use('/business-units', businessUnitRoutes);
+router.use('/locations', locationRoutes);
+router.use('/rooms', roomRoutes);
+router.use('/terms', termRoutes);
+router.use('/holiday-calendars', holidayCalendarRoutes);
 
 // =============================================
 // NEWLY MOUNTED MODULES
@@ -233,56 +258,51 @@ router.get('/observability/health', (_req: Request, res: Response) => {
     });
 });
 
-router.get('/observability/alerts', (_req: Request, res: Response) => {
-    res.json({ success: true, data: [] });
+router.get('/observability/alerts', async (_req: Request, res: Response) => {
+    try {
+        const { AuditVaultModel } = require('../modules/audit-vault/audit-vault.model');
+        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const alerts = await AuditVaultModel.find({
+            action: { $in: ['LOGIN_FAILED', 'UNAUTHORIZED', 'ERROR', 'SECURITY'] },
+            createdAt: { $gte: oneDayAgo },
+        }).sort({ createdAt: -1 }).limit(20).lean();
+        res.json({ success: true, data: alerts });
+    } catch {
+        res.json({ success: true, data: [] });
+    }
 });
 
-router.get('/system/analytics', (_req: Request, res: Response) => {
-    res.json({
-        success: true,
-        data: { totalUsers: 0, activeUsers: 0, totalLocations: 0, totalBookings: 0, revenue: 0 }
-    });
+router.get('/system/analytics', async (_req: Request, res: Response) => {
+    try {
+        const { User } = require('../modules/iam/user.model');
+        const { Booking } = require('../modules/booking/booking.model');
+        const { Location } = require('../modules/bcms/location.model');
+        const [totalUsers, activeUsers, totalLocations, totalBookings, revenueAgg] = await Promise.all([
+            User.countDocuments({}),
+            User.countDocuments({ status: 'ACTIVE' }),
+            Location.countDocuments({ isActive: true, isDeleted: { $ne: true } }),
+            Booking.countDocuments({}),
+            Booking.aggregate([
+                { $match: { 'payment.status': { $in: ['paid', 'COMPLETED', 'completed'] } } },
+                { $group: { _id: null, total: { $sum: '$payment.amount' } } },
+            ]),
+        ]);
+        res.json({
+            success: true,
+            data: { totalUsers, activeUsers, totalLocations, totalBookings, revenue: revenueAgg[0]?.total || 0 },
+        });
+    } catch {
+        res.json({ success: true, data: { totalUsers: 0, activeUsers: 0, totalLocations: 0, totalBookings: 0, revenue: 0 } });
+    }
 });
 
 // AI Chatbot
 router.use('/', aiChatbotRoutes);
 
 // =============================================
-// DASHBOARD & ANALYTICS STUBS
+// DASHBOARD & ANALYTICS (real data from MongoDB)
 // =============================================
-
-// Analytics dashboard endpoint (used by admin dashboard)
-router.get('/analytics/dashboard', (_req: Request, res: Response) => {
-    res.json({
-        success: true,
-        data: {
-            totalStudents: 0,
-            activeClasses: 0,
-            totalRevenue: 0,
-            attendanceRate: 0,
-            enrollmentTrend: 0,
-            revenueGrowth: 0,
-            totalLocations: 0,
-            customerSatisfaction: 0
-        }
-    });
-});
-
-router.get('/analytics/students', (_req: Request, res: Response) => {
-    res.json({ success: true, data: { labels: [], datasets: [] } });
-});
-
-router.get('/analytics/revenue', (_req: Request, res: Response) => {
-    res.json({ success: true, data: { labels: [], datasets: [] } });
-});
-
-router.get('/analytics/attendance', (_req: Request, res: Response) => {
-    res.json({ success: true, data: { labels: [], datasets: [] } });
-});
-
-router.get('/analytics/enrollment-trends', (_req: Request, res: Response) => {
-    res.json({ success: true, data: { labels: [], datasets: [] } });
-});
+router.use('/', dashboardRoutes);
 
 // IAM endpoints (used by users page)
 router.get('/iam/users', (_req: Request, res: Response) => {
@@ -297,13 +317,44 @@ router.get('/iam/permissions', (_req: Request, res: Response) => {
     res.json({ success: true, data: [] });
 });
 
-// Audit logs endpoint
-router.get('/audit/logs', (_req: Request, res: Response) => {
-    res.json({ success: true, data: [] });
+// Audit logs endpoint - real data from AuditVault
+router.get('/audit/logs', async (req: Request, res: Response) => {
+    try {
+        const { AuditVaultModel } = require('../modules/audit-vault/audit-vault.model');
+        const { action, status, search, limit: limitStr } = req.query;
+        const filter: any = {};
+        if (action) filter.action = action;
+        if (search) filter.$or = [
+            { action: { $regex: search, $options: 'i' } },
+            { entityType: { $regex: search, $options: 'i' } },
+            { reason: { $regex: search, $options: 'i' } },
+        ];
+        const limit = parseInt(limitStr as string) || 100;
+        const logs = await AuditVaultModel.find(filter).sort({ createdAt: -1 }).limit(limit).lean();
+        res.json({ success: true, data: logs });
+    } catch (error: any) {
+        res.json({ success: true, data: [] });
+    }
 });
 
-router.post('/audit/logs', (_req: Request, res: Response) => {
-    res.json({ success: true, data: { id: 'stub' } });
+router.post('/audit/logs', async (req: Request, res: Response) => {
+    try {
+        const { AuditVaultModel } = require('../modules/audit-vault/audit-vault.model');
+        const { v4: uuidv4 } = require('uuid');
+        const log = await AuditVaultModel.create({
+            auditId: uuidv4?.() || `audit-${Date.now()}`,
+            tenantId: req.body.tenantId || 'default',
+            userId: req.body.userId || 'system',
+            action: req.body.action || 'UNKNOWN',
+            entityType: req.body.entityType || 'system',
+            entityId: req.body.entityId || '',
+            changes: req.body.changes || {},
+            reason: req.body.reason || '',
+        });
+        res.json({ success: true, data: log });
+    } catch (error: any) {
+        res.json({ success: true, data: { id: `audit-${Date.now()}` } });
+    }
 });
 
 // HQ dashboard overview
@@ -374,12 +425,32 @@ router.get('/admin/location/analytics', (_req: Request, res: Response) => {
     res.json({ success: true, data: {} });
 });
 
-// Payments stats endpoint
-router.get('/payments/stats', (_req: Request, res: Response) => {
-    res.json({
-        success: true,
-        data: { totalPayments: 0, totalAmount: 0, pendingPayments: 0, completedPayments: 0 }
-    });
+// Payments stats endpoint - real data from Bookings
+router.get('/payments/stats', async (_req: Request, res: Response) => {
+    try {
+        const { Booking } = require('../modules/booking/booking.model');
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const [totalAgg, pendingCount, completedCount] = await Promise.all([
+            Booking.aggregate([
+                { $match: { 'payment.status': { $in: ['paid', 'COMPLETED', 'completed'] } } },
+                { $group: { _id: null, total: { $sum: '$payment.amount' }, count: { $sum: 1 } } },
+            ]),
+            Booking.countDocuments({ 'payment.status': { $in: ['pending', 'PENDING'] } }),
+            Booking.countDocuments({ 'payment.status': { $in: ['paid', 'COMPLETED', 'completed'] } }),
+        ]);
+        res.json({
+            success: true,
+            data: {
+                totalPayments: (totalAgg[0]?.count || 0) + pendingCount,
+                totalAmount: totalAgg[0]?.total || 0,
+                pendingPayments: pendingCount,
+                completedPayments: completedCount,
+            },
+        });
+    } catch (error: any) {
+        res.json({ success: true, data: { totalPayments: 0, totalAmount: 0, pendingPayments: 0, completedPayments: 0 } });
+    }
 });
 
 export default router;

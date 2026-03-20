@@ -162,6 +162,42 @@ const userSchema = new Schema<IUser>(
             select: false,
         },
 
+        // Password history — stores hashes of the last 5 passwords
+        passwordHistory: {
+            type: [String],
+            default: [],
+            select: false,
+        },
+
+        // Active sessions — limited to 3 concurrent sessions
+        activeSessions: {
+            type: [
+                {
+                    token: { type: String, required: true },
+                    device: { type: String, default: 'unknown' },
+                    ip: { type: String },
+                    createdAt: { type: Date, default: Date.now },
+                },
+            ],
+            default: [],
+            select: false,
+        },
+
+        // GDPR consent tracking
+        gdprConsent: {
+            dataProcessing: { type: Boolean, default: false },
+            marketing: { type: Boolean, default: false },
+            analytics: { type: Boolean, default: false },
+            consentDate: { type: Date },
+            consentIp: { type: String },
+        },
+
+        // Whether the user was created by an admin (can skip email verification)
+        createdByAdmin: {
+            type: Boolean,
+            default: false,
+        },
+
         // Metadata
         metadata: {
             type: Schema.Types.Mixed,
@@ -183,7 +219,7 @@ userSchema.index({ organizationId: 1 });
 userSchema.index({ locationId: 1 });
 userSchema.index({ firstName: 1, lastName: 1 });
 
-// Pre-save middleware to hash password
+// Pre-save middleware to hash password and maintain password history
 userSchema.pre('save', async function (next) {
     // Only hash password if it's modified
     const user = this as any;
@@ -193,6 +229,19 @@ userSchema.pre('save', async function (next) {
     }
 
     try {
+        // If there is an existing hashed password, push it into history
+        // before overwriting.  Keep only the most recent 5 entries.
+        if (user.password && !user.isNew) {
+            // The current value is the *old* hash (not yet overwritten)
+            if (!user.passwordHistory) {
+                user.passwordHistory = [];
+            }
+            user.passwordHistory.push(user.password);
+            if (user.passwordHistory.length > 5) {
+                user.passwordHistory = user.passwordHistory.slice(-5);
+            }
+        }
+
         const salt = await bcrypt.genSalt(envConfig.get().bcryptRounds);
         user.password = await bcrypt.hash(user.password, salt);
         next();

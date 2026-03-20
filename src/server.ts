@@ -19,8 +19,17 @@ const startServer = async () => {
         // Connect to database
         await databaseConfig.connect();
 
-        // Auto-seed demo users if they don't exist
+        // Auto-seed demo users + fix legacy roles (SUPER_ADMIN/HQ_ADMIN → ADMIN)
         try {
+            // Fix any legacy SUPER_ADMIN or HQ_ADMIN roles in the database
+            const legacyFix = await User.updateMany(
+                { role: { $in: ['SUPER_ADMIN', 'HQ_ADMIN'] } },
+                { $set: { role: 'ADMIN' } }
+            );
+            if (legacyFix.modifiedCount > 0) {
+                logger.info(`Fixed ${legacyFix.modifiedCount} legacy role(s) → ADMIN`);
+            }
+
             let seeded = 0;
             for (const userData of demoUsers) {
                 try {
@@ -29,6 +38,16 @@ const startServer = async () => {
                         await User.create(userData);
                         seeded++;
                         logger.info(`Demo user seeded: ${userData.email} (${userData.role})`);
+                    } else {
+                        // Update role/status/emailVerified if changed in seed data
+                        const updates: any = {};
+                        if (exists.role !== userData.role) updates.role = userData.role;
+                        if (exists.status !== userData.status) updates.status = userData.status;
+                        if (!exists.isEmailVerified && userData.isEmailVerified) updates.isEmailVerified = true;
+                        if (Object.keys(updates).length > 0) {
+                            await User.updateOne({ _id: exists._id }, { $set: updates });
+                            logger.info(`Demo user updated: ${userData.email} (${Object.keys(updates).join(', ')})`);
+                        }
                     }
                 } catch (userSeedError: any) {
                     logger.warn(`Failed to seed ${userData.email}: ${userSeedError.message}`);

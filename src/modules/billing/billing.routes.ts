@@ -3,6 +3,6 @@ import billingController from './billing.controller';
 
 const router = Router();
 
-router.use('/billing', billingController);
+router.use('/', billingController);
 
 export default router;

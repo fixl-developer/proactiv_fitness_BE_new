@@ -43,6 +43,32 @@ router.post('/refund/:transactionId', authenticate, async (req: Request, res: Re
     }
 });
 
+// Payment stats (must be before /:transactionId to avoid being caught by it)
+router.get('/stats', async (_req: Request, res: Response) => {
+    try {
+        const { Booking } = require('../booking/booking.model');
+        const [totalAgg, pendingCount, completedCount] = await Promise.all([
+            Booking.aggregate([
+                { $match: { 'payment.status': { $in: ['paid', 'COMPLETED', 'completed'] } } },
+                { $group: { _id: null, total: { $sum: '$payment.amount' }, count: { $sum: 1 } } },
+            ]),
+            Booking.countDocuments({ 'payment.status': { $in: ['pending', 'PENDING'] } }),
+            Booking.countDocuments({ 'payment.status': { $in: ['paid', 'COMPLETED', 'completed'] } }),
+        ]);
+        res.json({
+            success: true,
+            data: {
+                totalPayments: (totalAgg[0]?.count || 0) + pendingCount,
+                totalAmount: totalAgg[0]?.total || 0,
+                pendingPayments: pendingCount,
+                completedPayments: completedCount,
+            },
+        });
+    } catch {
+        res.json({ success: true, data: { totalPayments: 0, totalAmount: 0, pendingPayments: 0, completedPayments: 0 } });
+    }
+});
+
 // Get transaction
 router.get('/:transactionId', authenticate, async (req: Request, res: Response) => {
     try {

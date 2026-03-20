@@ -9,6 +9,7 @@ import logger from '@shared/utils/logger.util';
 export class AuthService {
     /**
      * Register a new user
+     * Status is set to PENDING until email is verified.
      */
     async register(data: IUserRegister): Promise<IAuthResponse> {
         // Validate password match
@@ -16,7 +17,7 @@ export class AuthService {
             throw new AppError('Passwords do not match', HTTP_STATUS.BAD_REQUEST);
         }
 
-        // Create user
+        // Create user with PENDING status until email verification
         const user = await userService.createUser({
             email: data.email,
             password: data.password,
@@ -29,6 +30,9 @@ export class AuthService {
             language: data.language,
         });
 
+        // Set status to PENDING until email is verified
+        await userService.updateUserStatus(user._id.toString(), 'PENDING' as any);
+
         // Generate tokens
         const tokens = this.generateTokens(user);
 
@@ -38,7 +42,10 @@ export class AuthService {
         // Generate email verification token (for future email service)
         await userService.generateEmailVerificationToken(user._id.toString());
 
-        logger.info('User registered successfully', { userId: user._id, email: user.email });
+        logger.info('User registered successfully (pending email verification)', {
+            userId: user._id,
+            email: user.email,
+        });
 
         return {
             user: userService.formatUserResponse(user),
@@ -47,9 +54,9 @@ export class AuthService {
     }
 
     /**
-     * Login user
+     * Login user — now enforces email verification and tracks sessions.
      */
-    async login(data: IUserLogin): Promise<IAuthResponse> {
+    async login(data: IUserLogin, meta?: { device?: string; ip?: string }): Promise<IAuthResponse> {
         // Get user with password
         const user = await userService.getUserByEmailWithPassword(data.email);
 
@@ -65,8 +72,11 @@ export class AuthService {
             );
         }
 
-        // Check if account is active
-        if (user.status !== 'ACTIVE') {
+        // Enforce email verification (admin-created users are exempt)
+        await userService.enforceEmailVerification(user);
+
+        // Check if account is active (PENDING users are caught by verification check above)
+        if (user.status !== 'ACTIVE' && user.status !== 'PENDING') {
             throw new AppError('Account is not active', HTTP_STATUS.FORBIDDEN);
         }
 
@@ -91,6 +101,14 @@ export class AuthService {
         // Save refresh token
         await userService.saveRefreshToken(user._id.toString(), tokens.refreshToken);
 
+        // Track active session (limit to 3 concurrent sessions)
+        await userService.addSession(
+            user._id.toString(),
+            tokens.accessToken,
+            meta?.device || 'unknown',
+            meta?.ip || ''
+        );
+
         logger.info('User logged in successfully', { userId: user._id, email: user.email });
 
         return {
@@ -100,10 +118,18 @@ export class AuthService {
     }
 
     /**
-     * Logout user
+     * Logout user — clears refresh token and removes the active session.
      */
-    async logout(userId: string): Promise<void> {
+    async logout(userId: string, accessToken?: string): Promise<void> {
         await userService.clearRefreshToken(userId);
+
+        // Remove the specific session if a token is provided, otherwise clear all
+        if (accessToken) {
+            await userService.removeSession(userId, accessToken);
+        } else {
+            await userService.removeAllSessions(userId);
+        }
+
         logger.info('User logged out', { userId });
     }
 

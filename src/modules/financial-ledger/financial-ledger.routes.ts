@@ -3,6 +3,6 @@ import financialLedgerController from './financial-ledger.controller';
 
 const router = Router();
 
-router.use('/financial-ledger', financialLedgerController);
+router.use('/', financialLedgerController);
 
 export default router;

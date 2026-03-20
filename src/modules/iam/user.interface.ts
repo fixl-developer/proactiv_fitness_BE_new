@@ -47,6 +47,29 @@ export interface IUser extends Document {
     refreshToken?: string;
     refreshTokenExpires?: Date;
 
+    // Password history (last 5 hashed passwords)
+    passwordHistory?: string[];
+
+    // Active sessions
+    activeSessions?: Array<{
+        token: string;
+        device: string;
+        ip: string;
+        createdAt: Date;
+    }>;
+
+    // GDPR consent
+    gdprConsent?: {
+        dataProcessing: boolean;
+        marketing: boolean;
+        analytics: boolean;
+        consentDate?: Date;
+        consentIp?: string;
+    };
+
+    // Whether the user was created by an admin
+    createdByAdmin?: boolean;
+
     // Metadata
     metadata?: Record<string, any>;
 

@@ -13,7 +13,7 @@ export const REFRESH_TOKEN_EXPIRY = '30d';
 
 // Rate Limiting
 export const RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
-export const RATE_LIMIT_MAX = 100;
+export const RATE_LIMIT_MAX = process.env.NODE_ENV === 'development' ? 10000 : 200;
 
 // File Upload
 export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB

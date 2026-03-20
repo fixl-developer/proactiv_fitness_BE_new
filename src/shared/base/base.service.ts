@@ -11,15 +11,15 @@ export abstract class BaseService<T extends Document> {
     }
 
     async findById(id: string): Promise<T | null> {
-        return await this.model.findOne({ _id: id, isDeleted: false } as FilterQuery<T>);
+        return await this.model.findOne({ _id: id, isDeleted: { $ne: true } } as FilterQuery<T>);
     }
 
     async findOne(filter: FilterQuery<T>): Promise<T | null> {
-        return await this.model.findOne({ ...filter, isDeleted: false });
+        return await this.model.findOne({ ...filter, isDeleted: { $ne: true } });
     }
 
     async findAll(filter: FilterQuery<T> = {}): Promise<T[]> {
-        return await this.model.find({ ...filter, isDeleted: false });
+        return await this.model.find({ ...filter, isDeleted: { $ne: true } });
     }
 
     async findWithPagination(
@@ -33,8 +33,8 @@ export abstract class BaseService<T extends Document> {
         );
 
         const [data, total] = await Promise.all([
-            this.model.find({ ...filter, isDeleted: false }).sort(sortOptions).skip(skip).limit(limit),
-            this.model.countDocuments({ ...filter, isDeleted: false }),
+            this.model.find({ ...filter, isDeleted: { $ne: true } }).sort(sortOptions).skip(skip).limit(limit),
+            this.model.countDocuments({ ...filter, isDeleted: { $ne: true } }),
         ]);
 
         return PaginationUtil.buildPaginationResult(data, total, page, limit);
@@ -42,7 +42,7 @@ export abstract class BaseService<T extends Document> {
 
     async update(id: string, data: UpdateQuery<T>): Promise<T | null> {
         return await this.model.findOneAndUpdate(
-            { _id: id, isDeleted: false } as FilterQuery<T>,
+            { _id: id, isDeleted: { $ne: true } } as FilterQuery<T>,
             data,
             { new: true, runValidators: true } as QueryOptions
         );
@@ -63,11 +63,11 @@ export abstract class BaseService<T extends Document> {
     }
 
     async count(filter: FilterQuery<T> = {}): Promise<number> {
-        return await this.model.countDocuments({ ...filter, isDeleted: false });
+        return await this.model.countDocuments({ ...filter, isDeleted: { $ne: true } });
     }
 
     async exists(filter: FilterQuery<T>): Promise<boolean> {
-        const count = await this.model.countDocuments({ ...filter, isDeleted: false });
+        const count = await this.model.countDocuments({ ...filter, isDeleted: { $ne: true } });
         return count > 0;
     }
 }

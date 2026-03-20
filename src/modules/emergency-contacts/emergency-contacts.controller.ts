@@ -29,7 +29,7 @@ export class EmergencyContactsController {
     constructor(private readonly emergencyContactsService: EmergencyContactsService) { }
 
     @Post()
-    @Roles(UserRole.LOCATION_MANAGER, UserRole.SUPER_ADMIN, UserRole.STAFF, UserRole.PARENT)
+    @Roles(UserRole.LOCATION_MANAGER, UserRole.ADMIN, UserRole.STAFF, UserRole.PARENT)
     @ApiOperation({ summary: 'Create emergency contact' })
     @ApiResponse({ status: 201, description: 'Emergency contact created successfully' })
     async createEmergencyContact(
@@ -44,7 +44,7 @@ export class EmergencyContactsController {
         };
     }
     @Get('location/:locationId')
-    @Roles(UserRole.LOCATION_MANAGER, UserRole.SUPER_ADMIN, UserRole.STAFF)
+    @Roles(UserRole.LOCATION_MANAGER, UserRole.ADMIN, UserRole.STAFF)
     @ApiOperation({ summary: 'Get emergency contacts for location' })
     @ApiResponse({ status: 200, description: 'Emergency contacts retrieved successfully' })
     async getLocationEmergencyContacts(
@@ -60,7 +60,7 @@ export class EmergencyContactsController {
     }
 
     @Get('student/:studentId')
-    @Roles(UserRole.LOCATION_MANAGER, UserRole.SUPER_ADMIN, UserRole.STAFF, UserRole.PARENT)
+    @Roles(UserRole.LOCATION_MANAGER, UserRole.ADMIN, UserRole.STAFF, UserRole.PARENT)
     @ApiOperation({ summary: 'Get emergency contacts for student' })
     @ApiResponse({ status: 200, description: 'Student emergency contacts retrieved successfully' })
     async getStudentEmergencyContacts(@Param('studentId') studentId: string) {
@@ -73,7 +73,7 @@ export class EmergencyContactsController {
     }
 
     @Put(':id/verify')
-    @Roles(UserRole.LOCATION_MANAGER, UserRole.SUPER_ADMIN)
+    @Roles(UserRole.LOCATION_MANAGER, UserRole.ADMIN)
     @ApiOperation({ summary: 'Verify emergency contact' })
     @ApiResponse({ status: 200, description: 'Emergency contact verified successfully' })
     async verifyContact(
@@ -89,7 +89,7 @@ export class EmergencyContactsController {
     }
 
     @Put(':id')
-    @Roles(UserRole.LOCATION_MANAGER, UserRole.SUPER_ADMIN, UserRole.PARENT)
+    @Roles(UserRole.LOCATION_MANAGER, UserRole.ADMIN, UserRole.PARENT)
     @ApiOperation({ summary: 'Update emergency contact' })
     @ApiResponse({ status: 200, description: 'Emergency contact updated successfully' })
     async updateEmergencyContact(
@@ -106,7 +106,7 @@ export class EmergencyContactsController {
     }
 
     @Delete(':id')
-    @Roles(UserRole.LOCATION_MANAGER, UserRole.SUPER_ADMIN, UserRole.PARENT)
+    @Roles(UserRole.LOCATION_MANAGER, UserRole.ADMIN, UserRole.PARENT)
     @ApiOperation({ summary: 'Delete emergency contact' })
     @ApiResponse({ status: 200, description: 'Emergency contact deleted successfully' })
     async deleteEmergencyContact(@Param('id') contactId: string) {

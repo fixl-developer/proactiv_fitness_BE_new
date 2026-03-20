@@ -3,6 +3,7 @@ import termController from './term.controller';
 import { authenticate, authorize } from '@modules/iam/auth.middleware';
 import { validate } from '@middleware/validation.middleware';
 import { UserRole } from '@shared/enums';
+import { asyncHandler } from '@shared/utils/async-handler.util';
 import { createTermValidation, updateTermValidation, idParamValidation } from './bcms.validation';
 
 const router = Router();
@@ -11,34 +12,34 @@ router.use(authenticate);
 
 router.post(
     '/',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN, UserRole.LOCATION_MANAGER),
+    authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN, UserRole.LOCATION_MANAGER),
     validate(createTermValidation),
-    termController.create
+    asyncHandler((req, res) => termController.create(req, res))
 );
 
 router.get(
     '/',
-    termController.getAll
+    asyncHandler((req, res) => termController.getAll(req, res))
 );
 
 router.get(
     '/:id',
     validate(idParamValidation),
-    termController.getById
+    asyncHandler((req, res) => termController.getById(req, res))
 );
 
 router.put(
     '/:id',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN, UserRole.LOCATION_MANAGER),
+    authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN, UserRole.LOCATION_MANAGER),
     validate(updateTermValidation),
-    termController.update
+    asyncHandler((req, res) => termController.update(req, res))
 );
 
 router.delete(
     '/:id',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN),
+    authorize(UserRole.ADMIN),
     validate(idParamValidation),
-    termController.delete
+    asyncHandler((req, res) => termController.delete(req, res))
 );
 
 export default router;
