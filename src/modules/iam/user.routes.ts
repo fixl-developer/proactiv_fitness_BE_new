@@ -2,7 +2,7 @@ import { Router } from 'express';
 import userController from './user.controller';
 import { validate } from '@middleware/validation.middleware';
 import { authenticate, authorize, checkOwnership, scopeFilter } from './auth.middleware';
-import { canCreateRole, canDeleteUser, canUpdateUserStatus, canViewUsers } from './rbac.middleware';
+import { canCreateRole, canDeleteUser, canUpdateUserStatus, canUpdateUser, canViewUsers } from './rbac.middleware';
 import { auditLog } from './audit.middleware';
 import { sanitizeInput } from './security.middleware';
 import { UserRole } from '@shared/enums';
@@ -74,8 +74,14 @@ router.get(
 
 router.put(
     '/:id',
+    authorize(
+        UserRole.ADMIN,
+        UserRole.REGIONAL_ADMIN,
+        UserRole.FRANCHISE_OWNER,
+        UserRole.LOCATION_MANAGER
+    ),
     validate(updateUserValidation),
-    checkOwnership('id'),
+    canUpdateUser(),
     auditLog('USER_UPDATE', 'User'),
     userController.update.bind(userController)
 );

@@ -202,4 +202,65 @@ export const canViewUsers = () => {
     };
 };
 
+/**
+ * Check if the authenticated user can update the target user.
+ * If a role change is being attempted, validates against ROLE_HIERARCHY.
+ * Prevents self-demotion (changing own role to a lower role).
+ */
+export const canUpdateUser = () => {
+    return async (req: Request, _res: Response, next: NextFunction) => {
+        try {
+            if (!req.user) {
+                return next(new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED));
+            }
+
+            const targetUserId = req.params.id;
+            const newRole = req.body.role;
+
+            const targetUser = await userService.getUserById(targetUserId);
+            if (!targetUser) {
+                return next(new AppError('Target user not found', HTTP_STATUS.NOT_FOUND));
+            }
+
+            const requesterRole = req.user.role;
+
+            // Self-demotion protection: cannot change own role
+            if (req.user.id === targetUserId && newRole && newRole !== requesterRole) {
+                return next(
+                    new AppError('You cannot change your own role', HTTP_STATUS.FORBIDDEN)
+                );
+            }
+
+            // If updating someone else, check hierarchy
+            if (req.user.id !== targetUserId) {
+                const allowedRoles = ROLE_HIERARCHY[requesterRole] || [];
+
+                // Must be able to manage the target user's current role
+                if (!allowedRoles.includes(targetUser.role)) {
+                    return next(
+                        new AppError(
+                            `Role '${requesterRole}' cannot update users with role '${targetUser.role}'`,
+                            HTTP_STATUS.FORBIDDEN
+                        )
+                    );
+                }
+
+                // If changing role, must also be able to assign the new role
+                if (newRole && newRole !== targetUser.role && !allowedRoles.includes(newRole)) {
+                    return next(
+                        new AppError(
+                            `Role '${requesterRole}' cannot assign role '${newRole}'`,
+                            HTTP_STATUS.FORBIDDEN
+                        )
+                    );
+                }
+            }
+
+            next();
+        } catch (error) {
+            next(error);
+        }
+    };
+};
+
 export { ROLE_HIERARCHY, DELETE_HIERARCHY, STATUS_HIERARCHY };
