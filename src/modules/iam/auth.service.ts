@@ -30,8 +30,9 @@ export class AuthService {
             language: data.language,
         });
 
-        // Set status to PENDING until email is verified
-        await userService.updateUserStatus(user._id.toString(), 'PENDING' as any);
+        // Set status to ACTIVE (email verification skipped when SMTP is not configured)
+        // TODO: Change back to PENDING when SMTP/email service is configured
+        await userService.updateUserStatus(user._id.toString(), 'ACTIVE' as any);
 
         // Generate tokens
         const tokens = this.generateTokens(user);

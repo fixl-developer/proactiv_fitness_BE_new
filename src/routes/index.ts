@@ -74,6 +74,9 @@ import virtualTrainingRoutes from '../modules/virtual-training/virtual-training.
 import nutritionRoutes from '../modules/nutrition/nutrition.routes';
 import localizationRoutes from '../modules/localization/localization.routes';
 
+// === Regional Admin ===
+import regionalAdminRoutes from './regional-admin.routes';
+
 // === BCMS (Business Configuration Management) ===
 import { termRoutes, holidayCalendarRoutes, countryRoutes, regionRoutes, businessUnitRoutes, locationRoutes, roomRoutes } from '../modules/bcms';
 
@@ -374,22 +377,8 @@ router.get('/admin/hq/health', (_req: Request, res: Response) => {
     res.json({ success: true, data: { uptime: 99.9, status: 'healthy' } });
 });
 
-// Regional dashboard overview
-router.get('/admin/regional/dashboard', (_req: Request, res: Response) => {
-    res.json({
-        success: true,
-        data: {
-            regionName: 'Default Region', totalLocations: 0, totalStaff: 0,
-            totalStudents: 0, totalRevenue: 0, monthlyRevenue: 0, revenueGrowth: 0,
-            occupancyRate: 0, staffUtilization: 0, customerSatisfaction: 0,
-            pendingApprovals: 0, criticalAlerts: 0, warnings: 0
-        }
-    });
-});
-
-router.get('/admin/regional/analytics', (_req: Request, res: Response) => {
-    res.json({ success: true, data: {} });
-});
+// Regional Admin (full CRUD routes)
+router.use('/admin/regional', regionalAdminRoutes);
 
 // Franchise dashboard overview
 router.get('/admin/franchise/dashboard', (_req: Request, res: Response) => {
