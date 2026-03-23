@@ -77,6 +77,12 @@ import localizationRoutes from '../modules/localization/localization.routes';
 // === Regional Admin ===
 import regionalAdminRoutes from './regional-admin.routes';
 
+// === Franchise Owner ===
+import franchiseOwnerRoutes from './franchise-owner.routes';
+
+// === Location Manager ===
+import locationManagerRoutes from './location-manager.routes';
+
 // === BCMS (Business Configuration Management) ===
 import { termRoutes, holidayCalendarRoutes, countryRoutes, regionRoutes, businessUnitRoutes, locationRoutes, roomRoutes } from '../modules/bcms';
 
@@ -380,39 +386,11 @@ router.get('/admin/hq/health', (_req: Request, res: Response) => {
 // Regional Admin (full CRUD routes)
 router.use('/admin/regional', regionalAdminRoutes);
 
-// Franchise dashboard overview
-router.get('/admin/franchise/dashboard', (_req: Request, res: Response) => {
-    res.json({
-        success: true,
-        data: {
-            franchiseName: 'Default Franchise', totalLocations: 0, totalStaff: 0,
-            totalStudents: 0, totalRevenue: 0, monthlyRevenue: 0, revenueGrowth: 0,
-            occupancyRate: 0, staffUtilization: 0, customerSatisfaction: 0,
-            pendingApprovals: 0, criticalAlerts: 0, warnings: 0
-        }
-    });
-});
+// Franchise Owner Dashboard (full CRUD routes)
+router.use('/admin/franchise', franchiseOwnerRoutes);
 
-router.get('/admin/franchise/analytics', (_req: Request, res: Response) => {
-    res.json({ success: true, data: {} });
-});
-
-// Location dashboard overview
-router.get('/admin/location/dashboard', (_req: Request, res: Response) => {
-    res.json({
-        success: true,
-        data: {
-            locationName: 'Default Location', totalClasses: 0, totalStaff: 0,
-            totalStudents: 0, monthlyRevenue: 0, revenueGrowth: 0, occupancyRate: 0,
-            staffUtilization: 0, customerSatisfaction: 0, todayClasses: 0,
-            todayAttendance: 0, pendingApprovals: 0, criticalAlerts: 0, warnings: 0
-        }
-    });
-});
-
-router.get('/admin/location/analytics', (_req: Request, res: Response) => {
-    res.json({ success: true, data: {} });
-});
+// Location Manager (full CRUD routes)
+router.use('/admin/location', locationManagerRoutes);
 
 // Payments stats endpoint - real data from Bookings
 router.get('/payments/stats', async (_req: Request, res: Response) => {
