@@ -4,6 +4,7 @@ import databaseConfig from '@config/database.config';
 import logger from '@shared/utils/logger.util';
 import { User } from './modules/iam/user.model';
 import { demoUsers } from './data-architecture/seeds/user.seeds';
+import { seedPartnerData } from './modules/partner-portal/partner-seed';
 
 const PORT = envConfig.get().port;
 
@@ -58,6 +59,13 @@ const startServer = async () => {
             }
         } catch (seedError) {
             logger.warn('Demo user seeding skipped:', seedError);
+        }
+
+        // Auto-seed partner portal data
+        try {
+            await seedPartnerData('partner-1');
+        } catch (partnerSeedError) {
+            logger.warn('Partner data seeding skipped:', partnerSeedError);
         }
 
         // Start Express server

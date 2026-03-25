@@ -8,12 +8,9 @@ const staffController = new StaffController();
 // Apply authentication middleware to all routes
 router.use(authenticate);
 
-// Staff CRUD routes
+// Staff CRUD routes (non-parameterized first)
 router.post('/', staffController.createStaff);
 router.get('/', staffController.getStaffMembers);
-router.get('/:staffId', staffController.getStaffById);
-router.put('/:staffId', staffController.updateStaff);
-router.delete('/:staffId', staffController.deleteStaff);
 
 // Staff availability routes
 router.put('/availability', staffController.updateStaffAvailability);
@@ -25,23 +22,10 @@ router.patch('/schedules/:scheduleId/status', staffController.updateScheduleStat
 
 // Time off management routes
 router.post('/time-off-requests', staffController.submitTimeOffRequest);
-router.patch('/:staffId/time-off-requests/:requestId', staffController.processTimeOffRequest);
 
 // Attendance routes
 router.post('/check-in', staffController.checkInStaff);
-router.patch('/:staffId/check-out', staffController.checkOutStaff);
 router.get('/attendance', staffController.getStaffAttendance);
-
-// Certification routes
-router.post('/:staffId/certifications', staffController.addStaffCertification);
-router.put('/:staffId/certifications/:certificationId', staffController.updateStaffCertification);
-
-// Background check routes
-router.post('/:staffId/background-checks', staffController.addBackgroundCheck);
-
-// Performance routes
-router.get('/:staffId/performance', staffController.getStaffPerformance);
-router.put('/:staffId/performance', staffController.updateStaffPerformance);
 
 // Statistics routes
 router.get('/statistics/overview', staffController.getStaffStatistics);
@@ -64,12 +48,7 @@ router.put('/settings', staffController.updateStaffSettings);
 
 // Live Chat routes
 router.get('/live-chat/sessions', staffController.getLiveChatSessions);
-router.get('/live-chat/:chatId/messages', staffController.getChatMessages);
-router.post('/live-chat/:chatId/messages', staffController.sendChatMessage);
-
-// Advanced Features routes
-// Live Chat
-router.get('/live-chat/sessions', staffController.getLiveChatSessions);
+router.post('/live-chat/sessions', staffController.createChatSession);
 router.get('/live-chat/:chatId/messages', staffController.getChatMessages);
 router.post('/live-chat/:chatId/messages', staffController.sendChatMessage);
 
@@ -93,8 +72,21 @@ router.get('/automation/rules', staffController.getAutomationRules);
 
 // Quality Assurance
 router.get('/quality/metrics', staffController.getQualityMetrics);
+router.get('/quality/reviews', staffController.getQualityReviews);
 
 // Communication
 router.get('/communication/announcements', staffController.getAnnouncements);
+
+// Parameterized staff routes MUST come last (/:staffId catches everything)
+router.get('/:staffId', staffController.getStaffById);
+router.put('/:staffId', staffController.updateStaff);
+router.delete('/:staffId', staffController.deleteStaff);
+router.patch('/:staffId/time-off-requests/:requestId', staffController.processTimeOffRequest);
+router.patch('/:staffId/check-out', staffController.checkOutStaff);
+router.post('/:staffId/certifications', staffController.addStaffCertification);
+router.put('/:staffId/certifications/:certificationId', staffController.updateStaffCertification);
+router.post('/:staffId/background-checks', staffController.addBackgroundCheck);
+router.get('/:staffId/performance', staffController.getStaffPerformance);
+router.put('/:staffId/performance', staffController.updateStaffPerformance);
 
 export { router as staffRoutes };

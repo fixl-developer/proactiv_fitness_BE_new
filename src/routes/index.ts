@@ -246,6 +246,27 @@ router.use('/localization', localizationRoutes);
 // Class-based routes (converted to Express routers)
 router.use('/marketing', classToRouter(MarketingRoutes));
 router.use('/partners', classToRouter(PartnerRoutes));
+router.use('/partner', classToRouter(PartnerRoutes));  // Alias for frontend compatibility
+// Commission routes - direct Express routes for /api/commissions/*
+const commissionRouter = Router();
+const { PartnerController: PartnerCtrl } = require('../modules/partner-portal/partner.controller');
+const commCtrl = new PartnerCtrl();
+commissionRouter.get('/', (req: Request, res: Response) => commCtrl.getCommissions(req, res));
+commissionRouter.get('/history', (req: Request, res: Response) => commCtrl.getCommissionHistory(req, res));
+commissionRouter.post('/calculate', (req: Request, res: Response) => commCtrl.calculateCommission(req, res));
+commissionRouter.get('/rates', (req: Request, res: Response) => commCtrl.getCommissionRates(req, res));
+commissionRouter.get('/tiers', (req: Request, res: Response) => commCtrl.getCommissionTiers(req, res));
+commissionRouter.post('/payout-request', (req: Request, res: Response) => commCtrl.requestCommissionPayout(req, res));
+commissionRouter.get('/payout-history', (req: Request, res: Response) => commCtrl.getPayoutHistory(req, res));
+commissionRouter.get('/payout/:payoutId', (req: Request, res: Response) => commCtrl.getPayoutStatus(req, res));
+commissionRouter.get('/:partnerId/stats', (req: Request, res: Response) => commCtrl.getCommissionStats(req, res));
+commissionRouter.get('/:partnerId/breakdown', (req: Request, res: Response) => commCtrl.getCommissionBreakdown(req, res));
+commissionRouter.get('/:partnerId/forecasts', (req: Request, res: Response) => commCtrl.getCommissionForecasts(req, res));
+commissionRouter.get('/:partnerId/export', (req: Request, res: Response) => commCtrl.exportCommissionReport(req, res));
+commissionRouter.get('/:partnerId/comparison', (req: Request, res: Response) => commCtrl.getCommissionComparison(req, res));
+commissionRouter.get('/:id', (req: Request, res: Response) => commCtrl.getCommissionById(req, res));
+router.use('/commissions', commissionRouter);
+
 router.use('/facilities', classToRouter(FacilityRoutes));
 router.use('/observations', classToRouter(ObservationRoutes));
 

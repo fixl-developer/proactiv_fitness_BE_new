@@ -1062,6 +1062,51 @@ export class LiveChatService extends BaseService<ILiveChatSession> {
         }
     }
 
+    /**
+     * Create a new chat session
+     */
+    async createSession(data: {
+        customerName: string;
+        customerEmail?: string;
+        initialMessage?: string;
+        assignedAgent?: string;
+    }): Promise<any> {
+        try {
+            const sessionId = `CHAT-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+            const messages: any[] = [];
+
+            if (data.initialMessage) {
+                messages.push({
+                    messageId: this.generateMessageId(),
+                    sender: 'agent',
+                    message: data.initialMessage,
+                    timestamp: new Date(),
+                    type: 'text' as const,
+                    status: 'sent' as const
+                });
+            }
+
+            const session = await LiveChatSession.create({
+                sessionId,
+                customerName: data.customerName,
+                customerEmail: data.customerEmail || '',
+                status: 'active',
+                startTime: new Date(),
+                assignedAgent: data.assignedAgent || '',
+                priority: 'medium',
+                department: 'general',
+                messages
+            });
+
+            return session;
+        } catch (error: any) {
+            throw new AppError(
+                error.message || 'Failed to create chat session',
+                HTTP_STATUS.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
     private generateMessageId(): string {
         return `MSG-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
     }

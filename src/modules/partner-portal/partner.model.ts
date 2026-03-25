@@ -167,3 +167,190 @@ export interface IPartnerSupport {
     createdAt: Date;
     updatedAt: Date;
 }
+
+// ===== Extended models for full partner portal integration =====
+
+export interface IPartnerProgram {
+    id: string;
+    partnerId: string;
+    name: string;
+    description: string;
+    category: string;
+    status: 'active' | 'inactive';
+    enrolledStudents: number;
+    revenue: number;
+    rating: number;
+    createdAt: Date;
+}
+
+export interface IPartnerStudent {
+    id: string;
+    partnerId: string;
+    name: string;
+    email: string;
+    phone: string;
+    enrolledPrograms: number;
+    totalSpent: number;
+    status: 'active' | 'inactive';
+    joinDate: Date;
+    lastActivity: Date;
+}
+
+export interface IPartnerNotification {
+    id: string;
+    partnerId: string;
+    type: 'alert' | 'update' | 'reminder' | 'announcement';
+    title: string;
+    message: string;
+    isRead: boolean;
+    createdAt: Date;
+    actionUrl?: string;
+}
+
+export interface IPartnerDocument {
+    id: string;
+    partnerId: string;
+    name: string;
+    type: string;
+    url: string;
+    uploadedAt: Date;
+    expiresAt?: Date;
+    status: 'active' | 'expired' | 'pending';
+    size?: string;
+    downloads?: number;
+    rating?: number;
+}
+
+export interface IPartnerContact {
+    id: string;
+    partnerId: string;
+    name: string;
+    email: string;
+    phone: string;
+    role: string;
+    isPrimary: boolean;
+}
+
+export interface IPerformanceMetrics {
+    totalRevenue: number;
+    totalStudents: number;
+    totalPrograms: number;
+    averageRating: number;
+    growthRate: number;
+    conversionRate: number;
+    retentionRate: number;
+    customerSatisfaction: number;
+}
+
+export interface IPerformanceTrend {
+    date: string;
+    revenue: number;
+    students: number;
+    bookings: number;
+    rating: number;
+}
+
+export interface IRevenueAnalytics {
+    totalRevenue: number;
+    averageRevenuePerStudent: number;
+    averageRevenuePerProgram: number;
+    revenueByProgram: { program: string; revenue: number }[];
+    revenueByMonth: { month: string; revenue: number }[];
+    revenueGrowth: number;
+}
+
+export interface IGoalProgress {
+    goalId: string;
+    goalName: string;
+    targetValue: number;
+    currentValue: number;
+    progress: number;
+    status: 'on-track' | 'at-risk' | 'off-track';
+    dueDate: string;
+}
+
+export interface ICommission {
+    id: string;
+    partnerId: string;
+    amount: number;
+    rate: number;
+    period: string;
+    status: 'pending' | 'approved' | 'paid' | 'disputed';
+    calculatedAt: Date;
+    paidAt?: Date;
+    notes?: string;
+}
+
+export interface ICommissionStats {
+    totalCommissions: number;
+    totalPaid: number;
+    totalPending: number;
+    averageCommission: number;
+    highestCommission: number;
+    lowestCommission: number;
+}
+
+export interface IMarketingCampaign {
+    id: string;
+    partnerId: string;
+    name: string;
+    status: 'active' | 'paused' | 'completed' | 'draft';
+    type: 'email' | 'social' | 'display' | 'content';
+    budget: number;
+    spent: number;
+    impressions: number;
+    clicks: number;
+    conversions: number;
+    roi: number;
+    startDate: Date;
+    endDate: Date;
+}
+
+export interface IMarketingLead {
+    id: string;
+    partnerId: string;
+    name: string;
+    email: string;
+    phone: string;
+    source: string;
+    status: 'new' | 'contacted' | 'qualified' | 'converted' | 'lost';
+    interestLevel: 'high' | 'medium' | 'low';
+    assignedTo?: string;
+    createdAt: Date;
+}
+
+export interface IIntegration {
+    id: string;
+    partnerId: string;
+    name: string;
+    type: string;
+    status: 'connected' | 'disconnected' | 'error';
+    lastSync: Date;
+    syncFrequency: string;
+    dataPointsSynced: number;
+    healthScore: number;
+}
+
+export interface ISupportTicket {
+    id: string;
+    partnerId: string;
+    subject: string;
+    description: string;
+    status: 'open' | 'in_progress' | 'resolved' | 'closed';
+    priority: 'low' | 'medium' | 'high' | 'critical';
+    category: string;
+    assignedTo?: string;
+    messages: ISupportMessage[];
+    createdAt: Date;
+    updatedAt: Date;
+    resolvedAt?: Date;
+}
+
+export interface ISupportMessage {
+    id: string;
+    ticketId: string;
+    sender: string;
+    senderType: 'partner' | 'support';
+    message: string;
+    createdAt: Date;
+}

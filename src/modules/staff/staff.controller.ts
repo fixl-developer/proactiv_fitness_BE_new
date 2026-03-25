@@ -870,6 +870,33 @@ export class StaffController extends BaseController {
         });
     });
 
+    /**
+     * Create a new chat session
+     */
+    createChatSession = asyncHandler(async (req: Request, res: Response) => {
+        const userId = req.user?.id;
+        if (!userId) {
+            throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        }
+
+        const { customerName, customerEmail, initialMessage } = req.body;
+        if (!customerName) {
+            throw new AppError('Customer name is required', HTTP_STATUS.BAD_REQUEST);
+        }
+
+        const session = await this.liveChatService.createSession({
+            customerName,
+            customerEmail,
+            initialMessage,
+            assignedAgent: userId
+        });
+
+        return this.sendSuccess(res, {
+            message: 'Chat session created successfully',
+            data: { session }
+        });
+    });
+
     // Escalations
     /**
      * Get escalations
@@ -1117,6 +1144,55 @@ export class StaffController extends BaseController {
         return this.sendSuccess(res, {
             message: 'Quality metrics retrieved successfully',
             data: metrics
+        });
+    });
+
+    /**
+     * Get quality reviews
+     */
+    getQualityReviews = asyncHandler(async (req: Request, res: Response) => {
+        const userId = req.user?.id;
+        if (!userId) {
+            throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        }
+
+        // Mock data - replace with actual implementation
+        const reviews = [
+            {
+                id: 'QR-001',
+                ticketId: 'TKT-101',
+                reviewer: 'Quality Team',
+                agent: 'John Doe',
+                score: 4.5,
+                status: 'passed',
+                feedback: 'Excellent response time and resolution',
+                reviewedAt: new Date().toISOString()
+            },
+            {
+                id: 'QR-002',
+                ticketId: 'TKT-102',
+                reviewer: 'Quality Team',
+                agent: 'Jane Smith',
+                score: 3.2,
+                status: 'needs-improvement',
+                feedback: 'Response could be more detailed',
+                reviewedAt: new Date().toISOString()
+            },
+            {
+                id: 'QR-003',
+                ticketId: 'TKT-103',
+                reviewer: 'Quality Team',
+                agent: 'Mike Johnson',
+                score: 1.8,
+                status: 'failed',
+                feedback: 'Incorrect information provided to customer',
+                reviewedAt: new Date().toISOString()
+            }
+        ];
+
+        return this.sendSuccess(res, {
+            message: 'Quality reviews retrieved successfully',
+            data: { reviews }
         });
     });
 
