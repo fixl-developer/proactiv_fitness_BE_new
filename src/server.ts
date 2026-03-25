@@ -1,3 +1,4 @@
+import http from 'http';
 import app from './app';
 import envConfig from '@config/env.config';
 import databaseConfig from '@config/database.config';
@@ -5,6 +6,7 @@ import logger from '@shared/utils/logger.util';
 import { User } from './modules/iam/user.model';
 import { demoUsers } from './data-architecture/seeds/user.seeds';
 import { seedPartnerData } from './modules/partner-portal/partner-seed';
+import { initializeSocketServer } from './modules/realtime';
 
 const PORT = envConfig.get().port;
 
@@ -68,8 +70,13 @@ const startServer = async () => {
             logger.warn('Partner data seeding skipped:', partnerSeedError);
         }
 
-        // Start Express server
-        const server = app.listen(PORT, () => {
+        // Create HTTP server and attach Socket.io
+        const httpServer = http.createServer(app);
+        const io = initializeSocketServer(httpServer);
+
+        // Start server
+        const server = httpServer;
+        httpServer.listen(PORT, () => {
             logger.info(`
         ╔═══════════════════════════════════════════════════════╗
         ║                                                       ║
@@ -78,6 +85,7 @@ const startServer = async () => {
         ║   Environment: ${envConfig.get().nodeEnv.padEnd(37)}║
         ║   Port: ${PORT.toString().padEnd(44)}║
         ║   API Version: ${envConfig.get().apiVersion.padEnd(38)}║
+        ║   Socket.io: ${'Enabled'.padEnd(39)}║
         ║                                                       ║
         ║   Server is running at:                              ║
         ║   http://localhost:${PORT}                              ║

@@ -11,13 +11,19 @@ import {
     ILiveChatSession,
     IStaffSettings
 } from './support.model';
-import { BaseService } from '../../shared/base/base.service';
+import { BaseService, EntityContext } from '../../shared/base/base.service';
 import { AppError } from '../../shared/utils/app-error.util';
 import { HTTP_STATUS } from '../../shared/constants';
 
 export class SupportService extends BaseService<ISupportTicket> {
     constructor() {
-        super(SupportTicket);
+        super(SupportTicket, 'ticket');
+    }
+
+    protected getEntityContext(doc: any): EntityContext | null {
+        return {
+            targetUserId: doc.createdBy?.toString(),
+        };
     }
 
     /**
@@ -256,6 +262,7 @@ export class SupportService extends BaseService<ISupportTicket> {
             });
 
             await ticket.save();
+            this.emitRealtimeEvent('created', ticket);
             return ticket;
         } catch (error: any) {
             throw new AppError(
@@ -280,6 +287,7 @@ export class SupportService extends BaseService<ISupportTicket> {
                 throw new AppError('Ticket not found', HTTP_STATUS.NOT_FOUND);
             }
 
+            this.emitRealtimeEvent('updated', ticket);
             return ticket;
         } catch (error: any) {
             throw new AppError(

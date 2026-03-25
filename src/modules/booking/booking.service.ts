@@ -13,13 +13,21 @@ import {
     BookingType,
     PaymentStatus
 } from './booking.interface';
-import { BaseService } from '../../shared/base/base.service';
+import { BaseService, EntityContext } from '../../shared/base/base.service';
 import { AppError } from '../../shared/utils/app-error.util';
 import { HTTP_STATUS } from '../../shared/constants';
 
 export class BookingService extends BaseService<IBooking> {
     constructor() {
-        super(Booking);
+        super(Booking, 'booking');
+    }
+
+    protected getEntityContext(doc: any): EntityContext | null {
+        return {
+            locationId: doc.locationId?.toString(),
+            organizationId: doc.businessUnitId?.toString(),
+            targetUserId: doc.bookedBy?.toString(),
+        };
     }
 
     /**
@@ -103,6 +111,7 @@ export class BookingService extends BaseService<IBooking> {
             });
 
             await booking.save();
+            this.emitRealtimeEvent('created', booking);
 
             return {
                 bookingId: booking.bookingId,
@@ -147,6 +156,7 @@ export class BookingService extends BaseService<IBooking> {
             booking.updatedBy = cancelledBy;
 
             await booking.save();
+            this.emitRealtimeEvent('cancelled', booking);
             return booking;
         } catch (error: any) {
             throw new AppError(

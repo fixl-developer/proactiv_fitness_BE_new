@@ -44,7 +44,37 @@ router.post('/send-bulk', authenticate, async (req: Request, res: Response) => {
     }
 });
 
-// Get user notifications
+// Get current user's notifications (for bell component)
+router.get('/me', authenticate, async (req: Request, res: Response) => {
+    try {
+        const userId = req.user?.id;
+        const { limit = 50, offset = 0 } = req.query;
+
+        const notifications = await notificationService.getUserNotifications(
+            userId,
+            Number(limit),
+            Number(offset)
+        );
+
+        res.json({ success: true, data: notifications });
+    } catch (error: any) {
+        res.status(400).json({ success: false, error: error.message });
+    }
+});
+
+// Get unread notification count
+router.get('/unread-count', authenticate, async (req: Request, res: Response) => {
+    try {
+        const userId = req.user?.id;
+        const count = await notificationService.getUnreadCount(userId);
+
+        res.json({ success: true, data: { count } });
+    } catch (error: any) {
+        res.status(400).json({ success: false, error: error.message });
+    }
+});
+
+// Get user notifications (legacy route)
 router.get('/user', authenticate, async (req: Request, res: Response) => {
     try {
         const userId = req.user?.id;
@@ -58,14 +88,25 @@ router.get('/user', authenticate, async (req: Request, res: Response) => {
     }
 });
 
-// Mark as read
+// Mark single notification as read
 router.put('/:notificationId/read', authenticate, async (req: Request, res: Response) => {
     try {
         const { notificationId } = req.params;
-
         const notification = await notificationService.markAsRead(notificationId);
 
         res.json({ success: true, data: notification });
+    } catch (error: any) {
+        res.status(400).json({ success: false, error: error.message });
+    }
+});
+
+// Mark all notifications as read
+router.put('/read-all', authenticate, async (req: Request, res: Response) => {
+    try {
+        const userId = req.user?.id;
+        const count = await notificationService.markAllAsRead(userId);
+
+        res.json({ success: true, data: { modifiedCount: count } });
     } catch (error: any) {
         res.status(400).json({ success: false, error: error.message });
     }
@@ -75,7 +116,6 @@ router.put('/:notificationId/read', authenticate, async (req: Request, res: Resp
 router.delete('/:notificationId', authenticate, async (req: Request, res: Response) => {
     try {
         const { notificationId } = req.params;
-
         await notificationService.deleteNotification(notificationId);
 
         res.json({ success: true });

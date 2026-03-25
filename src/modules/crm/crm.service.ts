@@ -18,13 +18,20 @@ import {
     InquiryStatus,
     LeadSource
 } from './crm.interface';
-import { BaseService } from '../../shared/base/base.service';
+import { BaseService, EntityContext } from '../../shared/base/base.service';
 import { AppError } from '../../shared/utils/app-error.util';
 import { HTTP_STATUS } from '../../shared/constants';
 
 export class FamilyService extends BaseService<IFamilyProfile> {
     constructor() {
-        super(FamilyProfile);
+        super(FamilyProfile, 'crm');
+    }
+
+    protected getEntityContext(doc: any): EntityContext | null {
+        return {
+            organizationId: doc.businessUnitId?.toString(),
+            locationId: doc.locationIds?.[0]?.toString(),
+        };
     }
 
     /**
@@ -55,6 +62,7 @@ export class FamilyService extends BaseService<IFamilyProfile> {
             });
 
             await family.save();
+            this.emitRealtimeEvent('created', family);
             return family;
         } catch (error: any) {
             throw new AppError(

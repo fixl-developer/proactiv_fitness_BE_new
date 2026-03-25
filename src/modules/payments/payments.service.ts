@@ -1,11 +1,18 @@
-import { BaseService } from '../../shared/base/base.service';
+import { BaseService, EntityContext } from '../../shared/base/base.service';
 import { IPaymentMethod, ITransaction } from './payments.interface';
 import { AppError } from '../../shared/utils/app-error.util';
 import { HTTP_STATUS } from '../../shared/constants';
 
 export class PaymentService extends BaseService<IPaymentMethod> {
     constructor() {
-        super({} as any); // Placeholder for PaymentMethod model
+        super({} as any, 'payment'); // Placeholder for PaymentMethod model
+    }
+
+    protected getEntityContext(doc: any): EntityContext | null {
+        return {
+            locationId: doc.locationId?.toString(),
+            targetUserId: doc.userId?.toString(),
+        };
     }
 
     /**

@@ -12,6 +12,8 @@ import { BaseController } from '../../shared/base/base.controller';
 import { asyncHandler } from '../../shared/utils/async-handler.util';
 import { AppError } from '../../shared/utils/app-error.util';
 import { HTTP_STATUS } from '../../shared/constants';
+import userService from '../iam/user.service';
+import { UserRole } from '../../shared/enums';
 
 export class StaffController extends BaseController {
     private staffService: StaffService;
@@ -1221,6 +1223,141 @@ export class StaffController extends BaseController {
         return this.sendSuccess(res, {
             message: 'Announcements retrieved successfully',
             data: { announcements }
+        });
+    });
+
+    // ==================== COACH MANAGEMENT ====================
+
+    /**
+     * Get all coaches (filtered from staff)
+     */
+    getCoaches = asyncHandler(async (req: Request, res: Response) => {
+        const {
+            page = 1,
+            limit = 20,
+            status,
+            locationId,
+            searchText
+        } = req.query;
+
+        const filter = {
+            staffType: 'coach',
+            status: status || undefined,
+            locationId: locationId || undefined,
+            searchText: searchText || undefined
+        };
+
+        const coaches = await this.staffService.getStaffMembers(
+            filter as any,
+            Number(page),
+            Number(limit)
+        );
+
+        return this.sendSuccess(res, {
+            message: 'Coaches retrieved successfully',
+            data: coaches
+        });
+    });
+
+    /**
+     * Create a new coach with both User account and Staff record
+     * This creates:
+     * 1. A User record (for login/auth) with role COACH
+     * 2. A Staff record (for staff management) with staffType 'coach'
+     */
+    createCoachWithUser = asyncHandler(async (req: Request, res: Response) => {
+        const adminUserId = req.user?.id;
+        if (!adminUserId) {
+            throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        }
+
+        const {
+            firstName,
+            lastName,
+            email,
+            password,
+            phone,
+            specializations,
+            skills,
+            experienceYears,
+            locationId,
+            organizationId,
+            maxHoursPerWeek
+        } = req.body;
+
+        if (!firstName || !lastName || !email || !password) {
+            throw new AppError('firstName, lastName, email, and password are required', HTTP_STATUS.BAD_REQUEST);
+        }
+
+        // Step 1: Create User account for login
+        const user = await userService.createUser({
+            email,
+            password,
+            firstName,
+            lastName,
+            phone,
+            role: UserRole.COACH,
+            locationId,
+            organizationId
+        });
+
+        // Mark as admin-created (skip email verification)
+        await userService.updateUser(user._id.toString(), {
+            metadata: { createdByAdmin: true }
+        } as any);
+        await userService.updateUserStatus(user._id.toString(), 'ACTIVE' as any);
+
+        // Step 2: Create Staff record for management
+        const staff = await this.staffService.createStaff({
+            personalInfo: { firstName, lastName },
+            contactInfo: { email, phone },
+            staffType: 'coach',
+            specializations: specializations || [],
+            skills: skills || [],
+            experienceYears: experienceYears || 0,
+            locationIds: locationId ? [locationId] : [],
+            primaryLocationId: locationId,
+            businessUnitId: organizationId,
+            maxHoursPerWeek: maxHoursPerWeek || 40
+        } as any, adminUserId);
+
+        return this.sendSuccess(res, {
+            message: 'Coach created successfully with login credentials',
+            data: {
+                user: {
+                    id: user._id,
+                    email: user.email,
+                    firstName: user.firstName,
+                    lastName: user.lastName,
+                    role: user.role
+                },
+                staff
+            }
+        });
+    });
+
+    /**
+     * Get coach statistics summary
+     */
+    getCoachStatistics = asyncHandler(async (req: Request, res: Response) => {
+        const stats = await this.staffService.getStaffMembers(
+            { staffType: 'coach' } as any, 1, 1000
+        );
+
+        const allCoaches = stats?.data || stats?.docs || [];
+        const active = allCoaches.filter((c: any) => c.status === 'active');
+        const onLeave = allCoaches.filter((c: any) => c.status === 'on_leave');
+
+        return this.sendSuccess(res, {
+            message: 'Coach statistics retrieved successfully',
+            data: {
+                totalCoaches: allCoaches.length,
+                activeCoaches: active.length,
+                onLeaveCoaches: onLeave.length,
+                avgExperience: allCoaches.length > 0
+                    ? Math.round(allCoaches.reduce((sum: number, c: any) => sum + (c.experienceYears || 0), 0) / allCoaches.length)
+                    : 0
+            }
         });
     });
 }

@@ -928,11 +928,13 @@ router.get('/financial-reports', async (req: Request, res: Response) => {
         const { Booking } = require('../modules/booking/booking.model');
         const timeRange = req.query.timeRange as string || 'monthly';
 
-        const sixMonthsAgo = new Date();
-        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        // Determine lookback period based on timeRange
+        const lookbackMonths = timeRange === 'yearly' ? 12 : timeRange === 'quarterly' ? 3 : 6;
+        const startDate = new Date();
+        startDate.setMonth(startDate.getMonth() - lookbackMonths);
 
         const monthlyRevenue = await Booking.aggregate([
-            { $match: { 'payment.status': { $in: ['paid', 'COMPLETED', 'completed'] }, createdAt: { $gte: sixMonthsAgo } } },
+            { $match: { 'payment.status': { $in: ['paid', 'COMPLETED', 'completed'] }, createdAt: { $gte: startDate } } },
             {
                 $group: {
                     _id: { year: { $year: '$createdAt' }, month: { $month: '$createdAt' } },
@@ -955,10 +957,10 @@ router.get('/financial-reports', async (req: Request, res: Response) => {
             };
         });
 
-        // If no data, provide defaults
+        // If no data, provide defaults based on lookback period
         if (monthlyData.length === 0) {
             const now = new Date();
-            for (let i = 5; i >= 0; i--) {
+            for (let i = lookbackMonths - 1; i >= 0; i--) {
                 const d = new Date(now);
                 d.setMonth(d.getMonth() - i);
                 monthlyData.push({ month: months[d.getMonth()], revenue: 0, expenses: 0, profit: 0 });

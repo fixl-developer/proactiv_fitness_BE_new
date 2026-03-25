@@ -22,13 +22,20 @@ import {
     ITimeSlot,
     IConflict
 } from './schedule.interface';
-import { BaseService } from '../../shared/base/base.service';
+import { BaseService, EntityContext } from '../../shared/base/base.service';
 import { AppError } from '../../shared/utils/app-error.util';
 import { HTTP_STATUS } from '../../shared/constants';
 
 export class ScheduleService extends BaseService<ISchedule> {
     constructor() {
-        super(Schedule);
+        super(Schedule, 'schedule');
+    }
+
+    protected getEntityContext(doc: any): EntityContext | null {
+        return {
+            organizationId: doc.businessUnitId?.toString(),
+            locationId: doc.locationIds?.[0]?.toString(),
+        };
     }
 
     /**
@@ -170,6 +177,7 @@ export class ScheduleService extends BaseService<ISchedule> {
             schedule.statistics.pendingConflicts = conflicts.length;
 
             await schedule.save();
+            this.emitRealtimeEvent('generated', schedule);
 
             // Calculate statistics
             const statistics = await this.calculateScheduleStatistics(schedule._id.toString());
@@ -220,6 +228,7 @@ export class ScheduleService extends BaseService<ISchedule> {
             schedule.updatedBy = publishedBy;
 
             await schedule.save();
+            this.emitRealtimeEvent('published', schedule);
 
             // Update all sessions to confirmed status
             await Session.updateMany(
