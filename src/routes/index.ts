@@ -83,6 +83,9 @@ import franchiseOwnerRoutes from './franchise-owner.routes';
 // === Location Manager ===
 import locationManagerRoutes from './location-manager.routes';
 
+// === Parent Dashboard ===
+import parentDashboardRoutes from './parent-dashboard.routes';
+
 // === BCMS (Business Configuration Management) ===
 import { termRoutes, holidayCalendarRoutes, countryRoutes, regionRoutes, businessUnitRoutes, locationRoutes, roomRoutes } from '../modules/bcms';
 
@@ -224,6 +227,33 @@ router.use('/dynamic-pricing', dynamicPricingRoutes);
 router.use('/', aiCoachRoutes);             // internal: /ai-coach
 router.use('/', aiCoachAssistantRoutes);    // internal: /ai-coach-assistant
 router.use('/', smartNutritionRoutes);      // internal: /nutrition
+
+// Advanced AI Modules (Tier 1, 2, 3)
+import aiVideoAnalysisRoutes from '../modules/ai-video-analysis/ai-video-analysis.routes';
+import smartSchedulerRoutes from '../modules/smart-scheduler/smart-scheduler.routes';
+import parentAIAssistantRoutes from '../modules/parent-ai-assistant/parent-ai-assistant.routes';
+import revenueIntelligenceRoutes from '../modules/revenue-intelligence/revenue-intelligence.routes';
+import aiContentEngineRoutes from '../modules/ai-content-engine/ai-content-engine.routes';
+import workflowOrchestratorRoutes from '../modules/workflow-orchestrator/workflow-orchestrator.routes';
+import smartSupportRoutes from '../modules/smart-support/smart-support.routes';
+import aiSafetyMonitorRoutes from '../modules/ai-safety-monitor/ai-safety-monitor.routes';
+import aiCommunicationRoutes from '../modules/ai-communication/routes';
+import studentDigitalTwinRoutes from '../modules/student-digital-twin/routes';
+import aiGamificationEngineRoutes from '../modules/ai-gamification-engine/routes';
+import globalIntelligenceRoutes from '../modules/global-intelligence/routes';
+
+router.use('/', aiVideoAnalysisRoutes);
+router.use('/', smartSchedulerRoutes);
+router.use('/', parentAIAssistantRoutes);
+router.use('/', revenueIntelligenceRoutes);
+router.use('/', aiContentEngineRoutes);
+router.use('/', workflowOrchestratorRoutes);
+router.use('/', smartSupportRoutes);
+router.use('/', aiSafetyMonitorRoutes);
+router.use('/', aiCommunicationRoutes);
+router.use('/', studentDigitalTwinRoutes);
+router.use('/', aiGamificationEngineRoutes);
+router.use('/', globalIntelligenceRoutes);
 
 // Health & Fitness
 router.use('/wearables', wearablesRoutes);
@@ -412,6 +442,9 @@ router.use('/admin/franchise', franchiseOwnerRoutes);
 
 // Location Manager (full CRUD routes)
 router.use('/admin/location', locationManagerRoutes);
+
+// Parent Dashboard (full CRUD routes)
+router.use('/parent', parentDashboardRoutes);
 
 // Payments stats endpoint - real data from Bookings
 router.get('/payments/stats', async (_req: Request, res: Response) => {

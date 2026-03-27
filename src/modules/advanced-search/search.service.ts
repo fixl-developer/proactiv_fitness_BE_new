@@ -15,6 +15,9 @@ import {
     ISearchIndex,
     ISearchMetrics
 } from './search.model';
+import aiService from '@shared/services/ai.service';
+import { AIPromptService } from '@shared/services/ai-prompt.service';
+import logger from '@shared/utils/logger.util';
 
 export class SearchService {
     private programs: Map<string, ISearchProgram> = new Map();
@@ -222,12 +225,12 @@ export class SearchService {
         };
     }
 
-    // Search Suggestions
+    // AI-Enhanced Search Suggestions
     async getSuggestions(query: string): Promise<ISearchSuggestion[]> {
         const suggestions: ISearchSuggestion[] = [];
         const lowerQuery = query.toLowerCase();
 
-        // Generate suggestions from programs
+        // Generate suggestions from programs (existing logic)
         const programs = Array.from(this.programs.values());
         const matchingPrograms = programs.filter(p =>
             p.name.toLowerCase().startsWith(lowerQuery)
@@ -244,7 +247,7 @@ export class SearchService {
             });
         });
 
-        // Add related suggestions
+        // Add related suggestions from tags
         const relatedTags = new Set<string>();
         programs.forEach(p => {
             if (p.name.toLowerCase().includes(lowerQuery)) {
@@ -263,7 +266,120 @@ export class SearchService {
             });
         });
 
+        // AI-enhanced suggestions if basic results are sparse
+        if (suggestions.length < 3) {
+            try {
+                const prompt = AIPromptService.searchQueryInterpretation({
+                    query,
+                    availableCategories: [...new Set(programs.map(p => p.category))],
+                    availableTags: [...new Set(programs.flatMap(p => p.tags))],
+                });
+
+                const aiResult = await aiService.jsonCompletion<{
+                    interpretedQuery: string;
+                    filters: any;
+                    expandedTerms: string[];
+                    suggestions: string[];
+                }>({
+                    systemPrompt: prompt.system,
+                    userPrompt: prompt.user,
+                    module: 'advanced-search',
+                    temperature: 0.6,
+                });
+
+                aiResult.suggestions?.forEach(suggestion => {
+                    suggestions.push({
+                        suggestionId: `SUG-AI-${Date.now()}-${Math.random()}`,
+                        query,
+                        suggestion,
+                        type: 'related' as const,
+                        popularity: 80,
+                        createdAt: new Date(),
+                    });
+                });
+
+                logger.info(`Search AI: Enhanced suggestions for "${query}" with ${aiResult.suggestions?.length || 0} AI suggestions`);
+            } catch (error: any) {
+                logger.warn(`Search AI suggestions failed for "${query}": ${error.message}`);
+            }
+        }
+
         return suggestions.slice(0, 10);
+    }
+
+    // AI-Powered Smart Search (natural language to structured query)
+    async smartSearch(query: string): Promise<ISearchResult> {
+        try {
+            const programs = Array.from(this.programs.values());
+
+            const prompt = AIPromptService.searchQueryInterpretation({
+                query,
+                availableCategories: [...new Set(programs.map(p => p.category))],
+                availableTags: [...new Set(programs.flatMap(p => p.tags))],
+            });
+
+            const interpretation = await aiService.jsonCompletion<{
+                interpretedQuery: string;
+                filters: {
+                    category: string | null;
+                    difficulty: string | null;
+                    ageRange: { min: number | null; max: number | null } | null;
+                    priceRange: { min: number | null; max: number | null } | null;
+                    tags: string[];
+                };
+                expandedTerms: string[];
+                suggestions: string[];
+            }>({
+                systemPrompt: prompt.system,
+                userPrompt: prompt.user,
+                module: 'advanced-search',
+                temperature: 0.4,
+            });
+
+            // Build filters from AI interpretation
+            const filters: Record<string, any> = {};
+            if (interpretation.filters.category) filters.category = interpretation.filters.category;
+            if (interpretation.filters.difficulty) filters.difficulty = interpretation.filters.difficulty;
+            if (interpretation.filters.priceRange?.min) filters.minPrice = interpretation.filters.priceRange.min;
+            if (interpretation.filters.priceRange?.max) filters.maxPrice = interpretation.filters.priceRange.max;
+
+            // Search with original query + expanded terms
+            const searchTerms = [query, ...interpretation.expandedTerms];
+            let results = programs.filter(p =>
+                searchTerms.some(term => {
+                    const lower = term.toLowerCase();
+                    return (
+                        p.name.toLowerCase().includes(lower) ||
+                        p.description.toLowerCase().includes(lower) ||
+                        p.tags.some(t => t.toLowerCase().includes(lower)) ||
+                        p.category.toLowerCase().includes(lower)
+                    );
+                })
+            );
+
+            // Apply AI-determined filters
+            if (filters.category) results = results.filter(p => p.category === filters.category);
+            if (filters.difficulty) results = results.filter(p => p.difficulty === filters.difficulty);
+            if (filters.minPrice) results = results.filter(p => p.price >= filters.minPrice);
+            if (filters.maxPrice) results = results.filter(p => p.price <= filters.maxPrice);
+
+            logger.info(`Search AI: Smart search for "${query}" interpreted as "${interpretation.interpretedQuery}" — ${results.length} results`);
+
+            return {
+                resultId: `RES-AI-${Date.now()}`,
+                query,
+                results,
+                totalResults: results.length,
+                executionTime: 0,
+                filters: this.extractFilters(results),
+                createdAt: new Date(),
+                aiInterpretation: interpretation,
+                aiPowered: true,
+            } as any;
+        } catch (error: any) {
+            logger.warn(`Search AI smart search failed, falling back to basic search: ${error.message}`);
+            return this.search(query);
+        }
     }
 
     // Search Facets
@@ -368,22 +484,71 @@ export class SearchService {
             throw new Error('No valid programs provided');
         }
 
-        // Find similar programs
-        const recommendedPrograms = Array.from(this.programs.values()).filter(p =>
-            !basedOnPrograms.includes(p.programId) &&
-            basePrograms.some(bp =>
-                bp.category === p.category || bp.tags.some(t => p.tags.includes(t))
-            )
-        );
+        const allPrograms = Array.from(this.programs.values());
+        let recommendedPrograms: ISearchProgram[] = [];
+        let reason = 'Based on your interests';
+        let score = 0.85;
+
+        try {
+            // Use AI for personalized recommendations
+            const userHistory = this.searchHistory.get(userId) || [];
+            const prompt = AIPromptService.searchRecommendations({
+                userHistory: userHistory.map(h => ({ query: h.searchQuery, resultsCount: h.resultsCount })),
+                availablePrograms: allPrograms.filter(p => !basedOnPrograms.includes(p.programId)).map(p => ({
+                    programId: p.programId,
+                    name: p.name,
+                    category: p.category,
+                    difficulty: p.difficulty,
+                    price: p.price,
+                    rating: p.rating,
+                    tags: p.tags,
+                })),
+                userProfile: { userId, enrolledPrograms: basedOnPrograms },
+            });
+
+            const aiRecs = await aiService.jsonCompletion<{
+                recommendations: Array<{
+                    programId: string;
+                    programName: string;
+                    score: number;
+                    reason: string;
+                }>;
+                personalizedMessage: string;
+            }>({
+                systemPrompt: prompt.system,
+                userPrompt: prompt.user,
+                module: 'advanced-search',
+                temperature: 0.7,
+            });
+
+            // Map AI recommendations to actual programs
+            recommendedPrograms = aiRecs.recommendations
+                .map(rec => allPrograms.find(p => p.programId === rec.programId))
+                .filter((p): p is ISearchProgram => p !== undefined);
+
+            reason = aiRecs.personalizedMessage || 'AI-personalized recommendations';
+            score = aiRecs.recommendations[0]?.score || 0.9;
+
+            logger.info(`Search AI: Generated ${recommendedPrograms.length} AI recommendations for user ${userId}`);
+        } catch (error: any) {
+            logger.warn(`Search AI recommendations failed, falling back to category matching: ${error.message}`);
+            // Fallback: category/tag matching
+            recommendedPrograms = allPrograms.filter(p =>
+                !basedOnPrograms.includes(p.programId) &&
+                basePrograms.some(bp =>
+                    bp.category === p.category || bp.tags.some(t => p.tags.includes(t))
+                )
+            );
+        }
 
         const recommendation: IDiscoveryRecommendation = {
             recommendationId: `REC-${Date.now()}`,
             userId,
             recommendedPrograms: recommendedPrograms.slice(0, 5),
-            reason: 'Based on your interests',
-            score: 0.85,
+            reason,
+            score,
             createdAt: new Date(),
-            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
         };
 
         if (!this.recommendations.has(userId)) {

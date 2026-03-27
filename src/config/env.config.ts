@@ -72,6 +72,15 @@ interface IEnvConfig {
 
     // Multi-tenancy
     defaultTenant: string;
+
+    // AI / OpenAI
+    openaiApiKey: string;
+    openaiModel: string;
+    openaiTemperature: number;
+    openaiMaxTokens: number;
+    openaiRateLimitPerMinute: number;
+    enableAi: boolean;
+    aiCacheTtl: number;
 }
 
 class EnvConfig {
@@ -148,6 +157,15 @@ class EnvConfig {
 
             // Multi-tenancy
             defaultTenant: process.env.DEFAULT_TENANT || 'proactiv-hq',
+
+            // AI / OpenAI
+            openaiApiKey: process.env.OPENAI_API_KEY || '',
+            openaiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+            openaiTemperature: parseFloat(process.env.OPENAI_TEMPERATURE || '0.7'),
+            openaiMaxTokens: parseInt(process.env.OPENAI_MAX_TOKENS || '2048', 10),
+            openaiRateLimitPerMinute: parseInt(process.env.OPENAI_RATE_LIMIT_PER_MINUTE || '60', 10),
+            enableAi: process.env.ENABLE_AI !== 'false',
+            aiCacheTtl: parseInt(process.env.AI_CACHE_TTL || '300', 10),
         };
 
         this.validate();
