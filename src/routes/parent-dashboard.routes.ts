@@ -466,4 +466,318 @@ router.put('/profile', async (req: Request, res: Response) => {
     }
 });
 
+// =============================================
+// ADD CHILD
+// =============================================
+router.post('/children', async (req: Request, res: Response) => {
+    try {
+        const { User } = require('../modules/iam/user.model');
+        const parentId = getParentId(req);
+        const { firstName, lastName, dateOfBirth, gender, medicalInfo } = req.body;
+
+        if (!firstName || !lastName) {
+            return res.status(400).json({ success: false, message: 'First name and last name are required' });
+        }
+
+        const child = await User.create({
+            firstName,
+            lastName,
+            dateOfBirth: dateOfBirth || undefined,
+            gender: gender || undefined,
+            role: 'STUDENT',
+            status: 'ACTIVE',
+            parentId: parentId,
+            createdBy: parentId,
+            medicalInfo: medicalInfo || {},
+            email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}.${Date.now()}@student.local`,
+            password: 'student-placeholder-' + Date.now(),
+        });
+
+        res.json({
+            success: true,
+            data: {
+                id: child._id,
+                name: `${firstName} ${lastName}`,
+                age: dateOfBirth ? Math.floor((Date.now() - new Date(dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 0,
+                dateOfBirth: child.dateOfBirth || '',
+                program: 'Not Enrolled',
+                level: 'Beginner',
+                status: 'ACTIVE',
+            },
+            message: 'Child added successfully'
+        });
+    } catch (error: any) {
+        console.error('Add child error:', error);
+        res.status(500).json({ success: false, message: error.message || 'Failed to add child' });
+    }
+});
+
+// Update child
+router.put('/children/:childId', async (req: Request, res: Response) => {
+    try {
+        const { User } = require('../modules/iam/user.model');
+        const { childId } = req.params;
+        const updates = req.body;
+
+        const allowedFields: any = {};
+        if (updates.firstName) allowedFields.firstName = updates.firstName;
+        if (updates.lastName) allowedFields.lastName = updates.lastName;
+        if (updates.dateOfBirth) allowedFields.dateOfBirth = updates.dateOfBirth;
+        if (updates.gender) allowedFields.gender = updates.gender;
+        if (updates.medicalInfo) allowedFields.medicalInfo = updates.medicalInfo;
+
+        const updated = await User.findByIdAndUpdate(childId, { $set: allowedFields }, { new: true }).lean();
+        res.json({ success: true, data: updated });
+    } catch (error: any) {
+        console.error('Update child error:', error);
+        res.status(500).json({ success: false, message: 'Failed to update child' });
+    }
+});
+
+// =============================================
+// CANCEL BOOKING
+// =============================================
+router.put('/bookings/:bookingId/cancel', async (req: Request, res: Response) => {
+    try {
+        const { Booking } = require('../modules/booking/booking.model');
+        const { bookingId } = req.params;
+
+        const updated = await Booking.findByIdAndUpdate(
+            bookingId,
+            { $set: { status: 'cancelled', cancelledAt: new Date(), cancelReason: req.body.reason || 'Cancelled by parent' } },
+            { new: true }
+        ).lean();
+
+        if (!updated) {
+            return res.status(404).json({ success: false, message: 'Booking not found' });
+        }
+
+        res.json({ success: true, data: updated, message: 'Booking cancelled successfully' });
+    } catch (error: any) {
+        console.error('Cancel booking error:', error);
+        res.status(500).json({ success: false, message: 'Failed to cancel booking' });
+    }
+});
+
+// Get single booking
+router.get('/bookings/:bookingId', async (req: Request, res: Response) => {
+    try {
+        const { Booking } = require('../modules/booking/booking.model');
+        const { bookingId } = req.params;
+
+        const booking = await Booking.findById(bookingId).lean();
+        if (!booking) {
+            return res.status(404).json({ success: false, message: 'Booking not found' });
+        }
+
+        res.json({
+            success: true,
+            data: {
+                id: (booking as any)._id,
+                child: (booking as any).childName || (booking as any).customer?.name || 'Student',
+                program: (booking as any).programName || (booking as any).session?.className || 'Class',
+                coach: (booking as any).coachName || (booking as any).session?.coach || '',
+                date: (booking as any).session?.date || (booking as any).date || (booking as any).createdAt,
+                time: (booking as any).session?.startTime || (booking as any).time || '',
+                duration: (booking as any).session?.duration || '1 hour',
+                location: (booking as any).session?.location || (booking as any).location || '',
+                status: ((booking as any).status || 'pending').toLowerCase(),
+                price: (booking as any).payment?.amount || 0,
+                paymentStatus: ((booking as any).payment?.status || 'pending').toLowerCase(),
+                type: (booking as any).type || 'regular',
+                participants: (booking as any).participants || [],
+                specialRequests: (booking as any).specialRequests || '',
+                cancelReason: (booking as any).cancelReason || '',
+            }
+        });
+    } catch (error: any) {
+        console.error('Get booking error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch booking' });
+    }
+});
+
+// =============================================
+// BROWSE CLASSES
+// =============================================
+router.get('/browse-classes', async (req: Request, res: Response) => {
+    try {
+        const { Session } = require('../modules/scheduling/schedule.model');
+        const { location, program, level, date } = req.query;
+
+        const filter: any = { status: { $in: ['scheduled', 'active', 'ACTIVE'] } };
+        if (location) filter.location = { $regex: new RegExp(location as string, 'i') };
+        if (program) filter.className = { $regex: new RegExp(program as string, 'i') };
+        if (level) filter.level = { $regex: new RegExp(level as string, 'i') };
+        if (date) {
+            const d = new Date(date as string);
+            filter.date = { $gte: d, $lt: new Date(d.getTime() + 24 * 60 * 60 * 1000) };
+        }
+
+        const sessions = await Session.find(filter).sort({ date: 1 }).limit(30).lean();
+
+        res.json({
+            success: true,
+            data: sessions.map((s: any) => ({
+                id: s._id,
+                program: s.className || s.programName || 'Class',
+                coach: s.coach || s.instructor || '',
+                level: s.level || 'All Levels',
+                location: s.location || '',
+                date: s.date || '',
+                time: s.startTime || '',
+                duration: s.duration || '1 hour',
+                availableSpots: s.maxCapacity ? Math.max(0, s.maxCapacity - (s.enrolledCount || 0)) : 10,
+                price: s.price || 0,
+                description: s.description || '',
+            }))
+        });
+    } catch (error: any) {
+        console.error('Browse classes error:', error);
+        res.json({ success: true, data: [] });
+    }
+});
+
+// =============================================
+// BOOK A CLASS
+// =============================================
+router.post('/book-class', async (req: Request, res: Response) => {
+    try {
+        const { Booking } = require('../modules/booking/booking.model');
+        const parentId = getParentId(req);
+        const { sessionId, childId, childName, paymentMethod } = req.body;
+
+        const booking = await Booking.create({
+            userId: parentId,
+            parentId: parentId,
+            childId: childId || undefined,
+            childName: childName || 'Student',
+            sessionId: sessionId,
+            status: 'confirmed',
+            type: 'regular',
+            payment: { amount: req.body.amount || 0, status: 'pending', method: paymentMethod || 'card' },
+            createdAt: new Date(),
+        });
+
+        res.json({ success: true, data: { id: booking._id, status: 'confirmed' }, message: 'Class booked successfully' });
+    } catch (error: any) {
+        console.error('Book class error:', error);
+        res.status(500).json({ success: false, message: error.message || 'Failed to book class' });
+    }
+});
+
+// =============================================
+// WAITLIST
+// =============================================
+router.get('/waitlist', async (req: Request, res: Response) => {
+    try {
+        const { Booking } = require('../modules/booking/booking.model');
+        const parentId = getParentId(req);
+
+        const waitlistBookings = await Booking.find({
+            $or: [{ userId: parentId }, { parentId: parentId }],
+            status: { $in: ['waitlisted', 'WAITLISTED', 'waitlist'] }
+        }).sort({ createdAt: -1 }).lean();
+
+        res.json({
+            success: true,
+            data: waitlistBookings.map((b: any, idx: number) => ({
+                id: b._id,
+                program: b.programName || b.session?.className || 'Class',
+                bookingId: b.bookingId || b._id?.toString().slice(-8).toUpperCase(),
+                date: b.session?.date || b.date || '',
+                time: b.session?.startTime || b.time || '',
+                location: b.session?.location || b.location || '',
+                participants: b.participants || [{ name: b.childName || 'Student' }],
+                position: b.waitlistPosition || idx + 1,
+            }))
+        });
+    } catch (error: any) {
+        console.error('Waitlist error:', error);
+        res.json({ success: true, data: [] });
+    }
+});
+
+router.delete('/waitlist/:id', async (req: Request, res: Response) => {
+    try {
+        const { Booking } = require('../modules/booking/booking.model');
+        await Booking.findByIdAndUpdate(req.params.id, { $set: { status: 'cancelled' } });
+        res.json({ success: true, message: 'Removed from waitlist' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: 'Failed to remove from waitlist' });
+    }
+});
+
+// =============================================
+// MAKEUP CREDITS
+// =============================================
+router.get('/makeup-credits', async (req: Request, res: Response) => {
+    try {
+        const { Booking } = require('../modules/booking/booking.model');
+        const parentId = getParentId(req);
+
+        // Credits come from cancelled bookings that were paid
+        const cancelledPaid = await Booking.find({
+            $or: [{ userId: parentId }, { parentId: parentId }],
+            status: { $in: ['cancelled', 'CANCELLED'] },
+            'payment.status': { $in: ['paid', 'COMPLETED', 'completed'] }
+        }).lean();
+
+        const now = new Date();
+        const credits = cancelledPaid.map((b: any) => {
+            const cancelDate = new Date(b.cancelledAt || b.updatedAt || b.createdAt);
+            const expiryDate = new Date(cancelDate.getTime() + 90 * 24 * 60 * 60 * 1000); // 90 days expiry
+            const isExpired = expiryDate < now;
+            const isUsed = b.creditUsed === true;
+
+            return {
+                id: b._id,
+                amount: b.payment?.amount || 0,
+                originalBooking: b.programName || b.session?.className || 'Class',
+                cancelDate: cancelDate.toISOString(),
+                expiryDate: expiryDate.toISOString(),
+                status: isUsed ? 'used' : isExpired ? 'expired' : 'available',
+            };
+        });
+
+        const available = credits.filter(c => c.status === 'available');
+        const used = credits.filter(c => c.status === 'used');
+        const expired = credits.filter(c => c.status === 'expired');
+
+        res.json({
+            success: true,
+            data: {
+                summary: {
+                    available: available.reduce((s, c) => s + c.amount, 0),
+                    used: used.reduce((s, c) => s + c.amount, 0),
+                    expired: expired.reduce((s, c) => s + c.amount, 0),
+                },
+                credits: { available, used, expired },
+            }
+        });
+    } catch (error: any) {
+        console.error('Makeup credits error:', error);
+        res.json({
+            success: true,
+            data: { summary: { available: 0, used: 0, expired: 0 }, credits: { available: [], used: [], expired: [] } }
+        });
+    }
+});
+
+// =============================================
+// NUTRITION
+// =============================================
+router.get('/nutrition', async (_req: Request, res: Response) => {
+    res.json({
+        success: true,
+        data: {
+            mealPlans: [],
+            recommendations: [
+                { id: '1', title: 'Stay Hydrated', description: 'Ensure your child drinks at least 8 glasses of water daily, especially before and after swimming.', priority: 'high' },
+                { id: '2', title: 'Protein Rich Meals', description: 'Include lean protein in every meal to support muscle recovery after training sessions.', priority: 'medium' },
+                { id: '3', title: 'Pre-Training Snack', description: 'A banana or energy bar 30 minutes before class helps maintain energy levels.', priority: 'medium' },
+            ],
+        }
+    });
+});
+
 export default router;
