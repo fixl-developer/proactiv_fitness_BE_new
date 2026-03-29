@@ -30,6 +30,7 @@ export interface IUser extends Document {
     tenantId?: string;
     organizationId?: string;
     locationId?: string;
+    partnerType?: string;
 
     // Security
     isEmailVerified: boolean;
@@ -98,6 +99,7 @@ export interface IUserCreate {
     tenantId?: string;
     organizationId?: string;
     locationId?: string;
+    partnerType?: string;
 }
 
 export interface IUserUpdate {

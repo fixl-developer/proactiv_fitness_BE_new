@@ -4,6 +4,7 @@ import userService from './user.service';
 import { IUserCreate, IUserUpdate, IUserQuery } from './user.interface';
 import { UserRole, UserStatus } from '@shared/enums';
 import { ROLE_HIERARCHY, DELETE_HIERARCHY, STATUS_HIERARCHY } from './rbac.middleware';
+import { PartnerProfile } from '../partner-portal/schemas/partner-profile.schema';
 
 export class UserController extends BaseController {
     /**
@@ -58,6 +59,34 @@ export class UserController extends BaseController {
         }
 
         const user = await userService.createUser(data);
+
+        // If creating a PARTNER_ADMIN, also create their partner profile with the selected partnerType
+        if (data.role === UserRole.PARTNER_ADMIN && data.partnerType) {
+            try {
+                await PartnerProfile.create({
+                    partnerId: `partner-${user._id}`,
+                    partnerName: `${data.firstName} ${data.lastName}`,
+                    partnerType: data.partnerType,
+                    email: data.email,
+                    phone: data.phone || '',
+                    address: '',
+                    city: '',
+                    state: '',
+                    country: 'India',
+                    businessName: '',
+                    businessType: data.partnerType,
+                    location: '',
+                    status: 'active',
+                    tier: 'bronze',
+                    commissionRate: 10,
+                    rating: 0,
+                });
+            } catch (profileError) {
+                // Log but don't fail user creation if profile creation fails
+                console.warn('[UserController] Failed to create partner profile:', profileError);
+            }
+        }
+
         return this.sendCreated(res, userService.formatUserResponse(user), 'User created successfully');
     }
 

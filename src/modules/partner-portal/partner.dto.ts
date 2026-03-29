@@ -1,6 +1,6 @@
 export class CreatePartnerProfileDTO {
     partnerName: string;
-    partnerType: 'school' | 'corporate' | 'institution' | 'ngo';
+    partnerType: 'school' | 'gym' | 'corporate' | 'sports_academy' | 'ngo' | 'municipal' | 'sports_club' | 'other';
     email: string;
     phone: string;
     address: string;

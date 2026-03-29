@@ -113,6 +113,12 @@ const userSchema = new Schema<IUser>(
             index: true,
         },
 
+        // Partner type (for PARTNER_ADMIN users)
+        partnerType: {
+            type: String,
+            enum: ['school', 'gym', 'corporate', 'sports_academy', 'ngo', 'municipal', 'sports_club', 'other'],
+        },
+
         // Security
         isEmailVerified: {
             type: Boolean,

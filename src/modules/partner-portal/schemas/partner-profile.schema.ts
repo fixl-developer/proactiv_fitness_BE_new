@@ -27,7 +27,7 @@ const partnerProfileSchema = new Schema<IPartnerProfileDoc>(
     {
         partnerId: { type: String, required: true, unique: true, index: true },
         partnerName: { type: String, required: true, trim: true },
-        partnerType: { type: String, enum: ['school', 'corporate', 'institution', 'ngo', 'sports_academy'], default: 'sports_academy' },
+        partnerType: { type: String, enum: ['school', 'gym', 'corporate', 'sports_academy', 'ngo', 'municipal', 'sports_club', 'other'], default: 'sports_academy' },
         email: { type: String, required: true, trim: true, lowercase: true },
         phone: { type: String, trim: true },
         address: { type: String, trim: true },

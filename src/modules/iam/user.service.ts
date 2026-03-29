@@ -441,6 +441,7 @@ export class UserService extends BaseService<IUser> {
             isEmailVerified: user.isEmailVerified,
             isPhoneVerified: user.isPhoneVerified,
             lastLogin: user.lastLogin,
+            partnerType: user.partnerType,
             createdAt: user.createdAt,
             updatedAt: user.updatedAt,
         };
