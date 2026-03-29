@@ -73,6 +73,11 @@ interface IEnvConfig {
     // Multi-tenancy
     defaultTenant: string;
 
+    // Cloudinary (Image Upload)
+    cloudinaryCloudName: string;
+    cloudinaryApiKey: string;
+    cloudinaryApiSecret: string;
+
     // AI / OpenAI
     openaiApiKey: string;
     openaiModel: string;
@@ -157,6 +162,11 @@ class EnvConfig {
 
             // Multi-tenancy
             defaultTenant: process.env.DEFAULT_TENANT || 'proactiv-hq',
+
+            // Cloudinary (Image Upload)
+            cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
+            cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || '',
+            cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || '',
 
             // AI / OpenAI
             openaiApiKey: process.env.OPENAI_API_KEY || '',

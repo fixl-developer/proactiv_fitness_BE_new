@@ -261,35 +261,75 @@ router.get('/staff', async (req: Request, res: Response) => {
         });
     } catch (error: any) {
         console.error('Get staff error:', error);
-        res.json({ success: true, data: { data: [], total: 0, page: 1, pageSize: 10, totalPages: 0 } });
+        res.status(500).json({ success: false, message: error.message || 'Failed to fetch staff' });
     }
 });
 
 router.post('/staff', async (req: Request, res: Response) => {
     try {
         const { Staff } = require('../modules/staff/staff.model');
+        const { User } = require('../modules/iam/user.model');
         const { v4: uuidv4 } = require('uuid');
+
+        const { firstName, lastName, email, phone, role, password, status } = req.body;
+
+        if (!firstName || !lastName || !email) {
+            return res.status(400).json({ success: false, message: 'firstName, lastName, and email are required' });
+        }
+
+        // Check duplicate email in User collection
+        const existingUser = await User.findOne({ email: email.toLowerCase() });
+        if (existingUser) {
+            return res.status(409).json({ success: false, message: 'A user with this email already exists' });
+        }
+
+        // Create user account so they can login
+        const user = await User.create({
+            firstName,
+            lastName,
+            fullName: `${firstName} ${lastName}`,
+            email: email.toLowerCase(),
+            phone: phone || '',
+            role: (role || 'COACH').toUpperCase(),
+            password: password || 'Staff@123456',
+            status: (status || 'ACTIVE').toUpperCase(),
+            isEmailVerified: true,
+            createdByAdmin: true,
+            locationId: (req as any).user?.locationId || undefined,
+        });
+
+        // Also create staff record for scheduling/metrics
         const staff = await Staff.create({
             staffId: uuidv4?.() || `staff-${Date.now()}`,
             personalInfo: {
-                firstName: req.body.firstName,
-                lastName: req.body.lastName,
-                dateOfBirth: req.body.dateOfBirth || new Date('1990-01-01'),
-                gender: req.body.gender || 'other'
+                firstName,
+                lastName,
+                dateOfBirth: new Date('1990-01-01'),
+                gender: 'other'
             },
             contactInfo: {
-                email: req.body.email,
-                phone: req.body.phone,
+                email: email.toLowerCase(),
+                phone: phone || '',
                 address: { street: '', city: '', state: '', country: '', postalCode: '' }
             },
-            staffType: (req.body.role || 'coach').toLowerCase(),
-            status: 'active',
+            staffType: (role || 'coach').toLowerCase(),
+            status: (status || 'active').toLowerCase(),
             hireDate: new Date(),
             businessUnitId: req.body.businessUnitId || 'default',
             createdBy: (req as any).user?.id || 'system',
             updatedBy: (req as any).user?.id || 'system'
         });
-        res.json({ success: true, data: staff });
+
+        res.status(201).json({
+            success: true,
+            data: {
+                id: user._id.toString(),
+                name: `${firstName} ${lastName}`,
+                email: user.email,
+                role: user.role,
+                status: user.status
+            }
+        });
     } catch (error: any) {
         res.status(400).json({ success: false, message: error.message });
     }
@@ -297,20 +337,34 @@ router.post('/staff', async (req: Request, res: Response) => {
 
 router.put('/staff/:id', async (req: Request, res: Response) => {
     try {
-        const { Staff } = require('../modules/staff/staff.model');
-        const updateData: any = { updatedBy: (req as any).user?.id || 'system' };
-        if (req.body.firstName || req.body.lastName) {
-            updateData['personalInfo.firstName'] = req.body.firstName;
-            updateData['personalInfo.lastName'] = req.body.lastName;
-        }
-        if (req.body.email) updateData['contactInfo.email'] = req.body.email;
-        if (req.body.phone) updateData['contactInfo.phone'] = req.body.phone;
-        if (req.body.role) updateData.staffType = req.body.role.toLowerCase();
-        if (req.body.status) updateData.status = req.body.status.toLowerCase();
+        const { User } = require('../modules/iam/user.model');
+        const { firstName, lastName, email, phone, role, status, password } = req.body;
 
-        const staff = await Staff.findByIdAndUpdate(req.params.id, updateData, { new: true });
-        if (!staff) return res.status(404).json({ success: false, message: 'Staff not found' });
-        res.json({ success: true, data: staff });
+        // Update User record
+        const userUpdate: any = {};
+        if (firstName) userUpdate.firstName = firstName;
+        if (lastName) userUpdate.lastName = lastName;
+        if (firstName && lastName) userUpdate.fullName = `${firstName} ${lastName}`;
+        if (email) userUpdate.email = email.toLowerCase();
+        if (phone) userUpdate.phone = phone;
+        if (role) userUpdate.role = role.toUpperCase();
+        if (status) userUpdate.status = status.toUpperCase();
+
+        const user = await User.findByIdAndUpdate(req.params.id, userUpdate, { new: true, runValidators: true })
+            .select('-password -passwordHistory -refreshToken').lean();
+        if (!user) return res.status(404).json({ success: false, message: 'Staff not found' });
+
+        res.json({
+            success: true,
+            data: {
+                id: (user as any)._id.toString(),
+                name: `${(user as any).firstName || ''} ${(user as any).lastName || ''}`.trim(),
+                email: (user as any).email,
+                role: (user as any).role,
+                status: (user as any).status,
+                phone: (user as any).phone,
+            }
+        });
     } catch (error: any) {
         res.status(400).json({ success: false, message: error.message });
     }

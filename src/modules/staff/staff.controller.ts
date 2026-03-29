@@ -1289,6 +1289,35 @@ export class StaffController extends BaseController {
             throw new AppError('firstName, lastName, email, and password are required', HTTP_STATUS.BAD_REQUEST);
         }
 
+        // Scope-based auto-assignment: enforce creator's scope on new coach
+        let resolvedLocationId = locationId;
+        let resolvedOrganizationId = organizationId;
+        let resolvedRegionId: string | undefined;
+        const requester = req.user!;
+
+        switch (requester.role) {
+            case UserRole.LOCATION_MANAGER:
+                // Force assign to creator's location, organization and region
+                resolvedLocationId = requester.locationId?.toString() || locationId;
+                resolvedOrganizationId = requester.organizationId?.toString() || organizationId;
+                resolvedRegionId = (requester as any).regionId?.toString();
+                break;
+            case UserRole.FRANCHISE_OWNER:
+                // Force assign to creator's organization and region; location can be chosen
+                resolvedOrganizationId = requester.organizationId?.toString() || organizationId;
+                resolvedRegionId = (requester as any).regionId?.toString();
+                if (!resolvedLocationId) {
+                    resolvedLocationId = requester.locationId?.toString();
+                }
+                break;
+            case UserRole.REGIONAL_ADMIN:
+                // Force assign to creator's organization and region
+                resolvedOrganizationId = requester.organizationId?.toString() || organizationId;
+                resolvedRegionId = (requester as any).regionId?.toString();
+                break;
+            // ADMIN: use whatever was provided in the request
+        }
+
         // Step 1: Create User account for login
         const user = await userService.createUser({
             email,
@@ -1297,8 +1326,9 @@ export class StaffController extends BaseController {
             lastName,
             phone,
             role: UserRole.COACH,
-            locationId,
-            organizationId
+            locationId: resolvedLocationId,
+            organizationId: resolvedOrganizationId,
+            regionId: resolvedRegionId
         });
 
         // Mark as admin-created (skip email verification)
@@ -1315,9 +1345,9 @@ export class StaffController extends BaseController {
             specializations: specializations || [],
             skills: skills || [],
             experienceYears: experienceYears || 0,
-            locationIds: locationId ? [locationId] : [],
-            primaryLocationId: locationId,
-            businessUnitId: organizationId,
+            locationIds: resolvedLocationId ? [resolvedLocationId] : [],
+            primaryLocationId: resolvedLocationId,
+            businessUnitId: resolvedOrganizationId,
             maxHoursPerWeek: maxHoursPerWeek || 40
         } as any, adminUserId);
 

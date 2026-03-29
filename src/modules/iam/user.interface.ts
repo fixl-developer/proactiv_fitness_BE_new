@@ -26,11 +26,12 @@ export interface IUser extends Document {
     status: UserStatus;
     permissions?: string[];
 
-    // Multi-tenancy
+    // Multi-tenancy & Hierarchy
     tenantId?: string;
-    organizationId?: string;
-    locationId?: string;
-    partnerType?: string;
+    organizationId?: string;  // Business Unit / Franchise ID
+    regionId?: string;        // Region ID (for REGIONAL_ADMIN scope)
+    locationId?: string;      // Location ID (for LOCATION_MANAGER scope)
+    partnerType?: string;     // Partner type (for PARTNER_ADMIN)
 
     // Security
     isEmailVerified: boolean;
@@ -98,6 +99,7 @@ export interface IUserCreate {
     language?: Language;
     tenantId?: string;
     organizationId?: string;
+    regionId?: string;
     locationId?: string;
     partnerType?: string;
 }

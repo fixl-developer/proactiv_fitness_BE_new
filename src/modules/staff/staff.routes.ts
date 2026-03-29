@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { StaffController } from './staff.controller';
 import { authenticate, authorize } from '../iam/auth.middleware';
+import { validateLocationScope } from '../iam/rbac.middleware';
 import { UserRole } from '../../shared/enums';
 
 const router = Router();
@@ -12,7 +13,7 @@ router.use(authenticate);
 // ==================== COACH MANAGEMENT ROUTES ====================
 // These must come before /:staffId to avoid route conflicts
 router.get('/coaches', staffController.getCoaches);
-router.post('/coaches', authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN, UserRole.FRANCHISE_OWNER, UserRole.LOCATION_MANAGER), staffController.createCoachWithUser);
+router.post('/coaches', authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN, UserRole.FRANCHISE_OWNER, UserRole.LOCATION_MANAGER), validateLocationScope(), staffController.createCoachWithUser);
 router.get('/coaches/statistics', staffController.getCoachStatistics);
 
 // Staff CRUD routes (non-parameterized first)

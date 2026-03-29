@@ -512,7 +512,7 @@ router.get('/staff', async (req: Request, res: Response) => {
         res.json({ success: true, data, total, page, pageSize, totalPages: Math.ceil(total / pageSize) });
     } catch (error: any) {
         console.error('Franchise staff error:', error);
-        res.json({ success: true, data: [], total: 0, page: 1, pageSize: 10, totalPages: 0 });
+        res.status(500).json({ success: false, message: error.message || 'Failed to fetch staff' });
     }
 });
 
@@ -530,19 +530,51 @@ router.get('/staff/:id', async (req: Request, res: Response) => {
 router.post('/staff', async (req: Request, res: Response) => {
     try {
         const { Staff } = require('../modules/staff/staff.model');
+        const { User } = require('../modules/iam/user.model');
         const { v4: uuidv4 } = require('uuid');
+
+        const firstName = req.body.firstName || req.body.name?.split(' ')[0] || '';
+        const lastName = req.body.lastName || req.body.name?.split(' ').slice(1).join(' ') || '';
+        const email = (req.body.email || '').toLowerCase();
+
+        if (!firstName || !email) {
+            return res.status(400).json({ success: false, message: 'firstName and email are required' });
+        }
+
+        // Allowed roles for franchise owner
+        const allowedRoles = ['COACH', 'LOCATION_MANAGER'];
+        const role = (req.body.role || 'COACH').toUpperCase();
+        if (!allowedRoles.includes(role)) {
+            return res.status(400).json({ success: false, message: `Role must be one of: ${allowedRoles.join(', ')}` });
+        }
+
+        // Check duplicate email
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            return res.status(409).json({ success: false, message: 'A user with this email already exists' });
+        }
+
+        // Create User account for login
+        const user = await User.create({
+            firstName,
+            lastName,
+            fullName: `${firstName} ${lastName}`.trim(),
+            email,
+            phone: req.body.phone || '',
+            role,
+            password: req.body.password || 'Staff@123456',
+            status: 'ACTIVE',
+            isEmailVerified: true,
+            createdByAdmin: true,
+            organizationId: (req as any).user?.organizationId || undefined,
+        });
+
+        // Also create Staff record for scheduling/metrics
         const staffData = {
-            ...req.body,
-            staffId: req.body.staffId || `STF-${uuidv4().substring(0, 8).toUpperCase()}`,
-            personalInfo: {
-                firstName: req.body.firstName || req.body.name?.split(' ')[0] || '',
-                lastName: req.body.lastName || req.body.name?.split(' ').slice(1).join(' ') || '',
-            },
-            contactInfo: {
-                email: req.body.email || '',
-                phone: req.body.phone || '',
-            },
-            staffType: req.body.role || 'COACH',
+            staffId: `STF-${(uuidv4?.() || Date.now().toString()).substring(0, 8).toUpperCase()}`,
+            personalInfo: { firstName, lastName },
+            contactInfo: { email, phone: req.body.phone || '' },
+            staffType: role.toLowerCase(),
             status: 'ACTIVE',
             isActive: true,
             hireDate: req.body.hireDate || new Date(),
@@ -550,8 +582,18 @@ router.post('/staff', async (req: Request, res: Response) => {
             locationIds: req.body.locationIds || [],
             primaryLocationId: req.body.primaryLocationId || req.body.locationIds?.[0],
         };
-        const staff = await Staff.create(staffData);
-        res.json({ success: true, data: staff });
+        await Staff.create(staffData);
+
+        res.status(201).json({
+            success: true,
+            data: {
+                id: user._id.toString(),
+                name: `${firstName} ${lastName}`.trim(),
+                email: user.email,
+                role: user.role,
+                status: user.status,
+            }
+        });
     } catch (error: any) {
         res.status(400).json({ success: false, message: error.message });
     }
@@ -559,20 +601,36 @@ router.post('/staff', async (req: Request, res: Response) => {
 
 router.put('/staff/:id', async (req: Request, res: Response) => {
     try {
-        const { Staff } = require('../modules/staff/staff.model');
-        const updates: any = {};
-        if (req.body.name) {
-            updates['personalInfo.firstName'] = req.body.name.split(' ')[0];
-            updates['personalInfo.lastName'] = req.body.name.split(' ').slice(1).join(' ');
-        }
-        if (req.body.email) updates['contactInfo.email'] = req.body.email;
-        if (req.body.phone) updates['contactInfo.phone'] = req.body.phone;
-        if (req.body.role) updates.staffType = req.body.role;
-        if (req.body.status) updates.status = req.body.status;
+        const { User } = require('../modules/iam/user.model');
+        const { firstName, lastName, email, phone, role, status, password, name } = req.body;
 
-        const staff = await Staff.findByIdAndUpdate(req.params.id, { $set: { ...updates, ...req.body } }, { new: true });
-        if (!staff) return res.status(404).json({ success: false, message: 'Staff not found' });
-        res.json({ success: true, data: staff });
+        // Build user update
+        const userUpdate: any = {};
+        const fName = firstName || (name ? name.split(' ')[0] : undefined);
+        const lName = lastName || (name ? name.split(' ').slice(1).join(' ') : undefined);
+        if (fName) userUpdate.firstName = fName;
+        if (lName) userUpdate.lastName = lName;
+        if (fName && lName) userUpdate.fullName = `${fName} ${lName}`;
+        if (email) userUpdate.email = email.toLowerCase();
+        if (phone) userUpdate.phone = phone;
+        if (role) userUpdate.role = role.toUpperCase();
+        if (status) userUpdate.status = status.toUpperCase();
+
+        const user = await User.findByIdAndUpdate(req.params.id, userUpdate, { new: true, runValidators: true })
+            .select('-password -passwordHistory -refreshToken').lean();
+        if (!user) return res.status(404).json({ success: false, message: 'Staff not found' });
+
+        res.json({
+            success: true,
+            data: {
+                id: (user as any)._id.toString(),
+                name: `${(user as any).firstName || ''} ${(user as any).lastName || ''}`.trim(),
+                email: (user as any).email,
+                role: (user as any).role,
+                status: (user as any).status,
+                phone: (user as any).phone,
+            }
+        });
     } catch (error: any) {
         res.status(400).json({ success: false, message: error.message });
     }

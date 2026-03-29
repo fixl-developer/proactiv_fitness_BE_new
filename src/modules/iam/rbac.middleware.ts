@@ -171,8 +171,10 @@ export const canViewUsers = () => {
                 break;
 
             case UserRole.REGIONAL_ADMIN:
-                // Sees only users in their organization/region
-                if (req.user.organizationId) {
+                // Sees users in their region (via regionId) or organization
+                if ((req.user as any).regionId) {
+                    scopeFilter = { regionId: (req.user as any).regionId };
+                } else if (req.user.organizationId) {
                     scopeFilter = { organizationId: req.user.organizationId };
                 }
                 break;
@@ -254,6 +256,82 @@ export const canUpdateUser = () => {
                         )
                     );
                 }
+            }
+
+            next();
+        } catch (error) {
+            next(error);
+        }
+    };
+};
+
+/**
+ * Validates that the requester can assign the target locationId based on their scope.
+ * - ADMIN: can assign any location
+ * - REGIONAL_ADMIN: can only assign locations in their region (organizationId)
+ * - FRANCHISE_OWNER: can only assign locations in their organization (organizationId)
+ * - LOCATION_MANAGER: can only assign their own location
+ */
+export const validateLocationScope = () => {
+    return async (req: Request, _res: Response, next: NextFunction) => {
+        try {
+            if (!req.user) {
+                return next(new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED));
+            }
+
+            const requesterRole = req.user.role;
+            const targetLocationId = req.body.locationId;
+
+            // If no location is being assigned, skip validation
+            if (!targetLocationId) {
+                return next();
+            }
+
+            // ADMIN can assign any location
+            if (requesterRole === UserRole.ADMIN) {
+                return next();
+            }
+
+            // LOCATION_MANAGER: can only assign their own location
+            if (requesterRole === UserRole.LOCATION_MANAGER) {
+                if (req.user.locationId && req.user.locationId.toString() !== targetLocationId.toString()) {
+                    return next(
+                        new AppError(
+                            'Location Managers can only create users for their own location',
+                            HTTP_STATUS.FORBIDDEN
+                        )
+                    );
+                }
+                return next();
+            }
+
+            // REGIONAL_ADMIN & FRANCHISE_OWNER: validate location belongs to their organization
+            if (requesterRole === UserRole.REGIONAL_ADMIN || requesterRole === UserRole.FRANCHISE_OWNER) {
+                if (!req.user.organizationId) {
+                    return next();
+                }
+
+                // Dynamically import Location model to avoid circular dependency
+                const { default: locationService } = await import('../bcms/location.service');
+                const location = await locationService.getLocationById(targetLocationId);
+
+                if (!location) {
+                    return next(
+                        new AppError('Target location not found', HTTP_STATUS.NOT_FOUND)
+                    );
+                }
+
+                // Check if the location belongs to the requester's organization
+                const locationOrgId = (location as any).organizationId || (location as any).businessUnitId;
+                if (locationOrgId && locationOrgId.toString() !== req.user.organizationId.toString()) {
+                    return next(
+                        new AppError(
+                            `You can only assign users to locations within your organization`,
+                            HTTP_STATUS.FORBIDDEN
+                        )
+                    );
+                }
+                return next();
             }
 
             next();

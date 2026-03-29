@@ -441,6 +441,10 @@ export class UserService extends BaseService<IUser> {
             isEmailVerified: user.isEmailVerified,
             isPhoneVerified: user.isPhoneVerified,
             lastLogin: user.lastLogin,
+            // Hierarchy scope fields
+            organizationId: user.organizationId,
+            regionId: (user as any).regionId,
+            locationId: user.locationId,
             partnerType: user.partnerType,
             createdAt: user.createdAt,
             updatedAt: user.updatedAt,

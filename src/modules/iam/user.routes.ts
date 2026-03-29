@@ -2,7 +2,7 @@ import { Router } from 'express';
 import userController from './user.controller';
 import { validate } from '@middleware/validation.middleware';
 import { authenticate, authorize, checkOwnership, scopeFilter } from './auth.middleware';
-import { canCreateRole, canDeleteUser, canUpdateUserStatus, canUpdateUser, canViewUsers } from './rbac.middleware';
+import { canCreateRole, canDeleteUser, canUpdateUserStatus, canUpdateUser, canViewUsers, validateLocationScope } from './rbac.middleware';
 import { auditLog } from './audit.middleware';
 import { sanitizeInput } from './security.middleware';
 import { UserRole } from '@shared/enums';
@@ -46,6 +46,7 @@ router.post(
     ),
     validate(createUserValidation),
     canCreateRole(),
+    validateLocationScope(),
     auditLog('USER_CREATE', 'User'),
     userController.create.bind(userController)
 );

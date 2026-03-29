@@ -105,6 +105,13 @@ const userSchema = new Schema<IUser>(
             ref: 'Organization',
             index: true,
         },
+        // Region assignment (for REGIONAL_ADMIN scope tracking)
+        // @ts-ignore - Mongoose type issue
+        regionId: {
+            type: Schema.Types.ObjectId,
+            ref: 'Region',
+            index: true,
+        },
         // @ts-ignore - Mongoose type issue
         // @ts-ignore - Mongoose type issue
         locationId: {

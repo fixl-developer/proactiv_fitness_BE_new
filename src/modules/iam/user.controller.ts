@@ -27,14 +27,20 @@ export class UserController extends BaseController {
         // Auto-assign scope fields based on the requester's role
         switch (requester.role) {
             case UserRole.REGIONAL_ADMIN:
-                // Auto-assign the same organizationId (region)
+                // Auto-assign the same regionId and organizationId
+                if ((requester as any).regionId) {
+                    data.regionId = (requester as any).regionId;
+                }
                 if (requester.organizationId) {
                     data.organizationId = requester.organizationId;
                 }
                 break;
 
             case UserRole.FRANCHISE_OWNER:
-                // Auto-assign the same organizationId and locationId
+                // Auto-assign the same regionId, organizationId; location can be chosen
+                if ((requester as any).regionId) {
+                    data.regionId = (requester as any).regionId;
+                }
                 if (requester.organizationId) {
                     data.organizationId = requester.organizationId;
                 }
@@ -44,7 +50,10 @@ export class UserController extends BaseController {
                 break;
 
             case UserRole.LOCATION_MANAGER:
-                // Auto-assign the same organizationId and locationId
+                // Auto-assign everything from creator's scope
+                if ((requester as any).regionId) {
+                    data.regionId = (requester as any).regionId;
+                }
                 if (requester.organizationId) {
                     data.organizationId = requester.organizationId;
                 }

@@ -74,6 +74,10 @@ import virtualTrainingRoutes from '../modules/virtual-training/virtual-training.
 import nutritionRoutes from '../modules/nutrition/nutrition.routes';
 import localizationRoutes from '../modules/localization/localization.routes';
 
+// === CMS (Content Management System) ===
+import { cmsPublicRoutes, cmsAdminRoutes } from '../modules/cms/cms.routes';
+import cmsUploadRoutes from '../modules/cms/cms-upload.routes';
+
 // === Regional Admin ===
 import regionalAdminRoutes from './regional-admin.routes';
 
@@ -433,6 +437,13 @@ router.get('/admin/hq/dashboard', (_req: Request, res: Response) => {
 router.get('/admin/hq/health', (_req: Request, res: Response) => {
     res.json({ success: true, data: { uptime: 99.9, status: 'healthy' } });
 });
+
+// =============================================
+// CMS (Content Management System)
+// =============================================
+router.use('/cms', cmsPublicRoutes);          // Public: GET /api/v1/cms/*
+router.use('/admin/cms', cmsAdminRoutes);     // Admin: CRUD /api/v1/admin/cms/*
+router.use('/admin/cms/media', cmsUploadRoutes); // Admin: Image uploads via Cloudinary
 
 // Regional Admin (full CRUD routes)
 router.use('/admin/regional', regionalAdminRoutes);
