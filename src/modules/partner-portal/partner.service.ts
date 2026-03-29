@@ -208,13 +208,16 @@ export class PartnerService {
         const totalRevenue = revenueAgg[0]?.totalRevenue || 0;
         return {
             id: profile.partnerId, partnerId: profile.partnerId,
-            name: profile.partnerName, email: profile.email, phone: profile.phone,
+            name: profile.partnerName, partnerName: profile.partnerName,
+            partnerType: profile.partnerType,
+            email: profile.email, phone: profile.phone,
             businessName: profile.businessName, businessType: profile.businessType,
             location: profile.location, status: profile.status,
             joinDate: profile.joinDate, tier: profile.tier,
             commissionRate: profile.commissionRate,
             totalRevenue, totalStudents, totalPrograms,
             rating: profile.rating, website: profile.website, address: profile.address,
+            city: profile.city, state: profile.state, country: profile.country,
         };
     }
 
