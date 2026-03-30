@@ -22,6 +22,7 @@ import {
     ContactInfoService,
     FAQItemService,
 } from './cms.service';
+import { CMSSeeder } from './cms.seeder';
 
 // =============================================
 // PUBLIC CONTROLLER (No Auth Required)
@@ -315,5 +316,18 @@ export class CMSAdminController {
     upsertContactInfo = asyncHandler(async (req: Request, res: Response) => {
         const result = await this.contactInfoService.upsertContactInfo(req.body);
         ResponseUtil.success(res, result, 'Contact info updated');
+    });
+
+    // --- Seed Default Data ---
+    seedDefaultData = asyncHandler(async (_req: Request, res: Response) => {
+        const result = await CMSSeeder.seedAll();
+        ResponseUtil.success(res, result, 'Default CMS data seeded successfully');
+    });
+
+    // --- Reset & Re-seed All Data ---
+    resetAndSeedData = asyncHandler(async (_req: Request, res: Response) => {
+        const cleared = await CMSSeeder.clearAll();
+        const result = await CMSSeeder.seedAll();
+        ResponseUtil.success(res, { cleared, ...result }, 'CMS data reset and re-seeded successfully');
     });
 }

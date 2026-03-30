@@ -273,4 +273,16 @@ adminRouter.put('/contact-info',
     adminCtrl.upsertContactInfo
 );
 
+// --- Seed Default Data ---
+adminRouter.post('/seed',
+    authenticate, authorize(...adminRoles),
+    adminCtrl.seedDefaultData
+);
+
+// --- Reset & Re-seed All Data ---
+adminRouter.post('/reset-and-seed',
+    authenticate, authorize(...adminRoles),
+    adminCtrl.resetAndSeedData
+);
+
 export { publicRouter as cmsPublicRoutes, adminRouter as cmsAdminRoutes };
