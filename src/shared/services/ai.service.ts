@@ -34,8 +34,11 @@ const FALLBACK_RESPONSES: Record<string, any> = {
         ],
     },
     'ai-chatbot': {
-        response: 'I am the ProActiv Fitness assistant. How can I help you today?',
-        suggestions: ['View Programs', 'Book a Trial', 'Contact Support'],
+        response: "I'm your ProActiv Fitness assistant! I can help you with program information, booking trial classes, locations, and pricing. What would you like to know?",
+        suggestions: ['Tell me about programs', 'Book a trial class', 'What are your locations?', 'Pricing information'],
+        intent: 'general',
+        bookingIntent: null,
+        requiresHumanSupport: false,
     },
     'ai-coach-assistant': {
         posture: 'Good',
@@ -271,15 +274,12 @@ class AIService {
             if (error.status === 401) {
                 throw new AppError('AI service authentication failed. Check OPENAI_API_KEY.', HTTP_STATUS.SERVICE_UNAVAILABLE);
             }
-            if (error.status === 429) {
-                throw new AppError('AI service rate limited by provider. Please try again later.', HTTP_STATUS.TOO_MANY_REQUESTS);
-            }
             if (error.status === 400) {
                 throw new AppError(`AI service bad request: ${error.message}`, HTTP_STATUS.BAD_REQUEST);
             }
 
-            // For other errors, return fallback
-            logger.warn(`🤖 AI [${options.module}] falling back to default response`);
+            // For 429 and other errors, return fallback
+            logger.warn(`🤖 AI [${options.module}] falling back to default response (${error.status || 'unknown'})`);
             return this.getFallbackResponse(options);
         }
     }
