@@ -6,6 +6,7 @@ export enum UserRole {
     LOCATION_MANAGER = 'LOCATION_MANAGER',
     COACH = 'COACH',
     PARENT = 'PARENT',
+    STUDENT = 'STUDENT',
     USER = 'USER', // General user (self-registration)
     PARTNER_ADMIN = 'PARTNER_ADMIN',
     SUPPORT_STAFF = 'SUPPORT_STAFF',

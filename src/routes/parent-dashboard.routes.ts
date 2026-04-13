@@ -1,6 +1,12 @@
 import { Router, Request, Response } from 'express';
+import { authenticate, authorize } from '../modules/iam/auth.middleware';
+import { UserRole } from '../shared/enums';
 
 const router = Router();
+
+// Apply authentication to all parent dashboard routes
+router.use(authenticate);
+router.use(authorize(UserRole.PARENT, UserRole.ADMIN));
 
 // Helper to get parent user ID from request
 const getParentId = (req: Request): string => {
@@ -228,9 +234,12 @@ router.get('/children', async (req: Request, res: Response) => {
 
             return {
                 id: child._id,
+                firstName: child.firstName || '',
+                lastName: child.lastName || '',
                 name: child.fullName || `${child.firstName || ''} ${child.lastName || ''}`.trim(),
                 age: child.dateOfBirth ? Math.floor((Date.now() - new Date(child.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 0,
                 dateOfBirth: child.dateOfBirth || '',
+                gender: child.gender || '',
                 program: child.currentProgram || 'Enrolled',
                 level: child.level || 'Beginner',
                 coach: child.assignedCoach || '',
@@ -497,12 +506,16 @@ router.post('/children', async (req: Request, res: Response) => {
             success: true,
             data: {
                 id: child._id,
+                firstName: child.firstName || '',
+                lastName: child.lastName || '',
                 name: `${firstName} ${lastName}`,
                 age: dateOfBirth ? Math.floor((Date.now() - new Date(dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 0,
                 dateOfBirth: child.dateOfBirth || '',
+                gender: child.gender || '',
                 program: 'Not Enrolled',
                 level: 'Beginner',
                 status: 'ACTIVE',
+                medicalInfo: child.medicalInfo || { allergies: [], medications: [], emergencyContact: '' },
             },
             message: 'Child added successfully'
         });

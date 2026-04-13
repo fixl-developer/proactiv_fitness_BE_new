@@ -33,6 +33,27 @@ export interface IUser extends Document {
     locationId?: string;      // Location ID (for LOCATION_MANAGER scope)
     partnerType?: string;     // Partner type (for PARTNER_ADMIN)
 
+    // Parent/Student Linking
+    parentId?: string;
+    family?: {
+        parentId?: string;
+        members?: string[];
+    };
+
+    // Student Specifics
+    medicalInfo?: {
+        allergies?: string[];
+        medications?: string[];
+        emergencyContact?: string;
+        conditions?: string[];
+    };
+    currentProgram?: string;
+    level?: string;
+    assignedCoach?: string;
+    rating?: number;
+    achievements?: string[];
+    skills?: Record<string, number>;
+
     // Security
     isEmailVerified: boolean;
     isPhoneVerified: boolean;

@@ -1,7 +1,7 @@
 {
     "compilerOptions": {
         "target": "ES2022",
-        "module": "commonjs",
+        "module": "Node16",
         "lib": [
             "ES2022"
         ],
@@ -12,7 +12,7 @@
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
         "resolveJsonModule": true,
-        "moduleResolution": "node",
+        "moduleResolution": "Node16",
         "allowSyntheticDefaultImports": true,
         "declaration": true,
         "declarationMap": true,
@@ -28,28 +28,27 @@
         "experimentalDecorators": true,
         "emitDecoratorMetadata": true,
         "noImplicitThis": false,
-        "baseUrl": "./src",
         "paths": {
             "@/*": [
-                "*"
+                "./src/*"
             ],
             "@config/*": [
-                "config/*"
+                "./src/config/*"
             ],
             "@modules/*": [
-                "modules/*"
+                "./src/modules/*"
             ],
             "@shared/*": [
-                "shared/*"
+                "./src/shared/*"
             ],
             "@utils/*": [
-                "utils/*"
+                "./src/utils/*"
             ],
             "@middleware/*": [
-                "middleware/*"
+                "./src/middleware/*"
             ],
             "@types/*": [
-                "types/*"
+                "./src/types/*"
             ]
         }
     },

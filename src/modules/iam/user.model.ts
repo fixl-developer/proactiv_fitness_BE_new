@@ -113,11 +113,55 @@ const userSchema = new Schema<IUser>(
             index: true,
         },
         // @ts-ignore - Mongoose type issue
-        // @ts-ignore - Mongoose type issue
         locationId: {
             type: Schema.Types.ObjectId,
             ref: 'Location',
             index: true,
+        },
+
+        // Parent/Student Linking
+        // @ts-ignore - Mongoose type issue
+        parentId: {
+            type: Schema.Types.ObjectId,
+            ref: 'User',
+            index: true,
+        },
+        family: {
+            // @ts-ignore - Mongoose type issue
+            parentId: {
+                type: Schema.Types.ObjectId,
+                ref: 'User',
+            },
+            // @ts-ignore - Mongoose type issue
+            members: [{
+                type: Schema.Types.ObjectId,
+                ref: 'User',
+            }],
+        },
+
+        // Student Specifics
+        medicalInfo: {
+            allergies: [String],
+            medications: [String],
+            emergencyContact: String,
+            conditions: [String],
+        },
+        currentProgram: String,
+        level: String,
+        // @ts-ignore - Mongoose type issue
+        assignedCoach: {
+            type: Schema.Types.ObjectId,
+            ref: 'User',
+        },
+        rating: {
+            type: Number,
+            default: 0,
+        },
+        achievements: [String],
+        skills: {
+            type: Map,
+            of: Number,
+            default: {},
         },
 
         // Partner type (for PARTNER_ADMIN users)
