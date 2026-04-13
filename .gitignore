@@ -53,11 +53,10 @@ temp/
 # Documentation files (remove from tracking)
 *.md
 **/*.md
-<<<<<<< Updated upstream
 
 backend/.git/
 =======
 !README.md
 *.ps1
 *.txt
->>>>>>> Stashed changes
+
