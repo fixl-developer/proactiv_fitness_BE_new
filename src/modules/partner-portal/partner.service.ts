@@ -1,7 +1,7 @@
 import {
     IPartnerProfile, IBulkStudentImport, IPartnerDashboard, IRevenueSharing,
     IComplianceExport, ITenderDocumentation, IMunicipalReporting, IPartnerAgreement,
-    IPartnerPerformance, IPartnerCommunication, IPartnerSupport
+    IPartnerPerformance, IPartnerCommunication, IPartnerSupport, StudentImportData
 } from './partner.model';
 import {
     PartnerProfile, PartnerProgram, PartnerStudent, PartnerBooking,
@@ -15,182 +15,626 @@ import { Program } from '../programs/program.model';
 
 export class PartnerService {
     async createPartnerProfile(profileData: Partial<IPartnerProfile>): Promise<IPartnerProfile> {
-        const profile: IPartnerProfile = {
-            partnerId: `PARTNER-${Date.now()}`,
-            partnerName: profileData.partnerName || '',
-            partnerType: profileData.partnerType || 'school',
-            email: profileData.email || '',
-            phone: profileData.phone || '',
-            address: profileData.address || '',
-            city: profileData.city || '',
-            state: profileData.state || '',
-            country: profileData.country || '',
-            logo: profileData.logo || '',
-            status: 'pending',
-            createdAt: new Date(),
-            updatedAt: new Date()
-        };
-        return profile;
+        try {
+            const partnerId = `PARTNER-${Date.now()}`;
+            const doc = await PartnerProfile.create({
+                partnerId,
+                partnerName: profileData.partnerName || '',
+                partnerType: profileData.partnerType || 'school',
+                email: profileData.email || '',
+                phone: profileData.phone || '',
+                address: profileData.address || '',
+                city: profileData.city || '',
+                state: profileData.state || '',
+                country: profileData.country || '',
+                logo: profileData.logo || '',
+                status: 'pending',
+            });
+            const saved: any = doc.toObject();
+            return {
+                partnerId: saved.partnerId,
+                partnerName: saved.partnerName,
+                partnerType: saved.partnerType,
+                email: saved.email,
+                phone: saved.phone,
+                address: saved.address,
+                city: saved.city,
+                state: saved.state,
+                country: saved.country,
+                logo: saved.logo || '',
+                status: saved.status,
+                createdAt: saved.createdAt,
+                updatedAt: saved.updatedAt,
+            };
+        } catch (error) {
+            console.error('Error creating partner profile:', error);
+            throw error;
+        }
     }
 
     async bulkImportStudents(importData: Partial<IBulkStudentImport>): Promise<IBulkStudentImport> {
-        const bulkImport: IBulkStudentImport = {
-            importId: `IMPORT-${Date.now()}`,
-            partnerId: importData.partnerId || '',
-            centerId: importData.centerId || '',
-            importDate: new Date(),
-            totalStudents: importData.totalStudents || 0,
-            successfulImports: 0,
-            failedImports: 0,
-            students: importData.students || [],
-            status: 'pending',
-            createdAt: new Date()
-        };
-        return bulkImport;
+        try {
+            const partnerId = importData.partnerId || '';
+            const centerId = importData.centerId || '';
+            const students = importData.students || [];
+            let successfulImports = 0;
+            let failedImports = 0;
+            const processedStudents: StudentImportData[] = [];
+
+            for (const student of students) {
+                try {
+                    await PartnerStudent.create({
+                        partnerId,
+                        name: `${student.firstName} ${student.lastName}`,
+                        email: student.email,
+                        phone: student.phone || '',
+                        enrolledPrograms: 1,
+                        totalSpent: 0,
+                        status: 'active',
+                        joinDate: new Date(),
+                        lastActivity: new Date(),
+                    });
+                    successfulImports++;
+                    processedStudents.push({ ...student, status: 'success' });
+                } catch (err: any) {
+                    failedImports++;
+                    processedStudents.push({ ...student, status: 'failed', errorMessage: err.message || 'Import failed' });
+                }
+            }
+
+            const totalStudents = students.length;
+            const status = failedImports === 0 ? 'completed' : (successfulImports === 0 ? 'failed' : 'completed');
+
+            return {
+                importId: `IMPORT-${Date.now()}`,
+                partnerId,
+                centerId,
+                importDate: new Date(),
+                totalStudents,
+                successfulImports,
+                failedImports,
+                students: processedStudents,
+                status,
+                createdAt: new Date(),
+            };
+        } catch (error) {
+            console.error('Error in bulk import students:', error);
+            throw error;
+        }
     }
 
     async getPartnerDashboard(partnerId: string): Promise<IPartnerDashboard> {
-        return {
-            dashboardId: `DASH-${Date.now()}`,
-            partnerId,
-            totalStudents: 156,
-            activePrograms: 12,
-            totalRevenue: 48500,
-            monthlyRevenue: 8200,
-            studentGrowth: 12.5,
-            engagementRate: 78,
-            satisfactionScore: 4.2,
-            lastUpdated: new Date(),
-            createdAt: new Date()
-        };
+        try {
+            await this.ensureSeeded(partnerId);
+
+            const totalStudents = await PartnerStudent.countDocuments({ partnerId, isDeleted: { $ne: true } });
+            const activePrograms = await PartnerProgram.countDocuments({ partnerId, status: 'active', isDeleted: { $ne: true } });
+
+            const revenueAgg = await PartnerRevenue.aggregate([
+                { $match: { partnerId } },
+                { $group: { _id: null, totalRevenue: { $sum: '$revenue' } } },
+            ]);
+            const totalRevenue = revenueAgg[0]?.totalRevenue || 0;
+
+            const latestMonth = await PartnerRevenue.findOne({ partnerId }).sort({ month: -1 }).lean();
+            const monthlyRevenue = latestMonth?.revenue || 0;
+
+            // Calculate student growth from the last two months of revenue data
+            const recentMonths = await PartnerRevenue.find({ partnerId }).sort({ month: -1 }).limit(2).lean();
+            let studentGrowth = 0;
+            if (recentMonths.length === 2) {
+                const currStudents = recentMonths[0].students || 0;
+                const prevStudents = recentMonths[1].students || 0;
+                studentGrowth = prevStudents > 0
+                    ? Math.round(((currStudents - prevStudents) / prevStudents) * 1000) / 10
+                    : 0;
+            }
+
+            // Engagement rate: active students / total students
+            const activeStudents = await PartnerStudent.countDocuments({ partnerId, status: 'active', isDeleted: { $ne: true } });
+            const engagementRate = totalStudents > 0 ? Math.round((activeStudents / totalStudents) * 100) : 0;
+
+            const profile = await PartnerProfile.findOne({ partnerId }).lean();
+            const satisfactionScore = profile?.rating || 0;
+
+            return {
+                dashboardId: `DASH-${partnerId}`,
+                partnerId,
+                totalStudents,
+                activePrograms,
+                totalRevenue,
+                monthlyRevenue,
+                studentGrowth,
+                engagementRate,
+                satisfactionScore,
+                lastUpdated: new Date(),
+                createdAt: new Date(),
+            };
+        } catch (error) {
+            console.error('Error fetching partner dashboard:', error);
+            throw error;
+        }
     }
 
     async calculateRevenueShare(partnerId: string, period: string): Promise<IRevenueSharing> {
-        return {
-            revenueSharingId: `REVSHARE-${Date.now()}`,
-            partnerId,
-            centerId: '',
-            period: period as any,
-            startDate: new Date(),
-            endDate: new Date(),
-            totalRevenue: 0,
-            partnerShare: 0,
-            sharePercentage: 0,
-            paymentStatus: 'pending',
-            createdAt: new Date()
-        };
+        try {
+            await this.ensureSeeded(partnerId);
+
+            const now = new Date();
+            let startDate: Date;
+            let endDate: Date = now;
+
+            switch (period) {
+                case 'quarterly':
+                    startDate = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+                    break;
+                case 'annual':
+                    startDate = new Date(now.getFullYear(), 0, 1);
+                    break;
+                case 'monthly':
+                default:
+                    startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                    break;
+            }
+
+            // Build month keys that fall within the date range
+            const monthKeys: string[] = [];
+            const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+            while (cursor <= endDate) {
+                const y = cursor.getFullYear();
+                const m = String(cursor.getMonth() + 1).padStart(2, '0');
+                monthKeys.push(`${y}-${m}`);
+                cursor.setMonth(cursor.getMonth() + 1);
+            }
+
+            const revenueAgg = await PartnerRevenue.aggregate([
+                { $match: { partnerId, month: { $in: monthKeys } } },
+                { $group: { _id: null, totalRevenue: { $sum: '$revenue' } } },
+            ]);
+            const totalRevenue = revenueAgg[0]?.totalRevenue || 0;
+
+            const profile = await PartnerProfile.findOne({ partnerId }).lean();
+            const sharePercentage = profile?.commissionRate || 15;
+            const partnerShare = Math.round(totalRevenue * sharePercentage / 100);
+
+            // Check if there is already a paid payout covering this period
+            const existingPayout = await PartnerPayout.findOne({
+                partnerId,
+                status: { $in: ['completed', 'processing'] },
+                requestedAt: { $gte: startDate, $lte: endDate },
+            }).lean();
+            const paymentStatus = existingPayout ? 'paid' : 'pending';
+
+            return {
+                revenueSharingId: `REVSHARE-${Date.now()}`,
+                partnerId,
+                centerId: profile ? (profile as any).location || '' : '',
+                period: period as any,
+                startDate,
+                endDate,
+                totalRevenue,
+                partnerShare,
+                sharePercentage,
+                paymentStatus,
+                createdAt: new Date(),
+            };
+        } catch (error) {
+            console.error('Error calculating revenue share:', error);
+            throw error;
+        }
     }
 
     async generateComplianceExport(exportData: Partial<IComplianceExport>): Promise<IComplianceExport> {
-        return {
-            exportId: `EXPORT-${Date.now()}`,
-            partnerId: exportData.partnerId || '',
-            exportType: exportData.exportType || 'financial',
-            exportDate: new Date(),
-            data: exportData.data || {},
-            format: exportData.format || 'pdf',
-            status: 'generated',
-            createdAt: new Date()
-        };
+        try {
+            const partnerId = exportData.partnerId || '';
+            const exportType = exportData.exportType || 'financial';
+
+            await this.ensureSeeded(partnerId);
+
+            let data: any = {};
+
+            switch (exportType) {
+                case 'financial': {
+                    const revenueRecords = await PartnerRevenue.find({ partnerId }).sort({ month: 1 }).lean();
+                    const commissions = await PartnerCommission.find({ partnerId, isDeleted: { $ne: true } }).lean();
+                    const payouts = await PartnerPayout.find({ partnerId, isDeleted: { $ne: true } }).lean();
+                    const totalRevenue = revenueRecords.reduce((s, r) => s + (r.revenue || 0), 0);
+                    const totalCommissions = commissions.reduce((s, c) => s + (c.amount || 0), 0);
+                    const totalPayouts = payouts.reduce((s, p) => s + (p.amount || 0), 0);
+                    data = {
+                        totalRevenue,
+                        totalCommissions,
+                        totalPayouts,
+                        revenueByMonth: revenueRecords.map(r => ({ month: r.month, revenue: r.revenue })),
+                        commissionCount: commissions.length,
+                        payoutCount: payouts.length,
+                    };
+                    break;
+                }
+                case 'students': {
+                    const students = await PartnerStudent.find({ partnerId, isDeleted: { $ne: true } }).lean();
+                    const activeCount = students.filter((s: any) => s.status === 'active').length;
+                    data = {
+                        totalStudents: students.length,
+                        activeStudents: activeCount,
+                        inactiveStudents: students.length - activeCount,
+                        students: students.map((s: any) => ({
+                            name: s.name,
+                            email: s.email,
+                            status: s.status,
+                            joinDate: s.joinDate,
+                            enrolledPrograms: s.enrolledPrograms,
+                            totalSpent: s.totalSpent,
+                        })),
+                    };
+                    break;
+                }
+                case 'operations': {
+                    const programs = await PartnerProgram.find({ partnerId, isDeleted: { $ne: true } }).lean();
+                    const bookings = await PartnerBooking.find({ partnerId, isDeleted: { $ne: true } }).lean();
+                    data = {
+                        totalPrograms: programs.length,
+                        activePrograms: programs.filter((p: any) => p.status === 'active').length,
+                        totalBookings: bookings.length,
+                        programs: programs.map((p: any) => ({
+                            name: p.name,
+                            category: p.category,
+                            status: p.status,
+                            enrolledStudents: p.enrolledStudents,
+                            revenue: p.revenue,
+                        })),
+                    };
+                    break;
+                }
+                case 'compliance': {
+                    const docs = await PartnerDocument.find({ partnerId, isDeleted: { $ne: true } }).lean();
+                    const agreements = await PartnerAgreement.find({ partnerId, isDeleted: { $ne: true } }).lean();
+                    const activeDocs = docs.filter((d: any) => d.status === 'active');
+                    data = {
+                        documentsTotal: docs.length,
+                        documentsActive: activeDocs.length,
+                        complianceScore: docs.length > 0 ? Math.round((activeDocs.length / docs.length) * 100) : 100,
+                        agreements: agreements.map((a: any) => ({
+                            type: a.type,
+                            status: a.status,
+                            startDate: a.startDate,
+                            endDate: a.endDate,
+                        })),
+                    };
+                    break;
+                }
+                case 'staff':
+                default: {
+                    const profile = await PartnerProfile.findOne({ partnerId }).lean();
+                    const contacts = await PartnerContact.find({ partnerId, isDeleted: { $ne: true } }).lean();
+                    data = {
+                        partnerName: profile?.partnerName || '',
+                        contacts: contacts.map((c: any) => ({
+                            name: c.name,
+                            email: c.email,
+                            role: c.role,
+                            isPrimary: c.isPrimary,
+                        })),
+                    };
+                    break;
+                }
+            }
+
+            return {
+                exportId: `EXPORT-${Date.now()}`,
+                partnerId,
+                exportType,
+                exportDate: new Date(),
+                data,
+                format: exportData.format || 'pdf',
+                status: 'generated',
+                createdAt: new Date(),
+            };
+        } catch (error) {
+            console.error('Error generating compliance export:', error);
+            throw error;
+        }
     }
 
     async submitTenderDocumentation(tenderData: Partial<ITenderDocumentation>): Promise<ITenderDocumentation> {
-        return {
-            tenderId: `TENDER-${Date.now()}`,
-            partnerId: tenderData.partnerId || '',
-            tenderName: tenderData.tenderName || '',
-            description: tenderData.description || '',
-            documents: tenderData.documents || [],
-            submissionDate: new Date(),
-            status: 'draft',
-            createdAt: new Date(),
-            updatedAt: new Date()
-        };
+        try {
+            const partnerId = tenderData.partnerId || '';
+            const documents = tenderData.documents || [];
+
+            // Store each tender document in the partner documents collection
+            for (const doc of documents) {
+                await PartnerDocument.create({
+                    partnerId,
+                    name: doc.name || 'Tender Document',
+                    type: doc.type || 'pdf',
+                    url: doc.url || '',
+                    status: 'active',
+                });
+            }
+
+            // Create a notification for the tender submission
+            await PartnerNotification.create({
+                partnerId,
+                type: 'update',
+                title: 'Tender Documentation Submitted',
+                message: `Tender "${tenderData.tenderName || 'Untitled'}" has been submitted with ${documents.length} document(s).`,
+                isRead: false,
+            });
+
+            return {
+                tenderId: `TENDER-${Date.now()}`,
+                partnerId,
+                tenderName: tenderData.tenderName || '',
+                description: tenderData.description || '',
+                documents,
+                submissionDate: new Date(),
+                status: 'submitted',
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            };
+        } catch (error) {
+            console.error('Error submitting tender documentation:', error);
+            throw error;
+        }
     }
 
     async submitMunicipalReport(reportData: Partial<IMunicipalReporting>): Promise<IMunicipalReporting> {
-        return {
-            reportingId: `MUNIREPORT-${Date.now()}`,
-            partnerId: reportData.partnerId || '',
-            reportType: reportData.reportType || 'enrollment',
-            reportingPeriod: reportData.reportingPeriod || '',
-            submissionDate: new Date(),
-            data: reportData.data || {},
-            status: 'draft',
-            createdAt: new Date()
-        };
+        try {
+            const partnerId = reportData.partnerId || '';
+            const reportType = reportData.reportType || 'enrollment';
+
+            await this.ensureSeeded(partnerId);
+
+            let data: any = reportData.data || {};
+
+            // Enrich report data with real metrics when no data is explicitly provided
+            if (!reportData.data || Object.keys(reportData.data).length === 0) {
+                switch (reportType) {
+                    case 'enrollment': {
+                        const totalStudents = await PartnerStudent.countDocuments({ partnerId, isDeleted: { $ne: true } });
+                        const activeStudents = await PartnerStudent.countDocuments({ partnerId, status: 'active', isDeleted: { $ne: true } });
+                        data = { totalStudents, activeStudents, inactiveStudents: totalStudents - activeStudents };
+                        break;
+                    }
+                    case 'attendance': {
+                        const bookings = await PartnerBooking.find({ partnerId, isDeleted: { $ne: true } }).lean();
+                        const completed = bookings.filter((b: any) => b.status === 'completed').length;
+                        data = { totalBookings: bookings.length, completedBookings: completed, attendanceRate: bookings.length > 0 ? Math.round((completed / bookings.length) * 100) : 0 };
+                        break;
+                    }
+                    case 'performance': {
+                        const programs = await PartnerProgram.find({ partnerId, isDeleted: { $ne: true } }).lean();
+                        const profile = await PartnerProfile.findOne({ partnerId }).lean();
+                        data = { totalPrograms: programs.length, activePrograms: programs.filter((p: any) => p.status === 'active').length, rating: profile?.rating || 0 };
+                        break;
+                    }
+                    case 'compliance': {
+                        const docs = await PartnerDocument.find({ partnerId, isDeleted: { $ne: true } }).lean();
+                        const activeDocs = docs.filter((d: any) => d.status === 'active');
+                        data = { documentsTotal: docs.length, documentsActive: activeDocs.length, complianceScore: docs.length > 0 ? Math.round((activeDocs.length / docs.length) * 100) : 100 };
+                        break;
+                    }
+                }
+            }
+
+            // Create a notification for the report submission
+            await PartnerNotification.create({
+                partnerId,
+                type: 'update',
+                title: 'Municipal Report Submitted',
+                message: `${reportType.charAt(0).toUpperCase() + reportType.slice(1)} report for period "${reportData.reportingPeriod || 'current'}" has been submitted.`,
+                isRead: false,
+            });
+
+            return {
+                reportingId: `MUNIREPORT-${Date.now()}`,
+                partnerId,
+                reportType,
+                reportingPeriod: reportData.reportingPeriod || '',
+                submissionDate: new Date(),
+                data,
+                status: 'submitted',
+                createdAt: new Date(),
+            };
+        } catch (error) {
+            console.error('Error submitting municipal report:', error);
+            throw error;
+        }
     }
 
     async createPartnerAgreement(agreementData: Partial<IPartnerAgreement>): Promise<IPartnerAgreement> {
-        return {
-            agreementId: `AGREEMENT-${Date.now()}`,
-            partnerId: agreementData.partnerId || '',
-            centerId: agreementData.centerId || '',
-            agreementType: agreementData.agreementType || 'standard',
-            startDate: agreementData.startDate || new Date(),
-            endDate: agreementData.endDate || new Date(),
-            terms: agreementData.terms || '',
-            status: 'active',
-            createdAt: new Date(),
-            updatedAt: new Date()
-        };
+        try {
+            const doc = await PartnerAgreement.create({
+                partnerId: agreementData.partnerId || '',
+                type: agreementData.agreementType || 'standard',
+                status: 'active',
+                startDate: agreementData.startDate || new Date(),
+                endDate: agreementData.endDate,
+                terms: agreementData.terms || '',
+                signedAt: new Date(),
+            });
+            const saved: any = doc.toObject();
+            return {
+                agreementId: saved._id.toString(),
+                partnerId: saved.partnerId,
+                centerId: agreementData.centerId || '',
+                agreementType: saved.type as any,
+                startDate: saved.startDate,
+                endDate: saved.endDate || new Date(),
+                terms: saved.terms || '',
+                status: saved.status,
+                createdAt: saved.createdAt,
+                updatedAt: saved.updatedAt,
+            };
+        } catch (error) {
+            console.error('Error creating partner agreement:', error);
+            throw error;
+        }
     }
 
     async getPartnerPerformance(partnerId: string, period: string): Promise<IPartnerPerformance> {
-        return {
-            performanceId: `PERF-${Date.now()}`,
-            partnerId,
-            period: (period as any) || 'monthly',
-            date: new Date(),
-            studentEnrollment: 156,
-            studentRetention: 89,
-            programCompletion: 76,
-            satisfactionScore: 4.2,
-            revenueGenerated: 48500,
-            createdAt: new Date()
-        };
+        try {
+            await this.ensureSeeded(partnerId);
+
+            const totalStudents = await PartnerStudent.countDocuments({ partnerId, isDeleted: { $ne: true } });
+            const activeStudents = await PartnerStudent.countDocuments({ partnerId, status: 'active', isDeleted: { $ne: true } });
+            const studentRetention = totalStudents > 0 ? Math.round((activeStudents / totalStudents) * 100) : 0;
+
+            const programs = await PartnerProgram.find({ partnerId, isDeleted: { $ne: true } }).lean();
+            const activePrograms = programs.filter((p: any) => p.status === 'active').length;
+            const programCompletion = programs.length > 0 ? Math.round((activePrograms / programs.length) * 100) : 0;
+
+            const profile = await PartnerProfile.findOne({ partnerId }).lean();
+            const satisfactionScore = profile?.rating || 0;
+
+            const revenueAgg = await PartnerRevenue.aggregate([
+                { $match: { partnerId } },
+                { $group: { _id: null, total: { $sum: '$revenue' } } },
+            ]);
+            const revenueGenerated = revenueAgg[0]?.total || 0;
+
+            return {
+                performanceId: `PERF-${partnerId}`,
+                partnerId,
+                period: (period as any) || 'monthly',
+                date: new Date(),
+                studentEnrollment: totalStudents,
+                studentRetention,
+                programCompletion,
+                satisfactionScore,
+                revenueGenerated,
+                createdAt: new Date(),
+            };
+        } catch (error) {
+            console.error('Error fetching partner performance:', error);
+            throw error;
+        }
     }
 
     async sendPartnerCommunication(commData: Partial<IPartnerCommunication>): Promise<IPartnerCommunication> {
-        return {
-            communicationId: `COMM-${Date.now()}`,
-            partnerId: commData.partnerId || '',
-            type: commData.type || 'email',
-            subject: commData.subject || '',
-            content: commData.content || '',
-            sentDate: new Date(),
-            status: 'sent',
-            createdAt: new Date()
-        };
+        try {
+            const partnerId = commData.partnerId || '';
+
+            // Persist as a partner message
+            const message = await PartnerMessage.create({
+                partnerId,
+                from: 'System',
+                fromType: 'support',
+                subject: commData.subject || '',
+                body: commData.content || '',
+                isRead: false,
+                priority: 'MEDIUM',
+                replies: [],
+            });
+
+            // Also create a notification for the partner
+            if (commData.type === 'notification' || commData.type === 'email') {
+                await PartnerNotification.create({
+                    partnerId,
+                    type: commData.type === 'notification' ? 'announcement' : 'update',
+                    title: commData.subject || 'New Communication',
+                    message: commData.content || '',
+                    isRead: false,
+                });
+            }
+
+            return {
+                communicationId: (message as any)._id.toString(),
+                partnerId,
+                type: commData.type || 'email',
+                subject: commData.subject || '',
+                content: commData.content || '',
+                sentDate: new Date(),
+                status: 'sent',
+                createdAt: (message as any).createdAt,
+            };
+        } catch (error) {
+            console.error('Error sending partner communication:', error);
+            throw error;
+        }
     }
 
-    async createSupportTicket(supportData: Partial<IPartnerSupport>): Promise<IPartnerSupport> {
-        return {
-            supportId: `SUPPORT-${Date.now()}`,
-            partnerId: supportData.partnerId || '',
-            issueType: supportData.issueType || 'technical',
-            subject: supportData.subject || '',
-            description: supportData.description || '',
-            priority: supportData.priority || 'medium',
-            status: 'open',
-            createdAt: new Date(),
-            updatedAt: new Date()
-        };
+    async createSupportTicketLegacy(supportData: Partial<IPartnerSupport>): Promise<IPartnerSupport> {
+        try {
+            const partnerId = supportData.partnerId || '';
+            const ticket = await PartnerTicket.create({
+                partnerId,
+                subject: supportData.subject || '',
+                description: supportData.description || '',
+                status: 'open',
+                priority: supportData.priority || 'medium',
+                category: supportData.issueType || 'technical',
+                assignedTo: supportData.assignedTo || 'Support Team',
+                messages: [{
+                    sender: 'Partner Admin',
+                    senderType: 'partner',
+                    message: supportData.description || '',
+                    createdAt: new Date(),
+                }],
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            });
+            const saved: any = ticket.toObject();
+            return {
+                supportId: saved._id.toString(),
+                partnerId: saved.partnerId,
+                issueType: (supportData.issueType || 'technical') as any,
+                subject: saved.subject,
+                description: saved.description,
+                priority: saved.priority as any,
+                status: 'open',
+                createdAt: saved.createdAt,
+                updatedAt: saved.updatedAt,
+            };
+        } catch (error) {
+            console.error('Error creating support ticket:', error);
+            throw error;
+        }
     }
 
     async resolveSupportTicket(supportId: string, resolution: string): Promise<IPartnerSupport> {
-        return {
-            supportId,
-            partnerId: '',
-            issueType: 'technical',
-            subject: '',
-            description: resolution,
-            priority: 'medium',
-            status: 'resolved',
-            resolvedDate: new Date(),
-            createdAt: new Date(),
-            updatedAt: new Date()
-        };
+        try {
+            const ticket = await PartnerTicket.findByIdAndUpdate(
+                supportId,
+                {
+                    $set: {
+                        status: 'resolved',
+                        resolvedAt: new Date(),
+                        updatedAt: new Date(),
+                    },
+                    $push: {
+                        messages: {
+                            sender: 'Support Team',
+                            senderType: 'support',
+                            message: resolution,
+                            createdAt: new Date(),
+                        },
+                    },
+                },
+                { new: true }
+            ).lean();
+
+            if (!ticket) {
+                throw new Error('Support ticket not found');
+            }
+
+            const t: any = ticket;
+            return {
+                supportId: t._id.toString(),
+                partnerId: t.partnerId,
+                issueType: (t.category || 'technical') as any,
+                subject: t.subject,
+                description: t.description || resolution,
+                priority: t.priority as any,
+                status: 'resolved',
+                resolvedDate: t.resolvedAt || new Date(),
+                createdAt: t.createdAt,
+                updatedAt: t.updatedAt,
+            };
+        } catch (error) {
+            console.error('Error resolving support ticket:', error);
+            throw error;
+        }
     }
 
     // ===== New endpoints for full partner portal integration =====

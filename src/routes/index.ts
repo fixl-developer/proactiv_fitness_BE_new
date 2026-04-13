@@ -11,6 +11,7 @@ import { userProgressRoutes } from '../modules/user-progress';
 import { userDashboardRoutes } from '../modules/user-dashboard';
 import { userClassesRoutes } from '../modules/user-classes';
 import { userAchievementsRoutes } from '../modules/user-achievements';
+import { guardianRoutes } from '../modules/guardian';
 
 // === Already mounted modules ===
 import aiChatbotRoutes from '../modules/ai-chatbot/ai-chatbot.routes';
@@ -90,6 +91,24 @@ import locationManagerRoutes from './location-manager.routes';
 // === Parent Dashboard ===
 import parentDashboardRoutes from './parent-dashboard.routes';
 
+// === NEW: Admin Alias Routes (maps /admin/* paths to actual modules) ===
+import adminAliasRoutes from './admin-routes';
+
+// === NEW: Admin Dashboard Routes ===
+import adminDashboardRoutes from './admin-dashboard.routes';
+
+// === NEW: Admin Customers Routes ===
+import adminCustomersRoutes from './admin-customers.routes';
+
+// === NEW: Admin Settings Routes ===
+import adminSettingsRoutes from './admin-settings.routes';
+
+// === NEW: Admin System Routes ===
+import adminSystemRoutes from './admin-system.routes';
+
+// === NEW: Missing Modules Routes (students, waitlist, social, budget, leads, etc.) ===
+import missingModulesRoutes from './missing-modules.routes';
+
 // === BCMS (Business Configuration Management) ===
 import { termRoutes, holidayCalendarRoutes, countryRoutes, regionRoutes, businessUnitRoutes, locationRoutes, roomRoutes } from '../modules/bcms';
 
@@ -155,6 +174,7 @@ router.use('/user/progress', userProgressRoutes);
 router.use('/user/dashboard', userDashboardRoutes);
 router.use('/user/classes', userClassesRoutes);
 router.use('/user/achievements', userAchievementsRoutes);
+router.use('/user/guardians', guardianRoutes);
 
 // =============================================
 // OPERATIONS (existing)
@@ -361,25 +381,42 @@ router.get('/system/analytics', async (_req: Request, res: Response) => {
 });
 
 // AI Chatbot
-router.use('/', aiChatbotRoutes);
+router.use('/ai', aiChatbotRoutes);
 
 // =============================================
 // DASHBOARD & ANALYTICS (real data from MongoDB)
 // =============================================
 router.use('/', dashboardRoutes);
 
-// IAM endpoints (used by users page)
-router.get('/iam/users', (_req: Request, res: Response) => {
-    res.json({ success: true, data: [] });
-});
+// =============================================
+// NEW: Admin Alias Routes (maps frontend /admin/* paths to backend modules)
+// =============================================
+router.use('/', adminAliasRoutes);
 
-router.get('/iam/roles', (_req: Request, res: Response) => {
-    res.json({ success: true, data: [] });
-});
+// =============================================
+// NEW: Admin Dashboard (real MongoDB data)
+// =============================================
+router.use('/admin/dashboard', adminDashboardRoutes);
 
-router.get('/iam/permissions', (_req: Request, res: Response) => {
-    res.json({ success: true, data: [] });
-});
+// =============================================
+// NEW: Admin Customers
+// =============================================
+router.use('/admin/customers', adminCustomersRoutes);
+
+// =============================================
+// NEW: Admin Settings
+// =============================================
+router.use('/admin/settings', adminSettingsRoutes);
+
+// =============================================
+// NEW: Admin System (API, Database, Features, Security, Logs)
+// =============================================
+router.use('/admin/system', adminSystemRoutes);
+
+// =============================================
+// NEW: Missing Modules (students, waitlist, social, budget, leads, campaigns, sop, semantic-search, IAM)
+// =============================================
+router.use('/', missingModulesRoutes);
 
 // Audit logs endpoint - real data from AuditVault
 router.get('/audit/logs', async (req: Request, res: Response) => {

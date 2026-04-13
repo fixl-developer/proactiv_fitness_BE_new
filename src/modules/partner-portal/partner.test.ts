@@ -107,7 +107,7 @@ describe('Partner Portal', () => {
     });
 
     it('should create support ticket', async () => {
-        const result = await service.createSupportTicket({
+        const result = await service.createSupportTicketLegacy({
             partnerId: 'partner-1',
             issueType: 'technical',
             subject: 'Login Issue',

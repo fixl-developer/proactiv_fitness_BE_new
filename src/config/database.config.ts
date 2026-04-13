@@ -27,7 +27,9 @@ export class DatabaseConfig {
                 maxPoolSize: 10,
                 minPoolSize: 5,
                 socketTimeoutMS: 45000,
-                serverSelectionTimeoutMS: 5000,
+                serverSelectionTimeoutMS: 30000,
+                connectTimeoutMS: 30000,
+                family: 4,
             });
 
             this.isConnected = true;

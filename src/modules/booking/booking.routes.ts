@@ -17,6 +17,36 @@ router.post('/search',
 );
 
 /**
+ * @route   POST /api/v1/bookings/assessment
+ * @desc    Create assessment booking (simplified website flow)
+ * @access  Private
+ */
+router.post('/assessment',
+    authenticate,
+    bookingController.createAssessmentBooking
+);
+
+/**
+ * @route   POST /api/v1/bookings/class
+ * @desc    Create class booking (simplified website flow)
+ * @access  Private
+ */
+router.post('/class',
+    authenticate,
+    bookingController.createClassBooking
+);
+
+/**
+ * @route   GET /api/v1/bookings/my-bookings
+ * @desc    Get logged-in user's bookings
+ * @access  Private
+ */
+router.get('/my-bookings',
+    authenticate,
+    bookingController.getMyBookings
+);
+
+/**
  * @route   POST /api/v1/bookings/validate
  * @desc    Validate booking request
  * @access  Private

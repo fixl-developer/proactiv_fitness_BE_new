@@ -19,11 +19,32 @@ process.on('uncaughtException', (error: Error) => {
 // Start server
 const startServer = async () => {
     try {
-        // Connect to database
-        await databaseConfig.connect();
+        // Connect to database (with retry)
+        let dbConnected = false;
+        try {
+            await databaseConfig.connect();
+            dbConnected = true;
+        } catch (dbError) {
+            logger.warn('Initial DB connection failed, server will start anyway. Retrying in background...', dbError);
+            // Retry connection in background
+            const retryConnect = async () => {
+                for (let i = 0; i < 5; i++) {
+                    try {
+                        await new Promise(resolve => setTimeout(resolve, 10000));
+                        await databaseConfig.connect();
+                        logger.info('Database connected on retry');
+                        return;
+                    } catch (e) {
+                        logger.warn(`DB retry ${i + 1}/5 failed`);
+                    }
+                }
+                logger.error('All DB connection retries failed');
+            };
+            retryConnect();
+        }
 
         // Auto-seed demo users + fix legacy roles (SUPER_ADMIN/HQ_ADMIN → ADMIN)
-        try {
+        if (dbConnected) try {
             // Fix any legacy SUPER_ADMIN or HQ_ADMIN roles in the database
             const legacyFix = await User.updateMany(
                 { role: { $in: ['SUPER_ADMIN', 'HQ_ADMIN'] } },
@@ -64,7 +85,7 @@ const startServer = async () => {
         }
 
         // Auto-seed partner portal data
-        try {
+        if (dbConnected) try {
             await seedPartnerData('partner-1');
         } catch (partnerSeedError) {
             logger.warn('Partner data seeding skipped:', partnerSeedError);

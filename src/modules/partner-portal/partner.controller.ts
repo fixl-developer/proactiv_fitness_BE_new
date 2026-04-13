@@ -104,7 +104,7 @@ export class PartnerController {
 
     async createSupportTicket(req: any, res: any): Promise<void> {
         try {
-            const ticket = await this.service.createSupportTicket(req.body);
+            const ticket = await this.service.createSupportTicketLegacy(req.body);
             res.status(201).json({ success: true, data: ticket });
         } catch (error) {
             res.status(500).json({ success: false, error: (error as Error).message });

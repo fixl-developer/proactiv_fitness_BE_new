@@ -71,23 +71,38 @@ router.post('/book-via-chat', async (req: Request, res: Response) => {
         }
 
         const bookingPayload = {
-            familyName: bookingData.parentName,
-            parentEmail: bookingData.parentEmail,
-            parentPhone: bookingData.parentPhone,
+            program: bookingData.program,
             childName: bookingData.childName,
             childAge: parseInt(bookingData.childAge),
             childGender: bookingData.childGender || 'Not specified',
-            bookingType: bookingData.type,
-            program: bookingData.program,
             location: bookingData.location,
-            sessionDate: new Date(`${bookingData.date}T${bookingData.timeSlot}`),
-            status: 'confirmed',
-            paymentStatus: 'pending',
+            date: bookingData.date,
+            timeSlot: bookingData.timeSlot,
+            parentName: bookingData.parentName,
+            parentEmail: bookingData.parentEmail,
+            parentPhone: bookingData.parentPhone,
         };
 
-        const booking = await bookingService.createBooking(bookingPayload as any, 'chatbot-user');
+        // Use the correct simplified booking methods based on type
+        let booking;
+        if (bookingData.type === 'assessment') {
+            booking = await bookingService.createAssessmentBooking(bookingPayload, 'chatbot-user');
+        } else {
+            // Trial class booking
+            booking = await bookingService.createClassBooking({
+                classId: `chatbot-${Date.now()}`,
+                className: `Trial: ${bookingData.program}`,
+                classDate: bookingData.date,
+                classTime: bookingData.timeSlot,
+                location: bookingData.location,
+                price: 0,
+                childName: bookingData.childName,
+                childAge: parseInt(bookingData.childAge),
+                notes: `Parent: ${bookingData.parentName} | Email: ${bookingData.parentEmail} | Phone: ${bookingData.parentPhone} | Gender: ${bookingData.childGender || 'Not specified'}`,
+            }, 'chatbot-user');
+        }
 
-        const confirmationMessage = `Booking Confirmed!\n\nThank you, ${bookingData.parentName}!\n\nBooking Details:\n- Type: ${bookingData.type === 'trial' ? 'Trial Class' : 'Assessment'}\n- Child: ${bookingData.childName} (Age ${bookingData.childAge})\n- Program: ${bookingData.program}\n- Location: ${bookingData.location}\n- Date & Time: ${bookingData.date} at ${bookingData.timeSlot}\n\nConfirmation email sent to ${bookingData.parentEmail}`;
+        const confirmationMessage = `Booking Confirmed! ✅\n\nThank you, ${bookingData.parentName}!\n\nBooking Details:\n📋 Type: ${bookingData.type === 'trial' ? 'Trial Class' : 'Assessment'}\n👧 Child: ${bookingData.childName} (Age ${bookingData.childAge})\n🤸 Program: ${bookingData.program}\n📍 Location: ${bookingData.location}\n📅 Date: ${bookingData.date}\n🕐 Time: ${bookingData.timeSlot}\n\nConfirmation ID: ${booking.bookingId}\nConfirmation email will be sent to ${bookingData.parentEmail}.\n\nWe look forward to seeing ${bookingData.childName}! 🎉`;
 
         ResponseUtil.created(res, {
             bookingId: booking.bookingId,

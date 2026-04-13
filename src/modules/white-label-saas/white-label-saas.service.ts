@@ -1,4 +1,5 @@
-import Tenant from './white-label-saas.model';
+import crypto from 'crypto';
+import Tenant, { SaaSUsageMetric, SaaSBilling, SaaSApiKey } from './white-label-saas.model';
 import logger from '@/shared/utils/logger.util';
 
 class WhiteLabelService {
@@ -43,40 +44,89 @@ class WhiteLabelService {
     }
 
     async getUsageMetrics(tenantId: string) {
-        return {
-            apiCalls: 10000,
-            storage: 5000,
-            users: 100,
-            period: 'monthly'
-        };
+        try {
+            const metrics = await SaaSUsageMetric.find({ tenantId })
+                .sort({ createdAt: -1 })
+                .lean();
+            return metrics;
+        } catch (error) {
+            logger.error(`Failed to get usage metrics for tenant ${tenantId}: ${error}`);
+            throw error;
+        }
     }
 
     async getBillingInfo(tenantId: string) {
-        return {
-            plan: 'professional',
-            monthlyFee: 500,
-            status: 'active',
-            nextBillingDate: new Date()
-        };
+        try {
+            const billing = await SaaSBilling.findOne({ tenantId }).lean();
+            if (!billing) throw new Error('Billing info not found for tenant');
+            return billing;
+        } catch (error) {
+            logger.error(`Failed to get billing info for tenant ${tenantId}: ${error}`);
+            throw error;
+        }
     }
 
     async updateBillingInfo(tenantId: string, data: any) {
-        logger.info(`Billing info updated for tenant: ${tenantId}`);
-        return data;
+        try {
+            const billing = await SaaSBilling.findOneAndUpdate(
+                { tenantId },
+                { $set: data },
+                { new: true, upsert: true },
+            );
+            logger.info(`Billing info updated for tenant: ${tenantId}`);
+            return billing;
+        } catch (error) {
+            logger.error(`Failed to update billing info for tenant ${tenantId}: ${error}`);
+            throw error;
+        }
     }
 
     async getApiKeys(tenantId: string) {
-        return [];
+        try {
+            const keys = await SaaSApiKey.find({ tenantId, isActive: true })
+                .select('-key')
+                .sort({ createdAt: -1 })
+                .lean();
+            return keys;
+        } catch (error) {
+            logger.error(`Failed to get API keys for tenant ${tenantId}: ${error}`);
+            throw error;
+        }
     }
 
-    async generateApiKey(tenantId: string) {
-        const key = `sk_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        logger.info(`API key generated for tenant: ${tenantId}`);
-        return { key, createdAt: new Date() };
+    async generateApiKey(tenantId: string, name?: string) {
+        try {
+            const key = `sk_${crypto.randomBytes(32).toString('hex')}`;
+            const apiKey = new SaaSApiKey({
+                tenantId,
+                key,
+                name: name || 'Default API Key',
+                permissions: ['read'],
+                isActive: true,
+            });
+            await apiKey.save();
+            logger.info(`API key generated for tenant: ${tenantId}`);
+            return apiKey;
+        } catch (error) {
+            logger.error(`Failed to generate API key for tenant ${tenantId}: ${error}`);
+            throw error;
+        }
     }
 
     async revokeApiKey(keyId: string) {
-        logger.info(`API key revoked: ${keyId}`);
+        try {
+            const apiKey = await SaaSApiKey.findByIdAndUpdate(
+                keyId,
+                { isActive: false },
+                { new: true },
+            );
+            if (!apiKey) throw new Error('API key not found');
+            logger.info(`API key revoked: ${keyId}`);
+            return apiKey;
+        } catch (error) {
+            logger.error(`Failed to revoke API key ${keyId}: ${error}`);
+            throw error;
+        }
     }
 }
 

@@ -15,11 +15,14 @@ import {
     ICredentialPortfolio,
     IVerificationResult,
     CertificationStatus,
+    CertificationLevel,
+    BadgeType,
     VerificationStatus
 } from './micro-credentials.interface';
 import { BaseService } from '../../shared/base/base.service';
 import { AppError } from '../../shared/utils/app-error.util';
 import { HTTP_STATUS } from '../../shared/constants';
+import { User } from '../iam/user.model';
 
 export class MicroCredentialService extends BaseService<IMicroCredential> {
     constructor() {
@@ -272,16 +275,20 @@ export class MicroCredentialService extends BaseService<IMicroCredential> {
 
             // Get recent credentials (last 30 days)
             const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-            const recentCredentials = credentials
-                .filter(c => c.issuedDate >= thirtyDaysAgo)
-                .map(c => this.mapToCredentialSummary(c))
-                .slice(0, 5);
+            const recentCredentials = await Promise.all(
+                credentials
+                    .filter(c => c.issuedDate >= thirtyDaysAgo)
+                    .slice(0, 5)
+                    .map(c => this.mapToCredentialSummary(c))
+            );
 
             // Get expiring credentials (next 30 days)
             const thirtyDaysFromNow = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-            const expiringCredentials = credentials
-                .filter(c => c.expirationDate && c.expirationDate <= thirtyDaysFromNow && !c.isExpired)
-                .map(c => this.mapToCredentialSummary(c));
+            const expiringCredentials = await Promise.all(
+                credentials
+                    .filter(c => c.expirationDate && c.expirationDate <= thirtyDaysFromNow && !c.isExpired)
+                    .map(c => this.mapToCredentialSummary(c))
+            );
 
             return {
                 recipientId,
@@ -373,44 +380,115 @@ export class MicroCredentialService extends BaseService<IMicroCredential> {
         await credential.save();
     }
 
-    private async groupCredentialsByLevel(credentials: IIssuedCredential[]): Promise<any[]> {
-        // Implementation to group credentials by level
-        return [];
+    private async groupCredentialsByLevel(credentials: IIssuedCredential[]): Promise<{ level: CertificationLevel; count: number }[]> {
+        try {
+            const credentialIds = credentials.map(c => c.credentialId);
+            const credentialDefs = await MicroCredential.find({ credentialId: { $in: credentialIds } }).lean();
+            const levelMap = new Map<string, string>();
+            for (const def of credentialDefs) {
+                levelMap.set(def.credentialId, def.level);
+            }
+
+            const counts: Record<string, number> = {};
+            for (const cred of credentials) {
+                const level = levelMap.get(cred.credentialId) || 'bronze';
+                counts[level] = (counts[level] || 0) + 1;
+            }
+
+            return Object.entries(counts).map(([level, count]) => ({
+                level: level as CertificationLevel,
+                count
+            }));
+        } catch (error: any) {
+            throw new AppError(
+                error.message || 'Failed to group credentials by level',
+                HTTP_STATUS.INTERNAL_SERVER_ERROR
+            );
+        }
     }
 
-    private async groupCredentialsByCategory(credentials: IIssuedCredential[]): Promise<any[]> {
-        // Implementation to group credentials by category
-        return [];
+    private async groupCredentialsByCategory(credentials: IIssuedCredential[]): Promise<{ category: string; count: number }[]> {
+        try {
+            const credentialIds = credentials.map(c => c.credentialId);
+            const credentialDefs = await MicroCredential.find({ credentialId: { $in: credentialIds } }).lean();
+            const categoryMap = new Map<string, string>();
+            for (const def of credentialDefs) {
+                categoryMap.set(def.credentialId, def.category);
+            }
+
+            const counts: Record<string, number> = {};
+            for (const cred of credentials) {
+                const category = categoryMap.get(cred.credentialId) || 'uncategorized';
+                counts[category] = (counts[category] || 0) + 1;
+            }
+
+            return Object.entries(counts).map(([category, count]) => ({
+                category,
+                count
+            }));
+        } catch (error: any) {
+            throw new AppError(
+                error.message || 'Failed to group credentials by category',
+                HTTP_STATUS.INTERNAL_SERVER_ERROR
+            );
+        }
     }
 
-    private mapToCredentialSummary(credential: IIssuedCredential): ICredentialSummary {
+    private async mapToCredentialSummary(credential: IIssuedCredential): Promise<ICredentialSummary> {
+        const credentialDef = await MicroCredential.findOne({ credentialId: credential.credentialId }).lean();
         return {
             credentialId: credential.issuedCredentialId,
             name: credential.credentialName,
-            level: 'bronze' as any, // Would get from credential definition
+            level: credentialDef?.level as CertificationLevel || CertificationLevel.BRONZE,
             status: credential.status,
             issuedDate: credential.issuedDate,
             expirationDate: credential.expirationDate,
             isExpired: credential.isExpired,
             verificationUrl: credential.digitalCertificate.verificationUrl,
-            badgeImageUrl: 'badge_url' // Would get from credential definition
+            badgeImageUrl: credentialDef?.badgeImageUrl || ''
         };
     }
 
     private async getBusinessUnitId(): Promise<string> {
-        return 'business_unit_id'; // Placeholder
+        try {
+            const user = await User.findOne({ isDeleted: { $ne: true } }).select('businessUnitId').lean();
+            return user?.businessUnitId?.toString() || '';
+        } catch {
+            return '';
+        }
     }
 
     private async getRecipientName(recipientId: string): Promise<string> {
-        return `Recipient ${recipientId}`;
+        try {
+            const user = await User.findById(recipientId).select('firstName lastName').lean();
+            if (user) {
+                return `${user.firstName || ''} ${user.lastName || ''}`.trim();
+            }
+            return '';
+        } catch {
+            return '';
+        }
     }
 
     private async getStaffName(staffId: string): Promise<string> {
-        return `Staff ${staffId}`;
+        try {
+            const user = await User.findById(staffId).select('firstName lastName').lean();
+            if (user) {
+                return `${user.firstName || ''} ${user.lastName || ''}`.trim();
+            }
+            return '';
+        } catch {
+            return '';
+        }
     }
 
     private async getLocationId(recipientId: string): Promise<string> {
-        return 'location_id'; // Placeholder
+        try {
+            const user = await User.findById(recipientId).select('locationId').lean();
+            return user?.locationId?.toString() || '';
+        } catch {
+            return '';
+        }
     }
 
     private generateVerificationId(): string {
@@ -607,37 +685,139 @@ export class BadgeService extends BaseService<IBadgeSystem> {
         return timeMap[difficulty] || 30;
     }
 
-    private async groupBadgesByCategory(earnedBadges: IEarnedBadge[]): Promise<any[]> {
-        // Implementation to group badges by category
-        return [];
+    private async groupBadgesByCategory(earnedBadges: IEarnedBadge[]): Promise<{ category: string; count: number; points: number }[]> {
+        try {
+            const badgeIds = earnedBadges.map(b => b.badgeId);
+            const badgeDefs = await BadgeSystem.find({ badgeId: { $in: badgeIds } }).lean();
+            const categoryMap = new Map<string, string>();
+            for (const def of badgeDefs) {
+                categoryMap.set(def.badgeId, def.category);
+            }
+
+            const grouped: Record<string, { count: number; points: number }> = {};
+            for (const badge of earnedBadges) {
+                const category = categoryMap.get(badge.badgeId) || 'uncategorized';
+                if (!grouped[category]) {
+                    grouped[category] = { count: 0, points: 0 };
+                }
+                grouped[category].count += 1;
+                grouped[category].points += badge.totalPoints || 0;
+            }
+
+            return Object.entries(grouped).map(([category, data]) => ({
+                category,
+                count: data.count,
+                points: data.points
+            }));
+        } catch (error: any) {
+            throw new AppError(
+                error.message || 'Failed to group badges by category',
+                HTTP_STATUS.INTERNAL_SERVER_ERROR
+            );
+        }
     }
 
-    private async calculateBadgeAchievements(earnedBadges: IEarnedBadge[]): Promise<any> {
-        // Implementation to calculate various badge achievements
-        return {
-            totalSkillBadges: 0,
-            totalAttendanceBadges: 0,
-            totalBehaviorBadges: 0,
-            totalLeadershipBadges: 0,
-            rareBadges: 0,
-            legendaryBadges: 0
-        };
+    private async calculateBadgeAchievements(earnedBadges: IEarnedBadge[]): Promise<{
+        totalSkillBadges: number;
+        totalAttendanceBadges: number;
+        totalBehaviorBadges: number;
+        totalLeadershipBadges: number;
+        rareBadges: number;
+        legendaryBadges: number;
+    }> {
+        try {
+            const badgeIds = earnedBadges.map(b => b.badgeId);
+            const badgeDefs = await BadgeSystem.find({ badgeId: { $in: badgeIds } }).lean();
+            const badgeInfoMap = new Map<string, { badgeType: string; rarity: string }>();
+            for (const def of badgeDefs) {
+                badgeInfoMap.set(def.badgeId, { badgeType: def.badgeType, rarity: def.rarity });
+            }
+
+            const achievements = {
+                totalSkillBadges: 0,
+                totalAttendanceBadges: 0,
+                totalBehaviorBadges: 0,
+                totalLeadershipBadges: 0,
+                rareBadges: 0,
+                legendaryBadges: 0
+            };
+
+            for (const badge of earnedBadges) {
+                const info = badgeInfoMap.get(badge.badgeId);
+                if (!info) continue;
+
+                switch (info.badgeType) {
+                    case BadgeType.SKILL_MASTERY:
+                        achievements.totalSkillBadges++;
+                        break;
+                    case BadgeType.ATTENDANCE:
+                        achievements.totalAttendanceBadges++;
+                        break;
+                    case BadgeType.BEHAVIOR:
+                        achievements.totalBehaviorBadges++;
+                        break;
+                    case BadgeType.LEADERSHIP:
+                        achievements.totalLeadershipBadges++;
+                        break;
+                }
+
+                if (info.rarity === 'rare' || info.rarity === 'epic') {
+                    achievements.rareBadges++;
+                }
+                if (info.rarity === 'legendary') {
+                    achievements.legendaryBadges++;
+                }
+            }
+
+            return achievements;
+        } catch (error: any) {
+            throw new AppError(
+                error.message || 'Failed to calculate badge achievements',
+                HTTP_STATUS.INTERNAL_SERVER_ERROR
+            );
+        }
     }
 
     private async getBusinessUnitId(): Promise<string> {
-        return 'business_unit_id'; // Placeholder
+        try {
+            const user = await User.findOne({ isDeleted: { $ne: true } }).select('businessUnitId').lean();
+            return user?.businessUnitId?.toString() || '';
+        } catch {
+            return '';
+        }
     }
 
     private async getRecipientName(recipientId: string): Promise<string> {
-        return `Recipient ${recipientId}`;
+        try {
+            const user = await User.findById(recipientId).select('firstName lastName').lean();
+            if (user) {
+                return `${user.firstName || ''} ${user.lastName || ''}`.trim();
+            }
+            return '';
+        } catch {
+            return '';
+        }
     }
 
     private async getStaffName(staffId: string): Promise<string> {
-        return `Staff ${staffId}`;
+        try {
+            const user = await User.findById(staffId).select('firstName lastName').lean();
+            if (user) {
+                return `${user.firstName || ''} ${user.lastName || ''}`.trim();
+            }
+            return '';
+        } catch {
+            return '';
+        }
     }
 
     private async getLocationId(recipientId: string): Promise<string> {
-        return 'location_id'; // Placeholder
+        try {
+            const user = await User.findById(recipientId).select('locationId').lean();
+            return user?.locationId?.toString() || '';
+        } catch {
+            return '';
+        }
     }
 
     private generateBadgeId(): string {
