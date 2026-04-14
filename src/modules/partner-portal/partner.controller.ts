@@ -102,7 +102,7 @@ export class PartnerController {
         }
     }
 
-    async createSupportTicket(req: any, res: any): Promise<void> {
+    async createSupportTicketLegacy(req: any, res: any): Promise<void> {
         try {
             const ticket = await this.service.createSupportTicketLegacy(req.body);
             res.status(201).json({ success: true, data: ticket });

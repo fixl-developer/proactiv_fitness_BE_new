@@ -1,4 +1,4 @@
-import { Schema, model, Document } from 'mongoose';
+import mongoose, { Schema, model, Document } from 'mongoose';
 import { baseSchemaFields, baseSchemaOptions } from '../../shared/base/base.model';
 
 // ── API Key ──────────────────────────────────────────────────────────────────
@@ -96,7 +96,7 @@ const webhookSchema = new Schema<IWebhookDocument>(
     baseSchemaOptions as any,
 );
 
-export const WebhookModel = model<IWebhookDocument>('Webhook', webhookSchema);
+export const WebhookModel = (mongoose.models['ApiDevWebhook'] as any) || model<IWebhookDocument>('ApiDevWebhook', webhookSchema);
 
 // ── API Usage Log ────────────────────────────────────────────────────────────
 

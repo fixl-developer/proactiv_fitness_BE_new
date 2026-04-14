@@ -21,7 +21,7 @@ export class DatabaseConfig {
         }
 
         try {
-            const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/proactiv_fitness';
+            const mongoUri = process.env.MONGODB_URI || 'mongodb+srv://proactiv_user:kUaE38F2HR72LsI4@cluster0.dqredjc.mongodb.net/proactiv_fitness_db?appName=Cluster0';
 
             await mongoose.connect(mongoUri, {
                 maxPoolSize: 10,

@@ -451,8 +451,8 @@ export class MicroCredentialService extends BaseService<IMicroCredential> {
 
     private async getBusinessUnitId(): Promise<string> {
         try {
-            const user = await User.findOne({ isDeleted: { $ne: true } }).select('businessUnitId').lean();
-            return user?.businessUnitId?.toString() || '';
+            const user = await User.findOne({ isDeleted: { $ne: true } }).select('organizationId').lean();
+            return (user as any)?.organizationId?.toString() || '';
         } catch {
             return '';
         }
@@ -780,8 +780,8 @@ export class BadgeService extends BaseService<IBadgeSystem> {
 
     private async getBusinessUnitId(): Promise<string> {
         try {
-            const user = await User.findOne({ isDeleted: { $ne: true } }).select('businessUnitId').lean();
-            return user?.businessUnitId?.toString() || '';
+            const user = await User.findOne({ isDeleted: { $ne: true } }).select('organizationId').lean();
+            return (user as any)?.organizationId?.toString() || '';
         } catch {
             return '';
         }
