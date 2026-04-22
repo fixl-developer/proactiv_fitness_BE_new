@@ -27,6 +27,26 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
 });
 
 /**
+ * @route   GET /notifications/me
+ * @desc    Get current user's notifications (alias for /)
+ * @access  Private
+ */
+router.get('/me', authenticate, async (req: Request, res: Response) => {
+    try {
+        const userId = req.user?.id;
+        if (!userId) {
+            res.status(401).json({ success: false, message: 'Unauthorized' });
+            return;
+        }
+
+        const userNotifications = notificationsStore.filter(n => n.userId === userId);
+        res.json({ success: true, data: userNotifications });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+/**
  * @route   GET /notifications/unread
  * @desc    Get unread notifications count
  * @access  Private
