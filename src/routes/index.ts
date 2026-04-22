@@ -12,6 +12,10 @@ import { userDashboardRoutes } from '../modules/user-dashboard';
 import { userClassesRoutes } from '../modules/user-classes';
 import { userAchievementsRoutes } from '../modules/user-achievements';
 import { guardianRoutes } from '../modules/guardian';
+import userScheduleRoutes from '../modules/user-schedule/user-schedule.routes';
+import userSettingsRoutes from '../modules/user-settings/user-settings.routes';
+import feedbackRoutes from '../modules/feedback/feedback.routes';
+import downloadsRoutes from '../modules/downloads/downloads.routes';
 
 // === Already mounted modules ===
 import aiChatbotRoutes from '../modules/ai-chatbot/ai-chatbot.routes';
@@ -74,6 +78,10 @@ import wearablesRoutes from '../modules/wearables/wearables.routes';
 import virtualTrainingRoutes from '../modules/virtual-training/virtual-training.routes';
 import nutritionRoutes from '../modules/nutrition/nutrition.routes';
 import localizationRoutes from '../modules/localization/localization.routes';
+
+// === Emergency Contacts & Waitlist ===
+import emergencyContactsRoutes from '../modules/emergency-contacts/emergency-contacts.routes';
+import waitlistRoutes from '../modules/waitlist/waitlist.routes';
 
 // === CMS (Content Management System) ===
 import { cmsPublicRoutes, cmsAdminRoutes } from '../modules/cms/cms.routes';
@@ -175,6 +183,10 @@ router.use('/user/dashboard', userDashboardRoutes);
 router.use('/user/classes', userClassesRoutes);
 router.use('/user/achievements', userAchievementsRoutes);
 router.use('/user/guardians', guardianRoutes);
+router.use('/user/settings', userSettingsRoutes);
+router.use('/schedule', userScheduleRoutes);
+router.use('/feedback', feedbackRoutes);
+router.use('/downloads', downloadsRoutes);
 
 // =============================================
 // OPERATIONS (existing)
@@ -274,10 +286,10 @@ router.use('/', aiContentEngineRoutes);
 router.use('/', workflowOrchestratorRoutes);
 router.use('/', smartSupportRoutes);
 router.use('/', aiSafetyMonitorRoutes);
-router.use('/', aiCommunicationRoutes);
-router.use('/', studentDigitalTwinRoutes);
-router.use('/', aiGamificationEngineRoutes);
-router.use('/', globalIntelligenceRoutes);
+router.use('/ai-communication', aiCommunicationRoutes);
+router.use('/student-digital-twin', studentDigitalTwinRoutes);
+router.use('/ai-gamification-engine', aiGamificationEngineRoutes);
+router.use('/global-intelligence', globalIntelligenceRoutes);
 
 // Health & Fitness
 router.use('/wearables', wearablesRoutes);
@@ -296,6 +308,12 @@ router.use('/', whiteLabelPlatformRoutes);     // internal: /white-label
 router.use('/white-label-saas', whiteLabelSaasRoutes);
 router.use('/franchise-management', franchiseManagementRoutes);
 router.use('/localization', localizationRoutes);
+
+// =============================================
+// EMERGENCY CONTACTS & WAITLIST
+// =============================================
+router.use('/emergency-contacts', emergencyContactsRoutes);
+router.use('/waitlist', waitlistRoutes);
 
 // Class-based routes (converted to Express routers)
 router.use('/marketing', classToRouter(MarketingRoutes));

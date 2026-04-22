@@ -794,3 +794,5 @@ export class BookingService extends BaseService<IBooking> {
         return id!;
     }
 }
+
+export const bookingService = new BookingService();

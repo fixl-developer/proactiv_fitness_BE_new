@@ -238,4 +238,66 @@ export class AICoachAssistantService {
 
         return { success: true, data: sessions };
     }
+
+    // ─── Predict Progress ──────────────────────────────────────
+    async predictProgress(userId: string, studentId: string, tenantId?: string): Promise<any> {
+        try {
+            // Fetch student's recent analyses
+            const recentAnalyses = await AICoachAssistantModel.find({
+                studentId,
+                ...(tenantId && { tenantId })
+            })
+                .sort({ createdAt: -1 })
+                .limit(10)
+                .lean();
+
+            if (recentAnalyses.length === 0) {
+                return {
+                    studentId,
+                    prediction: null,
+                    message: 'Insufficient data for progress prediction. Please complete more form analyses.',
+                    aiPowered: false,
+                };
+            }
+
+            const prompt = AIPromptService.progressPrediction({
+                studentId,
+                analysisHistory: recentAnalyses,
+            });
+
+            const result = await aiService.jsonCompletion<{
+                currentLevel: string;
+                projectedLevel: string;
+                timelineWeeks: number;
+                keyMilestones: string[];
+                recommendedFocus: string[];
+                riskFactors: string[];
+                motivationalInsight: string;
+            }>({
+                systemPrompt: prompt.system,
+                userPrompt: prompt.user,
+                module: 'ai-coach-assistant',
+                temperature: 0.6,
+            });
+
+            logger.info(`AI Coach Assistant: Progress prediction generated for student ${studentId}`);
+
+            return {
+                studentId,
+                ...result,
+                predictedAt: new Date(),
+                basedOnAnalyses: recentAnalyses.length,
+                aiPowered: true,
+            };
+        } catch (error: any) {
+            logger.error(`AI Coach Assistant progress prediction failed:`, error.message);
+            const fallback = aiService.getFallbackData('ai-coach-assistant');
+            return {
+                studentId,
+                prediction: fallback,
+                predictedAt: new Date(),
+                aiPowered: false,
+            };
+        }
+    }
 }

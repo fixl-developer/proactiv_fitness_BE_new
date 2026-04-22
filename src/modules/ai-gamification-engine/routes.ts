@@ -3,6 +3,6 @@ import aiGamificationEngineController from './controller';
 
 const router = Router();
 
-router.use('/ai-gamification-engine', aiGamificationEngineController);
+router.use('/', aiGamificationEngineController);
 
 export default router;
