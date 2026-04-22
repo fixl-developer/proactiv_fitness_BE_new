@@ -2,26 +2,26 @@
 // Each method returns { system, user } prompt pairs for AIService
 
 interface PromptPair {
-    system: string;
-    user: string;
+  system: string;
+  user: string;
 }
 
 const DOMAIN_CONTEXT = `You are an AI assistant for ProActiv Fitness — a global youth fitness platform offering gymnastics, multi-sports, holiday camps, and fitness programs for ages 2-18. The platform operates across multiple locations with coaches, parents, students, franchise owners, and support staff.`;
 
 export class AIPromptService {
 
-    // ─── AI Coach Module ───────────────────────────────────────
+  // ─── AI Coach Module ───────────────────────────────────────
 
-    static coachRecommendations(data: {
-        studentId: string;
-        performanceData?: any;
-        skillLevel?: string;
-        history?: any[];
-        age?: number;
-        programs?: string[];
-    }): PromptPair {
-        return {
-            system: `${DOMAIN_CONTEXT}
+  static coachRecommendations(data: {
+    studentId: string;
+    performanceData?: any;
+    skillLevel?: string;
+    history?: any[];
+    age?: number;
+    programs?: string[];
+  }): PromptPair {
+    return {
+      system: `${DOMAIN_CONTEXT}
 
 You are an expert youth fitness coach AI. Analyze student performance data and provide personalized training recommendations.
 
@@ -43,7 +43,7 @@ RESPOND ONLY with valid JSON matching this schema:
 
 Provide 3-6 recommendations. Consider the student's age, current level, and past performance. Make suggestions age-appropriate and safe.`,
 
-            user: `Student ID: ${data.studentId}
+      user: `Student ID: ${data.studentId}
 Age: ${data.age || 'Unknown'}
 Current Skill Level: ${data.skillLevel || 'Unknown'}
 Programs Enrolled: ${JSON.stringify(data.programs || [])}
@@ -51,17 +51,17 @@ Performance Data: ${JSON.stringify(data.performanceData || {})}
 Previous Session History: ${JSON.stringify((data.history || []).slice(-5))}
 
 Generate personalized coaching recommendations for this student.`,
-        };
-    }
+    };
+  }
 
-    static coachPerformanceAnalysis(data: {
-        studentId: string;
-        metrics: any;
-        attendanceHistory?: any[];
-        previousAnalyses?: any[];
-    }): PromptPair {
-        return {
-            system: `${DOMAIN_CONTEXT}
+  static coachPerformanceAnalysis(data: {
+    studentId: string;
+    metrics: any;
+    attendanceHistory?: any[];
+    previousAnalyses?: any[];
+  }): PromptPair {
+    return {
+      system: `${DOMAIN_CONTEXT}
 
 You are a performance analysis AI for youth athletes. Analyze the provided metrics and generate a comprehensive performance report.
 
@@ -81,25 +81,25 @@ RESPOND ONLY with valid JSON matching this schema:
   "nextMilestone": "string (what the student should aim for next)"
 }`,
 
-            user: `Student ID: ${data.studentId}
+      user: `Student ID: ${data.studentId}
 Performance Metrics: ${JSON.stringify(data.metrics)}
 Attendance History (last 30 days): ${JSON.stringify((data.attendanceHistory || []).slice(-30))}
 Previous Analyses: ${JSON.stringify((data.previousAnalyses || []).slice(-3))}
 
 Analyze this student's performance and provide a comprehensive assessment.`,
-        };
-    }
+    };
+  }
 
-    static coachingPlan(data: {
-        studentId: string;
-        previousAnalyses?: any[];
-        goals?: string[];
-        age?: number;
-        currentLevel?: string;
-        programType?: string;
-    }): PromptPair {
-        return {
-            system: `${DOMAIN_CONTEXT}
+  static coachingPlan(data: {
+    studentId: string;
+    previousAnalyses?: any[];
+    goals?: string[];
+    age?: number;
+    currentLevel?: string;
+    programType?: string;
+  }): PromptPair {
+    return {
+      system: `${DOMAIN_CONTEXT}
 
 You are a youth fitness program designer. Create a detailed, progressive multi-week training plan based on the student's profile and goals.
 
@@ -124,7 +124,7 @@ RESPOND ONLY with valid JSON matching this schema:
 
 Generate a plan of 8-12 weeks. Make all exercises age-appropriate and progressive.`,
 
-            user: `Student ID: ${data.studentId}
+      user: `Student ID: ${data.studentId}
 Age: ${data.age || 'Unknown'}
 Current Level: ${data.currentLevel || 'beginner'}
 Program Type: ${data.programType || 'general fitness'}
@@ -132,18 +132,18 @@ Goals: ${JSON.stringify(data.goals || ['Improve overall fitness'])}
 Previous Performance Analyses: ${JSON.stringify((data.previousAnalyses || []).slice(-3))}
 
 Create a personalized multi-week coaching plan for this student.`,
-        };
-    }
+    };
+  }
 
-    // ─── AI Chatbot Module ─────────────────────────────────────
+  // ─── AI Chatbot Module ─────────────────────────────────────
 
-    static chatbotConversation(data: {
-        message: string;
-        conversationHistory?: any[];
-        userContext?: any;
-    }): PromptPair {
-        return {
-            system: `${DOMAIN_CONTEXT}
+  static chatbotConversation(data: {
+    message: string;
+    conversationHistory?: any[];
+    userContext?: any;
+  }): PromptPair {
+    return {
+      system: `${DOMAIN_CONTEXT}
 
 You are ProActiv Fitness's friendly AI chatbot assistant on the website. Your job is to warmly help parents and visitors with information and help them book trial classes or assessments.
 
@@ -203,22 +203,22 @@ IMPORTANT RULES:
 - Never make up information. If unsure, suggest contacting staff.
 - Do NOT return anything except valid JSON.`,
 
-            user: data.message,
-        };
-    }
+      user: data.message,
+    };
+  }
 
-    // ─── AI Coach Assistant Module ─────────────────────────────
+  // ─── AI Coach Assistant Module ─────────────────────────────
 
-    static formAnalysis(data: {
-        exerciseType: string;
-        studentId: string;
-        description?: string;
-        videoUrl?: string;
-        age?: number;
-        level?: string;
-    }): PromptPair {
-        return {
-            system: `${DOMAIN_CONTEXT}
+  static formAnalysis(data: {
+    exerciseType: string;
+    studentId: string;
+    description?: string;
+    videoUrl?: string;
+    age?: number;
+    level?: string;
+  }): PromptPair {
+    return {
+      system: `${DOMAIN_CONTEXT}
 
 You are an expert exercise form analysis AI for youth athletes. Analyze the described exercise form and provide detailed feedback.
 
@@ -235,7 +235,7 @@ RESPOND ONLY with valid JSON:
 
 Consider the student's age and skill level. Prioritize safety for young athletes. Be encouraging but honest.`,
 
-            user: `Student ID: ${data.studentId}
+      user: `Student ID: ${data.studentId}
 Exercise Type: ${data.exerciseType}
 Student Age: ${data.age || 'Unknown'}
 Skill Level: ${data.level || 'beginner'}
@@ -243,16 +243,16 @@ Exercise Description/Notes: ${data.description || 'Standard form execution'}
 Video Reference: ${data.videoUrl || 'Not provided'}
 
 Analyze the form for this exercise and provide detailed feedback.`,
-        };
-    }
+    };
+  }
 
-    static formCorrections(data: {
-        studentId: string;
-        analysisData: any;
-        exerciseType?: string;
-    }): PromptPair {
-        return {
-            system: `${DOMAIN_CONTEXT}
+  static formCorrections(data: {
+    studentId: string;
+    analysisData: any;
+    exerciseType?: string;
+  }): PromptPair {
+    return {
+      system: `${DOMAIN_CONTEXT}
 
 You are a corrective exercise specialist for youth athletes. Based on previous form analysis, provide specific corrections and drills.
 
@@ -271,21 +271,21 @@ RESPOND ONLY with valid JSON:
   "progressionPlan": "string (how to progressively improve form)"
 }`,
 
-            user: `Student ID: ${data.studentId}
+      user: `Student ID: ${data.studentId}
 Exercise Type: ${data.exerciseType || 'General'}
 Previous Form Analysis: ${JSON.stringify(data.analysisData)}
 
 Provide specific corrections and drills to improve this student's form.`,
-        };
-    }
+    };
+  }
 
-    static coachingSession(data: {
-        message: string;
-        sessionHistory?: any[];
-        studentProfile?: any;
-    }): PromptPair {
-        return {
-            system: `${DOMAIN_CONTEXT}
+  static coachingSession(data: {
+    message: string;
+    sessionHistory?: any[];
+    studentProfile?: any;
+  }): PromptPair {
+    return {
+      system: `${DOMAIN_CONTEXT}
 
 You are an interactive AI coaching assistant having a real-time session with a student or coach. Provide expert fitness guidance, exercise tips, form corrections, and motivational support.
 
@@ -299,23 +299,52 @@ RESPOND ONLY with valid JSON:
 
 Be encouraging, knowledgeable, and safety-conscious for youth athletes.`,
 
-            user: data.message,
-        };
-    }
+      user: data.message,
+    };
+  }
 
-    // ─── Smart Nutrition Module ────────────────────────────────
+  static progressPrediction(data: {
+    studentId: string;
+    analysisHistory: any[];
+  }): PromptPair {
+    return {
+      system: `${DOMAIN_CONTEXT}
 
-    static mealPlan(data: {
-        childId: string;
-        age?: number;
-        weight?: number;
-        activityLevel?: string;
-        dietaryRestrictions?: string[];
-        goals?: string[];
-        duration: number;
-    }): PromptPair {
-        return {
-            system: `${DOMAIN_CONTEXT}
+You are a progress prediction AI for youth athletes. Analyze historical form analysis data and predict future progress and skill development.
+
+RESPOND ONLY with valid JSON:
+{
+  "currentLevel": "string (current skill assessment)",
+  "projectedLevel": "string (projected skill level in the future)",
+  "timelineWeeks": "number (estimated weeks to reach projected level)",
+  "keyMilestones": ["string (specific milestones to achieve)"],
+  "recommendedFocus": ["string (areas to focus on for fastest progress)"],
+  "riskFactors": ["string (potential obstacles or risks)"],
+  "motivationalInsight": "string (encouraging message about their progress trajectory)"
+}
+
+Base predictions on the analysis history. Be realistic but encouraging for young athletes.`,
+
+      user: `Student ID: ${data.studentId}
+Analysis History (last 10 sessions): ${JSON.stringify(data.analysisHistory)}
+
+Predict this student's progress trajectory based on their form analysis history.`,
+    };
+  }
+
+  // ─── Smart Nutrition Module ────────────────────────────────
+
+  static mealPlan(data: {
+    childId: string;
+    age?: number;
+    weight?: number;
+    activityLevel?: string;
+    dietaryRestrictions?: string[];
+    goals?: string[];
+    duration: number;
+  }): PromptPair {
+    return {
+      system: `${DOMAIN_CONTEXT}
 
 You are a youth sports nutrition expert. Generate age-appropriate, balanced meal plans for young athletes aged 2-18.
 
@@ -337,7 +366,7 @@ RESPOND ONLY with valid JSON:
 
 Ensure meals are kid-friendly, nutritionally balanced, and support athletic performance. Respect all dietary restrictions.`,
 
-            user: `Child ID: ${data.childId}
+      user: `Child ID: ${data.childId}
 Age: ${data.age || 'Unknown'}
 Weight: ${data.weight || 'Unknown'} kg
 Activity Level: ${data.activityLevel || 'moderate'}
@@ -346,17 +375,17 @@ Goals: ${JSON.stringify(data.goals || ['general health'])}
 Plan Duration: ${data.duration} days
 
 Generate a ${data.duration}-day meal plan for this young athlete.`,
-        };
-    }
+    };
+  }
 
-    static nutritionRecommendations(data: {
-        childId: string;
-        trackingHistory?: any[];
-        currentPlan?: any;
-        age?: number;
-    }): PromptPair {
-        return {
-            system: `${DOMAIN_CONTEXT}
+  static nutritionRecommendations(data: {
+    childId: string;
+    trackingHistory?: any[];
+    currentPlan?: any;
+    age?: number;
+  }): PromptPair {
+    return {
+      system: `${DOMAIN_CONTEXT}
 
 You are a youth nutrition advisor. Analyze the child's nutrition tracking data and provide personalized recommendations.
 
@@ -370,18 +399,18 @@ RESPOND ONLY with valid JSON:
   "improvements": "string (overall dietary improvement summary)"
 }`,
 
-            user: `Child ID: ${data.childId}
+      user: `Child ID: ${data.childId}
 Age: ${data.age || 'Unknown'}
 Nutrition Tracking History: ${JSON.stringify((data.trackingHistory || []).slice(-14))}
 Current Meal Plan: ${JSON.stringify(data.currentPlan || {})}
 
 Analyze this child's nutrition and provide personalized recommendations.`,
-        };
-    }
+    };
+  }
 
-    static groceryList(data: { mealPlan: any }): PromptPair {
-        return {
-            system: `${DOMAIN_CONTEXT}
+  static groceryList(data: { mealPlan: any }): PromptPair {
+    return {
+      system: `${DOMAIN_CONTEXT}
 
 Generate a consolidated grocery shopping list from the provided meal plan.
 
@@ -396,19 +425,19 @@ RESPOND ONLY with valid JSON:
 
 Consolidate duplicate ingredients across meals. Provide realistic quantities.`,
 
-            user: `Meal Plan: ${JSON.stringify(data.mealPlan)}
+      user: `Meal Plan: ${JSON.stringify(data.mealPlan)}
 
 Generate a complete grocery list for this meal plan.`,
-        };
-    }
+    };
+  }
 
-    static recipes(data: {
-        dietary?: string;
-        preferences?: any;
-        ageGroup?: string;
-    }): PromptPair {
-        return {
-            system: `${DOMAIN_CONTEXT}
+  static recipes(data: {
+    dietary?: string;
+    preferences?: any;
+    ageGroup?: string;
+  }): PromptPair {
+    return {
+      system: `${DOMAIN_CONTEXT}
 
 Generate kid-friendly, athlete-appropriate recipes.
 
@@ -432,24 +461,24 @@ RESPOND ONLY with valid JSON:
 
 Generate 5-8 recipes. Make them easy to prepare, delicious for kids, and nutritionally supportive for young athletes.`,
 
-            user: `Dietary Preference: ${data.dietary || 'none'}
+      user: `Dietary Preference: ${data.dietary || 'none'}
 Age Group: ${data.ageGroup || 'all ages'}
 Additional Preferences: ${JSON.stringify(data.preferences || {})}
 
 Generate kid-friendly athlete recipes.`,
-        };
-    }
+    };
+  }
 
-    // ─── Advanced Analytics Module ─────────────────────────────
+  // ─── Advanced Analytics Module ─────────────────────────────
 
-    static predictiveAnalytics(data: {
-        entityType: string;
-        entityId: string;
-        historicalData: any;
-        currentMetrics: any;
-    }): PromptPair {
-        return {
-            system: `${DOMAIN_CONTEXT}
+  static predictiveAnalytics(data: {
+    entityType: string;
+    entityId: string;
+    historicalData: any;
+    currentMetrics: any;
+  }): PromptPair {
+    return {
+      system: `${DOMAIN_CONTEXT}
 
 You are a business intelligence AI for a fitness platform. Analyze historical data and generate predictive analytics.
 
@@ -467,22 +496,22 @@ RESPOND ONLY with valid JSON:
 
 Base predictions on the provided data. If data is limited, indicate lower confidence and explain assumptions.`,
 
-            user: `Entity Type: ${data.entityType}
+      user: `Entity Type: ${data.entityType}
 Entity ID: ${data.entityId}
 Historical Data: ${JSON.stringify(data.historicalData)}
 Current Metrics: ${JSON.stringify(data.currentMetrics)}
 
 Generate predictive analytics for this entity.`,
-        };
-    }
+    };
+  }
 
-    static trendAnalysis(data: {
-        metric: string;
-        dataPoints: any[];
-        period?: string;
-    }): PromptPair {
-        return {
-            system: `${DOMAIN_CONTEXT}
+  static trendAnalysis(data: {
+    metric: string;
+    dataPoints: any[];
+    period?: string;
+  }): PromptPair {
+    return {
+      system: `${DOMAIN_CONTEXT}
 
 You are a trend analysis AI. Analyze time-series data and identify patterns, trends, and forecasts.
 
@@ -500,17 +529,17 @@ RESPOND ONLY with valid JSON:
   ]
 }`,
 
-            user: `Metric: ${data.metric}
+      user: `Metric: ${data.metric}
 Analysis Period: ${data.period || '30 days'}
 Data Points: ${JSON.stringify(data.dataPoints)}
 
 Analyze trends in this data and provide forecasts.`,
-        };
-    }
+    };
+  }
 
-    static anomalyDetection(data: { metricsData: any; thresholds?: any }): PromptPair {
-        return {
-            system: `${DOMAIN_CONTEXT}
+  static anomalyDetection(data: { metricsData: any; thresholds?: any }): PromptPair {
+    return {
+      system: `${DOMAIN_CONTEXT}
 
 You are an anomaly detection AI for a fitness business. Identify unusual patterns or metrics that require attention.
 
@@ -531,16 +560,16 @@ RESPOND ONLY with valid JSON:
   "summary": "string (brief summary of findings)"
 }`,
 
-            user: `Metrics Data: ${JSON.stringify(data.metricsData)}
+      user: `Metrics Data: ${JSON.stringify(data.metricsData)}
 Alert Thresholds: ${JSON.stringify(data.thresholds || {})}
 
 Detect any anomalies in this data.`,
-        };
-    }
+    };
+  }
 
-    static realTimeInsights(data: { currentMetrics: any; comparisonData?: any }): PromptPair {
-        return {
-            system: `${DOMAIN_CONTEXT}
+  static realTimeInsights(data: { currentMetrics: any; comparisonData?: any }): PromptPair {
+    return {
+      system: `${DOMAIN_CONTEXT}
 
 You are a real-time business insights AI. Analyze current operational metrics and generate actionable insights.
 
@@ -553,23 +582,23 @@ RESPOND ONLY with valid JSON:
   "immediateActions": ["string (things to do right now)"]
 }`,
 
-            user: `Current Metrics: ${JSON.stringify(data.currentMetrics)}
+      user: `Current Metrics: ${JSON.stringify(data.currentMetrics)}
 Comparison Data (previous period): ${JSON.stringify(data.comparisonData || {})}
 
 Generate real-time actionable insights.`,
-        };
-    }
+    };
+  }
 
-    // ─── Capacity Optimizer Module ─────────────────────────────
+  // ─── Capacity Optimizer Module ─────────────────────────────
 
-    static capacityOptimization(data: {
-        classData: any;
-        bookingData: any;
-        locationData?: any;
-        historicalUtilization?: any[];
-    }): PromptPair {
-        return {
-            system: `${DOMAIN_CONTEXT}
+  static capacityOptimization(data: {
+    classData: any;
+    bookingData: any;
+    locationData?: any;
+    historicalUtilization?: any[];
+  }): PromptPair {
+    return {
+      system: `${DOMAIN_CONTEXT}
 
 You are a capacity optimization AI for fitness classes. Analyze class capacity, bookings, and utilization to recommend optimal class management.
 
@@ -594,24 +623,24 @@ RESPOND ONLY with valid JSON:
   "overallAssessment": "string (summary of capacity health)"
 }`,
 
-            user: `Class Data: ${JSON.stringify(data.classData)}
+      user: `Class Data: ${JSON.stringify(data.classData)}
 Current Bookings: ${JSON.stringify(data.bookingData)}
 Location Info: ${JSON.stringify(data.locationData || {})}
 Historical Utilization (past 30 days): ${JSON.stringify((data.historicalUtilization || []).slice(-30))}
 
 Analyze capacity and recommend optimizations.`,
-        };
-    }
+    };
+  }
 
-    // ─── Forecast Simulator Module ─────────────────────────────
+  // ─── Forecast Simulator Module ─────────────────────────────
 
-    static forecastSimulation(data: {
-        scenarios: any[];
-        historicalData: any;
-        currentBaseline: any;
-    }): PromptPair {
-        return {
-            system: `${DOMAIN_CONTEXT}
+  static forecastSimulation(data: {
+    scenarios: any[];
+    historicalData: any;
+    currentBaseline: any;
+  }): PromptPair {
+    return {
+      system: `${DOMAIN_CONTEXT}
 
 You are a business forecasting AI. Analyze scenarios against historical data and provide detailed financial projections.
 
@@ -635,24 +664,24 @@ RESPOND ONLY with valid JSON:
   "strategicRecommendations": ["string (actionable recommendations)"]
 }`,
 
-            user: `Scenarios to Evaluate: ${JSON.stringify(data.scenarios)}
+      user: `Scenarios to Evaluate: ${JSON.stringify(data.scenarios)}
 Historical Performance Data: ${JSON.stringify(data.historicalData)}
 Current Baseline: ${JSON.stringify(data.currentBaseline)}
 
 Evaluate these scenarios and provide detailed projections.`,
-        };
-    }
+    };
+  }
 
-    // ─── Dynamic Pricing Module ────────────────────────────────
+  // ─── Dynamic Pricing Module ────────────────────────────────
 
-    static dynamicPricing(data: {
-        programData: any;
-        demandSignals: any;
-        competitorData?: any;
-        seasonalFactors?: any;
-    }): PromptPair {
-        return {
-            system: `${DOMAIN_CONTEXT}
+  static dynamicPricing(data: {
+    programData: any;
+    demandSignals: any;
+    competitorData?: any;
+    seasonalFactors?: any;
+  }): PromptPair {
+    return {
+      system: `${DOMAIN_CONTEXT}
 
 You are a pricing intelligence AI for a fitness business. Calculate optimal dynamic pricing based on demand, competition, and seasonal factors.
 
@@ -671,24 +700,24 @@ RESPOND ONLY with valid JSON:
 
 Price fairly — avoid excessive markups for youth programs. Consider parent affordability.`,
 
-            user: `Program Data: ${JSON.stringify(data.programData)}
+      user: `Program Data: ${JSON.stringify(data.programData)}
 Demand Signals: ${JSON.stringify(data.demandSignals)}
 Competitor Pricing: ${JSON.stringify(data.competitorData || {})}
 Seasonal Factors: ${JSON.stringify(data.seasonalFactors || {})}
 
 Calculate optimal pricing for this program.`,
-        };
-    }
+    };
+  }
 
-    // ─── Automation Module ─────────────────────────────────────
+  // ─── Automation Module ─────────────────────────────────────
 
-    static workflowAiAction(data: {
-        actionDescription: string;
-        executionContext: any;
-        inputData?: any;
-    }): PromptPair {
-        return {
-            system: `${DOMAIN_CONTEXT}
+  static workflowAiAction(data: {
+    actionDescription: string;
+    executionContext: any;
+    inputData?: any;
+  }): PromptPair {
+    return {
+      system: `${DOMAIN_CONTEXT}
 
 You are an AI automation agent executing a workflow action. Perform the described task and return structured results.
 
@@ -702,17 +731,17 @@ RESPOND ONLY with valid JSON:
 
 Execute the task as described. Be precise and actionable.`,
 
-            user: `Action to Execute: ${data.actionDescription}
+      user: `Action to Execute: ${data.actionDescription}
 Execution Context: ${JSON.stringify(data.executionContext)}
 Input Data: ${JSON.stringify(data.inputData || {})}
 
 Execute this automation action and return results.`,
-        };
-    }
+    };
+  }
 
-    static generateWorkflow(data: { description: string; availableTriggers?: string[]; availableActions?: string[] }): PromptPair {
-        return {
-            system: `${DOMAIN_CONTEXT}
+  static generateWorkflow(data: { description: string; availableTriggers?: string[]; availableActions?: string[] }): PromptPair {
+    return {
+      system: `${DOMAIN_CONTEXT}
 
 You are a workflow builder AI. Convert natural language descriptions into structured workflow definitions.
 
@@ -738,21 +767,21 @@ RESPOND ONLY with valid JSON:
   "isActive": true
 }`,
 
-            user: `Workflow Description: ${data.description}
+      user: `Workflow Description: ${data.description}
 
 Convert this description into a structured workflow definition.`,
-        };
-    }
+    };
+  }
 
-    // ─── Advanced Search Module ────────────────────────────────
+  // ─── Advanced Search Module ────────────────────────────────
 
-    static searchQueryInterpretation(data: {
-        query: string;
-        availableCategories?: string[];
-        availableTags?: string[];
-    }): PromptPair {
-        return {
-            system: `${DOMAIN_CONTEXT}
+  static searchQueryInterpretation(data: {
+    query: string;
+    availableCategories?: string[];
+    availableTags?: string[];
+  }): PromptPair {
+    return {
+      system: `${DOMAIN_CONTEXT}
 
 You are a search query interpreter. Convert natural language search queries into structured search parameters for a fitness program database.
 
@@ -773,19 +802,19 @@ RESPOND ONLY with valid JSON:
   "suggestions": ["string (search suggestions for the user)"]
 }`,
 
-            user: `Search Query: "${data.query}"
+      user: `Search Query: "${data.query}"
 
 Interpret this search query and extract structured search parameters.`,
-        };
-    }
+    };
+  }
 
-    static searchRecommendations(data: {
-        userHistory: any[];
-        availablePrograms: any[];
-        userProfile?: any;
-    }): PromptPair {
-        return {
-            system: `${DOMAIN_CONTEXT}
+  static searchRecommendations(data: {
+    userHistory: any[];
+    availablePrograms: any[];
+    userProfile?: any;
+  }): PromptPair {
+    return {
+      system: `${DOMAIN_CONTEXT}
 
 You are a program recommendation AI. Based on user history and available programs, recommend the best matching programs.
 
@@ -804,11 +833,11 @@ RESPOND ONLY with valid JSON:
 
 Recommend 3-5 programs. Prioritize safety and age-appropriateness.`,
 
-            user: `User Search/Booking History: ${JSON.stringify((data.userHistory || []).slice(-10))}
+      user: `User Search/Booking History: ${JSON.stringify((data.userHistory || []).slice(-10))}
 User Profile: ${JSON.stringify(data.userProfile || {})}
 Available Programs: ${JSON.stringify((data.availablePrograms || []).slice(0, 20))}
 
 Recommend the best programs for this user.`,
-        };
-    }
+    };
+  }
 }

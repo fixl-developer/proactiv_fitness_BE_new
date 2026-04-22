@@ -17,6 +17,7 @@ export enum WaitlistPriority {
 export interface IWaitlistEntry extends Document {
     studentId: Types.ObjectId;
     classId: Types.ObjectId;
+    locationId?: Types.ObjectId;
     position: number;
     status: WaitlistStatus;
     priority: WaitlistPriority;
@@ -24,6 +25,8 @@ export interface IWaitlistEntry extends Document {
     offerDate?: Date;
     offerExpiryDate?: Date;
     enrolledDate?: Date;
+    rejectionDate?: Date;
+    rejectionReason?: string;
     notes?: string;
     businessUnitId: string;
     createdBy: string;
@@ -46,4 +49,8 @@ export interface IWaitlistFilters {
     status?: WaitlistStatus;
     classId?: string;
     priority?: WaitlistPriority;
+    limit?: number;
+    offset?: number;
+    sortBy?: 'createdAt' | 'priority' | 'position';
+    sortOrder?: 'asc' | 'desc';
 }

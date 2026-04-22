@@ -3,6 +3,6 @@ import globalIntelligenceController from './controller';
 
 const router = Router();
 
-router.use('/global-intelligence', globalIntelligenceController);
+router.use('/', globalIntelligenceController);
 
 export default router;

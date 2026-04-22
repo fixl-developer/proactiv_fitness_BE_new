@@ -64,6 +64,25 @@ export class UserAchievementsService {
     async getAchievementsByCategory(userId: string, category: string): Promise<IUserAchievement[]> {
         return await UserAchievementModel.find({ userId, category }).lean();
     }
+
+    async getStats(userId: string): Promise<{
+        totalAchievements: number;
+        unlockedAchievements: number;
+        totalPoints: number;
+        badges: number;
+    }> {
+        const allAchievements = await UserAchievementModel.find({ userId }).lean();
+        const unlockedAchievements = await UserAchievementModel.find({ userId, isCompleted: true }).lean();
+        const totalPoints = await this.getTotalPoints(userId);
+        const badges = unlockedAchievements.length;
+
+        return {
+            totalAchievements: allAchievements.length,
+            unlockedAchievements: unlockedAchievements.length,
+            totalPoints,
+            badges
+        };
+    }
 }
 
 export const userAchievementsService = new UserAchievementsService();

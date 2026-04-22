@@ -55,6 +55,15 @@ export class UserClassesService {
         return await UserClassModel.find({ userId, status: 'completed' }).lean();
     }
 
+    async getUpcomingClasses(userId: string): Promise<IUserClass[]> {
+        const now = new Date();
+        return await UserClassModel.find({
+            userId,
+            status: 'active',
+            startDate: { $gt: now }
+        }).sort({ startDate: 1 }).lean();
+    }
+
     async addMaterial(userId: string, classId: string, material: any): Promise<void> {
         await UserClassModel.findOneAndUpdate(
             { userId, classId },

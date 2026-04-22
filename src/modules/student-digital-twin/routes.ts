@@ -3,6 +3,6 @@ import studentDigitalTwinController from './controller';
 
 const router = Router();
 
-router.use('/student-digital-twin', studentDigitalTwinController);
+router.use('/', studentDigitalTwinController);
 
 export default router;

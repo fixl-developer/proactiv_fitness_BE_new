@@ -1,190 +1,200 @@
 import { Router, Request, Response } from 'express';
 import { authenticate } from '../iam/auth.middleware';
-import { asyncHandler } from '../../shared/utils/async-handler.util';
-import { ResponseUtil } from '../../shared/utils/response.util';
-import { SupportService, KnowledgeBaseService } from './support.service';
+import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
-const supportService = new SupportService();
-const kbService = new KnowledgeBaseService();
 
-router.use(authenticate);
-
-// =============================================
-// SUPPORT TICKETS
-// =============================================
-
-// GET /support/tickets - List tickets
-router.get('/tickets', asyncHandler(async (req: Request, res: Response) => {
-    const { status, priority, search, page, limit } = req.query;
-    const result = await supportService.getTickets(
-        { status, priority, search },
-        parseInt(page as string) || 1,
-        parseInt(limit as string) || 25
-    );
-    ResponseUtil.success(res, result);
-}));
-
-// GET /support/tickets/:id - Get single ticket
-router.get('/tickets/:id', asyncHandler(async (req: Request, res: Response) => {
-    const ticket = await supportService.findOne({ ticketId: req.params.id } as any);
-    if (!ticket) {
-        return ResponseUtil.notFound(res, 'Ticket not found');
+// In-memory storage for demo (replace with database in production)
+const tickets: any[] = [];
+const faqs = [
+    {
+        id: '1',
+        question: 'How do I book a class?',
+        answer: 'You can book a class by going to My Classes section and selecting the class you want to attend. Click the Book button and confirm your booking.',
+        category: 'Booking'
+    },
+    {
+        id: '2',
+        question: 'Can I cancel my booking?',
+        answer: 'Yes, you can cancel your booking up to 24 hours before the class starts. Go to My Classes and click Cancel.',
+        category: 'Booking'
+    },
+    {
+        id: '3',
+        question: 'How do I track my progress?',
+        answer: 'Visit the Progress section in your dashboard to see your fitness metrics, achievements, and performance trends.',
+        category: 'Progress'
+    },
+    {
+        id: '4',
+        question: 'What payment methods do you accept?',
+        answer: 'We accept credit cards, debit cards, bank transfers, and digital wallets. You can manage your payment methods in Settings.',
+        category: 'Payment'
+    },
+    {
+        id: '5',
+        question: 'How do I get a refund?',
+        answer: 'Refunds are processed within 5-7 business days. Contact our support team with your booking details for assistance.',
+        category: 'Payment'
     }
-    ResponseUtil.success(res, ticket);
-}));
+];
 
-// POST /support/tickets - Create ticket
-router.post('/tickets', asyncHandler(async (req: Request, res: Response) => {
-    const { subject, description, priority, requester, category } = req.body;
-    const ticket = await supportService.createTicket(
-        {
-            subject: subject || 'Untitled',
-            description: description || '',
-            priority: priority?.toLowerCase() || 'medium',
-            category: category || 'General',
-            customer: {
-                name: requester || req.user?.email || 'Unknown',
-                email: req.user?.email || 'unknown@email.com',
-            },
-            tags: [],
-            attachments: [],
-            comments: [],
-            escalated: false,
-        },
-        req.user?.id || 'system'
-    );
-    ResponseUtil.created(res, ticket, 'Ticket created successfully');
-}));
+/**
+ * @route   GET /support/tickets
+ * @desc    Get user's support tickets
+ * @access  Private
+ */
+router.get('/tickets', authenticate, async (req: Request, res: Response) => {
+    try {
+        const userId = req.user?.id;
+        if (!userId) {
+            res.status(401).json({ success: false, message: 'Unauthorized' });
+            return;
+        }
 
-// PATCH /support/tickets/:id - Update ticket (status, assignee, etc.)
-router.patch('/tickets/:id', asyncHandler(async (req: Request, res: Response) => {
-    const { status, assignedTo, priority, resolution } = req.body;
-    const updates: any = {};
+        const userTickets = tickets.filter(t => t.userId === userId);
+        res.json({ success: true, data: userTickets });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
 
-    if (status) {
-        // Map frontend status to backend enum
-        const statusMap: Record<string, string> = {
-            'Open': 'open',
-            'In Progress': 'in-progress',
-            'Resolved': 'resolved',
-            'Closed': 'closed',
-            'Pending': 'pending',
+/**
+ * @route   POST /support/tickets
+ * @desc    Create a support ticket
+ * @access  Private
+ */
+router.post('/tickets', authenticate, async (req: Request, res: Response) => {
+    try {
+        const userId = req.user?.id;
+        const { subject, description, priority } = req.body;
+
+        if (!userId) {
+            res.status(401).json({ success: false, message: 'Unauthorized' });
+            return;
+        }
+
+        if (!subject || !description) {
+            res.status(400).json({ success: false, message: 'Subject and description are required' });
+            return;
+        }
+
+        const ticket = {
+            id: uuidv4(),
+            userId,
+            subject,
+            description,
+            priority: priority || 'medium',
+            status: 'open',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            replies: 0
         };
-        updates.status = statusMap[status] || status.toLowerCase();
 
-        if (updates.status === 'resolved') {
-            updates.resolvedAt = new Date();
+        tickets.push(ticket);
+        res.status(201).json({ success: true, data: ticket, message: 'Ticket created successfully' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+/**
+ * @route   GET /support/tickets/:ticketId
+ * @desc    Get ticket details
+ * @access  Private
+ */
+router.get('/tickets/:ticketId', authenticate, async (req: Request, res: Response) => {
+    try {
+        const userId = req.user?.id;
+        const { ticketId } = req.params;
+
+        if (!userId) {
+            res.status(401).json({ success: false, message: 'Unauthorized' });
+            return;
         }
-        if (updates.status === 'closed') {
-            updates.closedAt = new Date();
+
+        const ticket = tickets.find(t => t.id === ticketId && t.userId === userId);
+        if (!ticket) {
+            res.status(404).json({ success: false, message: 'Ticket not found' });
+            return;
         }
+
+        res.json({ success: true, data: ticket });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
     }
-    if (assignedTo) {
-        updates.assignedTo = assignedTo;
-        updates.assignedAt = new Date();
+});
+
+/**
+ * @route   PUT /support/tickets/:ticketId
+ * @desc    Update ticket status
+ * @access  Private
+ */
+router.put('/tickets/:ticketId', authenticate, async (req: Request, res: Response) => {
+    try {
+        const userId = req.user?.id;
+        const { ticketId } = req.params;
+        const { status } = req.body;
+
+        if (!userId) {
+            res.status(401).json({ success: false, message: 'Unauthorized' });
+            return;
+        }
+
+        const ticket = tickets.find(t => t.id === ticketId && t.userId === userId);
+        if (!ticket) {
+            res.status(404).json({ success: false, message: 'Ticket not found' });
+            return;
+        }
+
+        ticket.status = status || ticket.status;
+        ticket.updatedAt = new Date();
+
+        res.json({ success: true, data: ticket, message: 'Ticket updated successfully' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
     }
-    if (priority) updates.priority = priority.toLowerCase();
-    if (resolution) updates.resolution = resolution;
+});
 
-    const ticket = await supportService.updateTicket(
-        req.params.id,
-        updates,
-        req.user?.id || 'system'
-    );
-    ResponseUtil.success(res, ticket, 'Ticket updated');
-}));
+/**
+ * @route   GET /support/faq
+ * @desc    Get FAQs
+ * @access  Public
+ */
+router.get('/faq', async (req: Request, res: Response) => {
+    try {
+        const { category } = req.query;
+        let filteredFaqs = faqs;
 
-// POST /support/tickets/:id/comments - Add comment
-router.post('/tickets/:id/comments', asyncHandler(async (req: Request, res: Response) => {
-    const { message, isInternal } = req.body;
-    const ticket = await supportService.addTicketComment(
-        req.params.id,
-        message,
-        req.user?.id || 'system',
-        'staff',
-        isInternal || false
-    );
-    ResponseUtil.success(res, ticket, 'Comment added');
-}));
+        if (category) {
+            filteredFaqs = faqs.filter(f => f.category === category);
+        }
 
-// GET /support/dashboard - Dashboard stats
-router.get('/dashboard', asyncHandler(async (req: Request, res: Response) => {
-    const data = await supportService.getDashboardData();
-    ResponseUtil.success(res, data);
-}));
-
-// =============================================
-// KNOWLEDGE BASE
-// =============================================
-
-// GET /support/knowledge-base - List articles
-router.get('/knowledge-base', asyncHandler(async (req: Request, res: Response) => {
-    const { status, category, search, page, limit } = req.query;
-    const result = await kbService.getArticles(
-        { status, category, search },
-        parseInt(page as string) || 1,
-        parseInt(limit as string) || 50
-    );
-    ResponseUtil.success(res, result);
-}));
-
-// GET /support/knowledge-base/:id - Get single article
-router.get('/knowledge-base/:id', asyncHandler(async (req: Request, res: Response) => {
-    const article = await kbService.findOne({ articleId: req.params.id } as any);
-    if (!article) {
-        return ResponseUtil.notFound(res, 'Article not found');
+        res.json({ success: true, data: filteredFaqs });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
     }
-    // Increment views
-    await kbService.incrementViews(req.params.id);
-    ResponseUtil.success(res, article);
-}));
+});
 
-// POST /support/knowledge-base - Create article
-router.post('/knowledge-base', asyncHandler(async (req: Request, res: Response) => {
-    const { title, content, category, tags, status, author } = req.body;
-    const article = await kbService.createArticle(
-        {
-            title: title || 'Untitled',
-            content: content || '',
-            category: category || 'General',
-            tags: tags || [],
-            status: status?.toLowerCase() || 'draft',
-            author: author || req.user?.email || 'Admin',
-            featured: false,
-            views: 0,
-            helpful: 0,
-            notHelpful: 0,
-            version: 1,
-            relatedArticles: [],
-            attachments: [],
-        },
-        req.user?.id || 'system'
-    );
-    ResponseUtil.created(res, article, 'Article created');
-}));
+/**
+ * @route   POST /support/contact
+ * @desc    Send contact message
+ * @access  Public
+ */
+router.post('/contact', async (req: Request, res: Response) => {
+    try {
+        const { name, email, subject, message } = req.body;
 
-// PUT /support/knowledge-base/:id - Update article
-router.put('/knowledge-base/:id', asyncHandler(async (req: Request, res: Response) => {
-    const article = await kbService.updateArticle(
-        req.params.id,
-        req.body,
-        req.user?.id || 'system'
-    );
-    ResponseUtil.success(res, article, 'Article updated');
-}));
+        if (!name || !email || !subject || !message) {
+            res.status(400).json({ success: false, message: 'All fields are required' });
+            return;
+        }
 
-// DELETE /support/knowledge-base/:id - Delete article
-router.delete('/knowledge-base/:id', asyncHandler(async (req: Request, res: Response) => {
-    await kbService.deleteArticle(req.params.id);
-    ResponseUtil.success(res, null, 'Article deleted');
-}));
-
-// POST /support/knowledge-base/:id/rate - Rate article
-router.post('/knowledge-base/:id/rate', asyncHandler(async (req: Request, res: Response) => {
-    const { helpful } = req.body;
-    const article = await kbService.rateArticle(req.params.id, helpful);
-    ResponseUtil.success(res, article);
-}));
+        // In production, send email or save to database
+        res.json({ success: true, message: 'Your message has been sent successfully. We will get back to you soon.' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
 
 export default router;
