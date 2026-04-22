@@ -16,6 +16,11 @@ import userScheduleRoutes from '../modules/user-schedule/user-schedule.routes';
 import userSettingsRoutes from '../modules/user-settings/user-settings.routes';
 import feedbackRoutes from '../modules/feedback/feedback.routes';
 import downloadsRoutes from '../modules/downloads/downloads.routes';
+import referralsRoutes from '../modules/referrals/referrals.routes';
+import certificatesRoutes from '../modules/certificates/certificates.routes';
+import healthMetricsRoutes from '../modules/health-metrics/health-metrics.routes';
+import scheduleRoutes from '../modules/schedule/schedule.routes';
+import notificationsRoutes from '../modules/notifications/notifications.routes';
 
 // === Already mounted modules ===
 import aiChatbotRoutes from '../modules/ai-chatbot/ai-chatbot.routes';
@@ -184,9 +189,13 @@ router.use('/user/classes', userClassesRoutes);
 router.use('/user/achievements', userAchievementsRoutes);
 router.use('/user/guardians', guardianRoutes);
 router.use('/user/settings', userSettingsRoutes);
-router.use('/schedule', userScheduleRoutes);
+router.use('/schedule', scheduleRoutes);
+router.use('/notifications', notificationsRoutes);
 router.use('/feedback', feedbackRoutes);
 router.use('/downloads', downloadsRoutes);
+router.use('/referrals', referralsRoutes);
+router.use('/certificates', certificatesRoutes);
+router.use('/health-metrics', healthMetricsRoutes);
 
 // =============================================
 // OPERATIONS (existing)
