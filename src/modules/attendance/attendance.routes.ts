@@ -1,11 +1,11 @@
 import { Router } from 'express'
 import { attendanceService } from './attendance.service'
-import { authMiddleware } from '../iam/auth.middleware'
+import { authenticate } from '../iam/auth.middleware'
 
 const router = Router()
 
 // Check-in endpoint
-router.post('/check-in', authMiddleware, async (req, res) => {
+router.post('/check-in', authenticate, async (req, res) => {
     try {
         const userId = req.user?.id
         if (!userId) {
@@ -18,12 +18,13 @@ router.post('/check-in', authMiddleware, async (req, res) => {
         )
         res.json({ success: true, data: result })
     } catch (error: any) {
+        console.error('Check-in error:', error)
         res.status(500).json({ success: false, error: error.message })
     }
 })
 
 // Check-out endpoint
-router.post('/check-out', authMiddleware, async (req, res) => {
+router.post('/check-out', authenticate, async (req, res) => {
     try {
         const userId = req.user?.id
         if (!userId) {
@@ -41,7 +42,7 @@ router.post('/check-out', authMiddleware, async (req, res) => {
 })
 
 // Get attendance history
-router.get('/history', authMiddleware, async (req, res) => {
+router.get('/history', authenticate, async (req, res) => {
     try {
         const userId = req.user?.id
         if (!userId) {
@@ -72,7 +73,7 @@ router.get('/history', authMiddleware, async (req, res) => {
 })
 
 // Get attendance statistics
-router.get('/stats', authMiddleware, async (req, res) => {
+router.get('/stats', authenticate, async (req, res) => {
     try {
         const userId = req.user?.id
         if (!userId) {
@@ -103,7 +104,7 @@ router.get('/stats', authMiddleware, async (req, res) => {
 })
 
 // Get calendar data
-router.get('/calendar/:month/:year', authMiddleware, async (req, res) => {
+router.get('/calendar/:month/:year', authenticate, async (req, res) => {
     try {
         const userId = req.user?.id
         if (!userId) {
@@ -133,7 +134,7 @@ router.get('/calendar/:month/:year', authMiddleware, async (req, res) => {
 })
 
 // Get attendance report
-router.get('/report/:month/:year', authMiddleware, async (req, res) => {
+router.get('/report/:month/:year', authenticate, async (req, res) => {
     try {
         const userId = req.user?.id
         if (!userId) {
