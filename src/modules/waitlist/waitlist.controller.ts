@@ -1,3 +1,20 @@
+import {
+    Controller,
+    Get,
+    Post,
+    Put,
+    Delete,
+    Body,
+    Param,
+    Query,
+    UseGuards,
+    Request
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
+import { RolesGuard } from '../../shared/guards/roles.guard';
+import { Roles } from '../../shared/decorators/roles.decorator';
+import { UserRole } from '../../shared/enums';
 import { WaitlistService } from './waitlist.service';
 import {
     ICreateWaitlistEntryRequest,
@@ -5,12 +22,19 @@ import {
     IWaitlistFilters
 } from './waitlist.interface';
 
+@ApiTags('Waitlist')
+@Controller('waitlist')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class WaitlistController {
     constructor(private readonly waitlistService: WaitlistService) { }
 
+    @Post()
+    @Roles(UserRole.LOCATION_MANAGER, UserRole.SUPER_ADMIN, UserRole.STAFF)
+    @ApiOperation({ summary: 'Add student to waitlist' })
+    @ApiResponse({ status: 201, description: 'Student added to waitlist successfully' })
     async createWaitlistEntry(
-        createRequest: ICreateWaitlistEntryRequest,
-        req: any
+        @Body() createRequest: ICreateWaitlistEntryRequest,
+        @Request() req: any
     ) {
         const entry = await this.waitlistService.createWaitlistEntry(createRequest, req.user.id);
         return {
@@ -19,10 +43,13 @@ export class WaitlistController {
             data: entry
         };
     }
-
+    @Get('location/:locationId')
+    @Roles(UserRole.LOCATION_MANAGER, UserRole.SUPER_ADMIN, UserRole.STAFF)
+    @ApiOperation({ summary: 'Get waitlist entries for location' })
+    @ApiResponse({ status: 200, description: 'Waitlist entries retrieved successfully' })
     async getLocationWaitlist(
-        locationId: string,
-        filters: IWaitlistFilters
+        @Param('locationId') locationId: string,
+        @Query() filters: IWaitlistFilters
     ) {
         const entries = await this.waitlistService.getLocationWaitlist(locationId, filters);
         return {
@@ -32,39 +59,13 @@ export class WaitlistController {
         };
     }
 
-    async getClassWaitlist(
-        classId: string,
-        filters: IWaitlistFilters
-    ) {
-        const entries = await this.waitlistService.getClassWaitlist(classId, filters);
-        return {
-            success: true,
-            message: 'Class waitlist retrieved successfully',
-            data: entries
-        };
-    }
-
-    async getStudentWaitlist(studentId: string) {
-        const entries = await this.waitlistService.getStudentWaitlist(studentId);
-        return {
-            success: true,
-            message: 'Student waitlist retrieved successfully',
-            data: entries
-        };
-    }
-
-    async getWaitlistEntry(entryId: string) {
-        const entry = await this.waitlistService.getWaitlistEntry(entryId);
-        return {
-            success: true,
-            message: 'Waitlist entry retrieved successfully',
-            data: entry
-        };
-    }
-
+    @Put(':id/offer')
+    @Roles(UserRole.LOCATION_MANAGER, UserRole.SUPER_ADMIN)
+    @ApiOperation({ summary: 'Offer spot to waitlisted student' })
+    @ApiResponse({ status: 200, description: 'Spot offered successfully' })
     async offerSpot(
-        entryId: string,
-        req: any
+        @Param('id') entryId: string,
+        @Request() req: any
     ) {
         const entry = await this.waitlistService.offerSpot(entryId, req.user.id);
         return {
@@ -74,7 +75,11 @@ export class WaitlistController {
         };
     }
 
-    async acceptOffer(entryId: string) {
+    @Put(':id/accept')
+    @Roles(UserRole.PARENT, UserRole.LOCATION_MANAGER, UserRole.SUPER_ADMIN)
+    @ApiOperation({ summary: 'Accept waitlist offer' })
+    @ApiResponse({ status: 200, description: 'Offer accepted successfully' })
+    async acceptOffer(@Param('id') entryId: string) {
         const entry = await this.waitlistService.acceptOffer(entryId);
         return {
             success: true,
@@ -83,33 +88,13 @@ export class WaitlistController {
         };
     }
 
-    async rejectOffer(
-        entryId: string,
-        body: any
-    ) {
-        const entry = await this.waitlistService.rejectOffer(entryId, body.reason);
-        return {
-            success: true,
-            message: 'Offer rejected successfully',
-            data: entry
-        };
-    }
-
-    async updatePriority(
-        entryId: string,
-        body: { priority: string }
-    ) {
-        const entry = await this.waitlistService.updatePriority(entryId, body.priority);
-        return {
-            success: true,
-            message: 'Priority updated successfully',
-            data: entry
-        };
-    }
-
+    @Delete(':id')
+    @Roles(UserRole.LOCATION_MANAGER, UserRole.SUPER_ADMIN, UserRole.PARENT)
+    @ApiOperation({ summary: 'Remove from waitlist' })
+    @ApiResponse({ status: 200, description: 'Removed from waitlist successfully' })
     async removeFromWaitlist(
-        entryId: string,
-        req: any
+        @Param('id') entryId: string,
+        @Request() req: any
     ) {
         await this.waitlistService.removeFromWaitlist(entryId, req.user.id);
         return {
