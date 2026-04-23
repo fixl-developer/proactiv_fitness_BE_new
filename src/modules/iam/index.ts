@@ -6,5 +6,6 @@ export { default as userController } from './user.controller';
 export { default as authController } from './auth.controller';
 export { default as userRoutes } from './user.routes';
 export { default as authRoutes } from './auth.routes';
-export { authenticate, authorize, optionalAuth, checkOwnership, checkTenantAccess } from './auth.middleware';
+export { authenticate, authorize, optionalAuth, checkOwnership, checkTenantAccess, scopeFilter } from './auth.middleware';
+export { canCreateRole, canDeleteUser, canUpdateUserStatus, canViewUsers, ROLE_HIERARCHY, DELETE_HIERARCHY, STATUS_HIERARCHY } from './rbac.middleware';
 export * from './user.interface';

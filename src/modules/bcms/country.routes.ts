@@ -3,6 +3,7 @@ import countryController from './country.controller';
 import { authenticate, authorize } from '@modules/iam/auth.middleware';
 import { validate } from '@middleware/validation.middleware';
 import { UserRole } from '@shared/enums';
+import { asyncHandler } from '@shared/utils/async-handler.util';
 import { createCountryValidation, updateCountryValidation, idParamValidation } from './bcms.validation';
 
 const router = Router();
@@ -11,34 +12,34 @@ router.use(authenticate);
 
 router.post(
     '/',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN),
+    authorize(UserRole.ADMIN),
     validate(createCountryValidation),
-    countryController.create
+    asyncHandler((req, res) => countryController.create(req, res))
 );
 
 router.get(
     '/',
-    countryController.getAll
+    asyncHandler((req, res) => countryController.getAll(req, res))
 );
 
 router.get(
     '/:id',
     validate(idParamValidation),
-    countryController.getById
+    asyncHandler((req, res) => countryController.getById(req, res))
 );
 
 router.put(
     '/:id',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN),
+    authorize(UserRole.ADMIN),
     validate(updateCountryValidation),
-    countryController.update
+    asyncHandler((req, res) => countryController.update(req, res))
 );
 
 router.delete(
     '/:id',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN),
+    authorize(UserRole.ADMIN),
     validate(idParamValidation),
-    countryController.delete
+    asyncHandler((req, res) => countryController.delete(req, res))
 );
 
 export default router;

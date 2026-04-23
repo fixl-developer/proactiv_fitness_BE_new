@@ -17,6 +17,9 @@ import {
 
 const router = Router();
 
+// Sanitize all incoming request bodies
+router.use(sanitizeInput());
+
 // Public routes (with rate limiting)
 router.post(
     '/register',

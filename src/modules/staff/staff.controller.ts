@@ -12,6 +12,8 @@ import { BaseController } from '../../shared/base/base.controller';
 import { asyncHandler } from '../../shared/utils/async-handler.util';
 import { AppError } from '../../shared/utils/app-error.util';
 import { HTTP_STATUS } from '../../shared/constants';
+import userService from '../iam/user.service';
+import { UserRole } from '../../shared/enums';
 
 export class StaffController extends BaseController {
     private staffService: StaffService;

@@ -11,7 +11,7 @@ router.use(authenticate);
 
 router.post(
     '/',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN, UserRole.FRANCHISE_OWNER),
+    authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN, UserRole.FRANCHISE_OWNER),
     validate(createLocationValidation),
     locationController.create.bind(locationController)
 );
@@ -29,14 +29,14 @@ router.get(
 
 router.put(
     '/:id',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN, UserRole.FRANCHISE_OWNER, UserRole.LOCATION_MANAGER),
+    authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN, UserRole.FRANCHISE_OWNER, UserRole.LOCATION_MANAGER),
     validate(updateLocationValidation),
     locationController.update.bind(locationController)
 );
 
 router.delete(
     '/:id',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+    authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN),
     validate(idParamValidation),
     locationController.delete.bind(locationController)
 );

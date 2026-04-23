@@ -3,6 +3,7 @@ import locationController from './location.controller';
 import { authenticate, authorize } from '@modules/iam/auth.middleware';
 import { validate } from '@middleware/validation.middleware';
 import { UserRole } from '@shared/enums';
+import { asyncHandler } from '@shared/utils/async-handler.util';
 import { createLocationValidation, updateLocationValidation, idParamValidation } from './bcms.validation';
 
 const router = Router();
@@ -11,34 +12,34 @@ router.use(authenticate);
 
 router.post(
     '/',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+    authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN),
     validate(createLocationValidation),
-    locationController.create
+    asyncHandler((req, res) => locationController.create(req, res))
 );
 
 router.get(
     '/',
-    locationController.getAll
+    asyncHandler((req, res) => locationController.getAll(req, res))
 );
 
 router.get(
     '/:id',
     validate(idParamValidation),
-    locationController.getById
+    asyncHandler((req, res) => locationController.getById(req, res))
 );
 
 router.put(
     '/:id',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN, UserRole.LOCATION_MANAGER),
+    authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN, UserRole.LOCATION_MANAGER),
     validate(updateLocationValidation),
-    locationController.update
+    asyncHandler((req, res) => locationController.update(req, res))
 );
 
 router.delete(
     '/:id',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN),
+    authorize(UserRole.ADMIN),
     validate(idParamValidation),
-    locationController.delete
+    asyncHandler((req, res) => locationController.delete(req, res))
 );
 
 export default router;

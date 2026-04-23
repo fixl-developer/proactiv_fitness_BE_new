@@ -20,19 +20,19 @@ export function createFeatureFlagRoutes(controller: FeatureFlagsController): Rou
 
     // Flag management endpoints (admin only)
     router.post('/flags',
-        authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+        authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN),
         controller.createFlag
     );
 
     router.get('/flags/:flagKey', controller.getFlag);
 
     router.put('/flags/:flagKey',
-        authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+        authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN),
         controller.updateFlag
     );
 
     router.delete('/flags/:flagKey',
-        authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN),
+        authorize(UserRole.ADMIN),
         controller.deleteFlag
     );
 
@@ -41,7 +41,7 @@ export function createFeatureFlagRoutes(controller: FeatureFlagsController): Rou
     // Version management endpoints (admin only)
     router.get('/flags/:flagKey/versions', controller.getFlagVersions);
     router.post('/flags/:flagKey/rollback',
-        authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN),
+        authorize(UserRole.ADMIN),
         controller.rollbackFlag
     );
 

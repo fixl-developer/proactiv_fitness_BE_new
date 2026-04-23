@@ -1,7 +1,12 @@
+import http from 'http';
 import app from './app';
 import envConfig from '@config/env.config';
 import databaseConfig from '@config/database.config';
 import logger from '@shared/utils/logger.util';
+import { User } from './modules/iam/user.model';
+import { demoUsers } from './data-architecture/seeds/user.seeds';
+import { seedPartnerData } from './modules/partner-portal/partner-seed';
+import { initializeSocketServer } from './modules/realtime';
 
 const PORT = envConfig.get().port;
 
@@ -14,11 +19,85 @@ process.on('uncaughtException', (error: Error) => {
 // Start server
 const startServer = async () => {
     try {
-        // Connect to database
-        await databaseConfig.connect();
+        // Connect to database (with retry)
+        let dbConnected = false;
+        try {
+            await databaseConfig.connect();
+            dbConnected = true;
+        } catch (dbError) {
+            logger.warn('Initial DB connection failed, server will start anyway. Retrying in background...', dbError);
+            // Retry connection in background
+            const retryConnect = async () => {
+                for (let i = 0; i < 5; i++) {
+                    try {
+                        await new Promise(resolve => setTimeout(resolve, 10000));
+                        await databaseConfig.connect();
+                        logger.info('Database connected on retry');
+                        return;
+                    } catch (e) {
+                        logger.warn(`DB retry ${i + 1}/5 failed`);
+                    }
+                }
+                logger.error('All DB connection retries failed');
+            };
+            retryConnect();
+        }
 
-        // Start Express server
-        const server = app.listen(PORT, () => {
+        // Auto-seed demo users + fix legacy roles (SUPER_ADMIN/HQ_ADMIN → ADMIN)
+        if (dbConnected) try {
+            // Fix any legacy SUPER_ADMIN or HQ_ADMIN roles in the database
+            const legacyFix = await User.updateMany(
+                { role: { $in: ['SUPER_ADMIN', 'HQ_ADMIN'] } },
+                { $set: { role: 'ADMIN' } }
+            );
+            if (legacyFix.modifiedCount > 0) {
+                logger.info(`Fixed ${legacyFix.modifiedCount} legacy role(s) → ADMIN`);
+            }
+
+            let seeded = 0;
+            for (const userData of demoUsers) {
+                try {
+                    const exists = await User.findOne({ email: userData.email });
+                    if (!exists) {
+                        await User.create(userData);
+                        seeded++;
+                        logger.info(`Demo user seeded: ${userData.email} (${userData.role})`);
+                    } else {
+                        // Update role/status/emailVerified if changed in seed data
+                        const updates: any = {};
+                        if (exists.role !== userData.role) updates.role = userData.role;
+                        if (exists.status !== userData.status) updates.status = userData.status;
+                        if (!exists.isEmailVerified && userData.isEmailVerified) updates.isEmailVerified = true;
+                        if (Object.keys(updates).length > 0) {
+                            await User.updateOne({ _id: exists._id }, { $set: updates });
+                            logger.info(`Demo user updated: ${userData.email} (${Object.keys(updates).join(', ')})`);
+                        }
+                    }
+                } catch (userSeedError: any) {
+                    logger.warn(`Failed to seed ${userData.email}: ${userSeedError.message}`);
+                }
+            }
+            if (seeded > 0) {
+                logger.info(`${seeded} demo user(s) seeded successfully`);
+            }
+        } catch (seedError) {
+            logger.warn('Demo user seeding skipped:', seedError);
+        }
+
+        // Auto-seed partner portal data
+        if (dbConnected) try {
+            await seedPartnerData('partner-1');
+        } catch (partnerSeedError) {
+            logger.warn('Partner data seeding skipped:', partnerSeedError);
+        }
+
+        // Create HTTP server and attach Socket.io
+        const httpServer = http.createServer(app);
+        const io = initializeSocketServer(httpServer);
+
+        // Start server
+        const server = httpServer;
+        httpServer.listen(PORT, () => {
             logger.info(`
         ╔═══════════════════════════════════════════════════════╗
         ║                                                       ║
@@ -27,6 +106,7 @@ const startServer = async () => {
         ║   Environment: ${envConfig.get().nodeEnv.padEnd(37)}║
         ║   Port: ${PORT.toString().padEnd(44)}║
         ║   API Version: ${envConfig.get().apiVersion.padEnd(38)}║
+        ║   Socket.io: ${'Enabled'.padEnd(39)}║
         ║                                                       ║
         ║   Server is running at:                              ║
         ║   http://localhost:${PORT}                              ║

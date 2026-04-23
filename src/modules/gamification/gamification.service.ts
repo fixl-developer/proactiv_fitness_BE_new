@@ -1,317 +1,413 @@
-import { LoyaltyPoints, Streak, Achievement, UnlockedAchievement, Leaderboard, Reward, Redemption, Challenge } from './gamification.model';
-import {
-    IAwardPointsRequest,
-    IUpdateStreakRequest,
-    IUnlockAchievementRequest,
-    IRedeemRewardRequest,
-    IJoinChallengeRequest,
-    IGamificationProfile,
-    PointTransactionType
-} from './gamification.interface';
-import { AppError } from '../../shared/utils/app-error.util';
-import { v4 as uuidv4 } from 'uuid';
+import { Badge, Streak, Challenge, Leaderboard, GamificationProfile, Reward } from './gamification.model';
+
+class EventBus {
+    async publish(event: string, data: any): Promise<void> {
+        // no-op stub
+    }
+}
 
 export class GamificationService {
-    // Points Management
-    async awardPoints(data: IAwardPointsRequest, userId: string): Promise<any> {
+    private eventBus: EventBus;
+
+    constructor() {
+        this.eventBus = new EventBus();
+    }
+
+    // Badge Management
+    async issueBadge(childId: string, skillId: string, badgeData: any) {
         try {
-            let loyaltyPoints = await LoyaltyPoints.findOne({ userId: data.userId });
+            const badge = new Badge({
+                childId,
+                skillId,
+                ...badgeData,
+                earnedDate: new Date(),
+            });
 
-            if (!loyaltyPoints) {
-                loyaltyPoints = new LoyaltyPoints({
-                    userId: data.userId,
-                    userName: await this.getUserName(data.userId),
-                    businessUnitId: 'bu-001',
-                    locationId: 'loc-001',
-                    createdBy: userId,
-                    updatedBy: userId
-                });
-            }
+            await badge.save();
 
-            const transaction = {
-                transactionId: uuidv4(),
-                type: PointTransactionType.EARNED,
-                points: data.points,
-                balance: loyaltyPoints.currentBalance + data.points,
-                reason: data.reason,
-                relatedEntity: data.relatedEntity,
-                relatedEntityType: data.relatedEntityType,
-                date: new Date()
-            };
+            // Update gamification profile
+            await this.updateProfileBadgeCount(childId);
 
-            loyaltyPoints.totalPointsEarned += data.points;
-            loyaltyPoints.currentBalance += data.points;
-            loyaltyPoints.lifetimePoints += data.points;
-            loyaltyPoints.transactions.push(transaction);
-            loyaltyPoints.updatedBy = userId;
+            // Emit event for notification
+            await this.eventBus.publish('badge.earned', {
+                childId,
+                badgeId: badge._id,
+                badgeName: badge.name,
+            });
 
-            await loyaltyPoints.save();
-            return loyaltyPoints;
-        } catch (error: any) {
-            throw new AppError(error.message || 'Failed to award points', 500);
+            return badge;
+        } catch (error) {
+            throw new Error(`Failed to issue badge: ${error.message}`);
         }
     }
 
-    async getPointsBalance(userId: string): Promise<any> {
-        const loyaltyPoints = await LoyaltyPoints.findOne({ userId });
-        if (!loyaltyPoints) {
-            throw new AppError('Loyalty points not found', 404);
+    async getBadges(childId: string) {
+        try {
+            return await Badge.find({ childId, isActive: true }).sort({ earnedDate: -1 });
+        } catch (error) {
+            throw new Error(`Failed to get badges: ${error.message}`);
         }
-        return {
-            userId: loyaltyPoints.userId,
-            currentBalance: loyaltyPoints.currentBalance,
-            lifetimePoints: loyaltyPoints.lifetimePoints,
-            currentTier: loyaltyPoints.currentTier
-        };
+    }
+
+    async revokeBadge(badgeId: string) {
+        try {
+            const badge = await Badge.findByIdAndUpdate(badgeId, { isActive: false }, { new: true });
+            return badge;
+        } catch (error) {
+            throw new Error(`Failed to revoke badge: ${error.message}`);
+        }
     }
 
     // Streak Management
-    async updateStreak(data: IUpdateStreakRequest, userId: string): Promise<any> {
+    async createStreak(childId: string, type: 'attendance' | 'behavior' | 'engagement') {
         try {
-            let streak = await Streak.findOne({ userId: data.userId, streakType: data.streakType });
+            const existingStreak = await Streak.findOne({ childId, type, isActive: true });
 
-            if (!streak) {
-                streak = new Streak({
-                    userId: data.userId,
-                    userName: await this.getUserName(data.userId),
-                    streakType: data.streakType,
-                    streakName: `${data.streakType} Streak`,
-                    businessUnitId: 'bu-001',
-                    locationId: 'loc-001',
-                    createdBy: userId,
-                    updatedBy: userId
-                });
+            if (existingStreak) {
+                existingStreak.currentCount += 1;
+                existingStreak.lastActivityDate = new Date();
+                existingStreak.rewards = existingStreak.currentCount * 10; // 10 points per streak
+                await existingStreak.save();
+                return existingStreak;
             }
 
-            const daysDiff = this.calculateDaysDifference(streak.lastActivityDate, data.activityDate);
-
-            if (daysDiff === 1) {
-                streak.currentStreak += 1;
-            } else if (daysDiff > 1) {
-                if (streak.currentStreak > 0) {
-                    streak.streakHistory.push({
-                        startDate: new Date(data.activityDate.getTime() - streak.currentStreak * 24 * 60 * 60 * 1000),
-                        endDate: streak.lastActivityDate || new Date(),
-                        streakLength: streak.currentStreak,
-                        reason: 'Streak broken'
-                    });
-                }
-                streak.currentStreak = 1;
-            }
-
-            if (streak.currentStreak > streak.longestStreak) {
-                streak.longestStreak = streak.currentStreak;
-            }
-
-            streak.lastActivityDate = data.activityDate;
-            streak.updatedBy = userId;
+            const streak = new Streak({
+                childId,
+                type,
+                currentCount: 1,
+                startDate: new Date(),
+                lastActivityDate: new Date(),
+                rewards: 10,
+            });
 
             await streak.save();
             return streak;
-        } catch (error: any) {
-            throw new AppError(error.message || 'Failed to update streak', 500);
+        } catch (error) {
+            throw new Error(`Failed to create streak: ${error.message}`);
         }
     }
 
-    async getStreaks(userId: string): Promise<any[]> {
-        return await Streak.find({ userId, isActive: true });
-    }
-
-    // Achievement Management
-    async unlockAchievement(data: IUnlockAchievementRequest, userId: string): Promise<any> {
+    async getStreaks(childId: string) {
         try {
-            const achievement = await Achievement.findOne({ achievementId: data.achievementId });
-            if (!achievement) {
-                throw new AppError('Achievement not found', 404);
-            }
-
-            const unlockedAchievementId = uuidv4();
-            const unlockedAchievement = new UnlockedAchievement({
-                unlockedAchievementId,
-                achievementId: data.achievementId,
-                achievementName: achievement.name,
-                userId: data.userId,
-                userName: await this.getUserName(data.userId),
-                progress: data.progress,
-                isCompleted: data.progress >= 100,
-                completedDate: data.progress >= 100 ? new Date() : undefined,
-                unlockContext: data.context,
-                pointsClaimed: achievement.pointsReward,
-                businessUnitId: 'bu-001',
-                locationId: 'loc-001',
-                createdBy: userId,
-                updatedBy: userId
-            });
-
-            await unlockedAchievement.save();
-
-            // Award points
-            if (achievement.pointsReward > 0) {
-                await this.awardPoints({
-                    userId: data.userId,
-                    points: achievement.pointsReward,
-                    reason: `Achievement unlocked: ${achievement.name}`,
-                    relatedEntity: data.achievementId,
-                    relatedEntityType: 'achievement'
-                }, userId);
-            }
-
-            return unlockedAchievement;
-        } catch (error: any) {
-            throw new AppError(error.message || 'Failed to unlock achievement', 500);
+            return await Streak.find({ childId, isActive: true });
+        } catch (error) {
+            throw new Error(`Failed to get streaks: ${error.message}`);
         }
     }
 
-    async getAchievements(userId: string): Promise<any> {
-        const unlocked = await UnlockedAchievement.find({ userId });
-        const all = await Achievement.find({ isActive: true });
-
-        return {
-            total: unlocked.length,
-            unlocked,
-            available: all.filter(a => !unlocked.find(u => u.achievementId === a.achievementId))
-        };
-    }
-
-    // Reward Management
-    async redeemReward(data: IRedeemRewardRequest, userId: string): Promise<any> {
+    async resetStreak(streakId: string) {
         try {
-            const reward = await Reward.findOne({ rewardId: data.rewardId });
-            if (!reward) {
-                throw new AppError('Reward not found', 404);
-            }
-
-            const loyaltyPoints = await LoyaltyPoints.findOne({ userId: data.userId });
-            if (!loyaltyPoints || loyaltyPoints.currentBalance < reward.pointsCost) {
-                throw new AppError('Insufficient points', 400);
-            }
-
-            const redemptionId = uuidv4();
-            const redemption = new Redemption({
-                redemptionId,
-                rewardId: data.rewardId,
-                rewardName: reward.name,
-                userId: data.userId,
-                userName: await this.getUserName(data.userId),
-                pointsSpent: reward.pointsCost,
-                status: reward.redemptionRules.requiresApproval ? 'pending' : 'approved',
-                requiresApproval: reward.redemptionRules.requiresApproval,
-                businessUnitId: 'bu-001',
-                locationId: 'loc-001',
-                createdBy: userId,
-                updatedBy: userId
-            });
-
-            await redemption.save();
-
-            // Deduct points
-            loyaltyPoints.currentBalance -= reward.pointsCost;
-            loyaltyPoints.totalPointsSpent += reward.pointsCost;
-            loyaltyPoints.transactions.push({
-                transactionId: uuidv4(),
-                type: PointTransactionType.SPENT,
-                points: -reward.pointsCost,
-                balance: loyaltyPoints.currentBalance,
-                reason: `Redeemed: ${reward.name}`,
-                relatedEntity: redemptionId,
-                relatedEntityType: 'redemption',
-                date: new Date()
-            });
-
-            await loyaltyPoints.save();
-
-            return redemption;
-        } catch (error: any) {
-            throw new AppError(error.message || 'Failed to redeem reward', 500);
+            const streak = await Streak.findByIdAndUpdate(
+                streakId,
+                { currentCount: 0, isActive: false },
+                { new: true }
+            );
+            return streak;
+        } catch (error) {
+            throw new Error(`Failed to reset streak: ${error.message}`);
         }
-    }
-
-    async getAvailableRewards(userId: string): Promise<any[]> {
-        return await Reward.find({ isActive: true, status: 'available' });
     }
 
     // Challenge Management
-    async joinChallenge(data: IJoinChallengeRequest, userId: string): Promise<any> {
+    async createChallenge(childId: string, challengeData: any) {
         try {
-            const challenge = await Challenge.findOne({ challengeId: data.challengeId });
-            if (!challenge) {
-                throw new AppError('Challenge not found', 404);
-            }
-
-            const alreadyJoined = challenge.participants.find(p => p.userId === data.userId);
-            if (alreadyJoined) {
-                throw new AppError('Already joined this challenge', 400);
-            }
-
-            challenge.participants.push({
-                userId: data.userId,
-                userName: await this.getUserName(data.userId),
-                progress: 0,
-                joinedDate: new Date()
+            const challenge = new Challenge({
+                childId,
+                ...challengeData,
+                status: 'active',
             });
 
-            challenge.updatedBy = userId;
             await challenge.save();
 
+            // Emit event
+            await this.eventBus.publish('challenge.created', {
+                childId,
+                challengeId: challenge._id,
+                challengeName: challenge.title,
+            });
+
             return challenge;
-        } catch (error: any) {
-            throw new AppError(error.message || 'Failed to join challenge', 500);
+        } catch (error) {
+            throw new Error(`Failed to create challenge: ${error.message}`);
         }
     }
 
-    async getActiveChallenges(): Promise<any[]> {
-        return await Challenge.find({ status: 'active', isActive: true });
+    async updateChallengeProgress(challengeId: string, progress: number) {
+        try {
+            const challenge = await Challenge.findById(challengeId);
+
+            if (!challenge) {
+                throw new Error('Challenge not found');
+            }
+
+            challenge.progress = Math.min(progress, challenge.target);
+
+            if (challenge.progress >= challenge.target) {
+                challenge.status = 'completed';
+
+                // Award reward
+                await this.awardReward(challenge.childId, 'points', challenge.reward, `Challenge completed: ${challenge.title}`);
+
+                // Emit event
+                await this.eventBus.publish('challenge.completed', {
+                    childId: challenge.childId,
+                    challengeId: challenge._id,
+                    reward: challenge.reward,
+                });
+            }
+
+            await challenge.save();
+            return challenge;
+        } catch (error) {
+            throw new Error(`Failed to update challenge progress: ${error.message}`);
+        }
+    }
+
+    async getChallenges(childId: string, status?: string) {
+        try {
+            const query: any = { childId };
+            if (status) {
+                query.status = status;
+            }
+            return await Challenge.find(query).sort({ dueDate: 1 });
+        } catch (error) {
+            throw new Error(`Failed to get challenges: ${error.message}`);
+        }
     }
 
     // Leaderboard Management
-    async getLeaderboard(leaderboardId: string): Promise<any> {
-        const leaderboard = await Leaderboard.findOne({ leaderboardId, isActive: true });
-        if (!leaderboard) {
-            throw new AppError('Leaderboard not found', 404);
+    async updateLeaderboard(childId: string, childName: string, programId: string, centerId: string, points: number) {
+        try {
+            const periods = ['daily', 'weekly', 'monthly', 'all-time'];
+
+            for (const period of periods) {
+                let leaderboardEntry = await Leaderboard.findOne({
+                    childId,
+                    programId,
+                    centerId,
+                    period,
+                });
+
+                if (!leaderboardEntry) {
+                    leaderboardEntry = new Leaderboard({
+                        childId,
+                        childName,
+                        programId,
+                        centerId,
+                        period,
+                        points: 0,
+                    });
+                }
+
+                leaderboardEntry.points += points;
+                await leaderboardEntry.save();
+            }
+
+            // Recalculate ranks
+            await this.recalculateRanks(programId, centerId);
+
+            return true;
+        } catch (error) {
+            throw new Error(`Failed to update leaderboard: ${error.message}`);
         }
-        return leaderboard;
     }
 
-    // Gamification Profile
-    async getGamificationProfile(userId: string): Promise<IGamificationProfile> {
-        const points = await LoyaltyPoints.findOne({ userId });
-        const streaks = await Streak.find({ userId, isActive: true });
-        const achievements = await UnlockedAchievement.find({ userId });
-
-        return {
-            userId,
-            userName: await this.getUserName(userId),
-            points: {
-                current: points?.currentBalance || 0,
-                lifetime: points?.lifetimePoints || 0,
-                rank: 0
-            },
-            streaks: {
-                attendance: streaks.find(s => s.streakType === 'attendance')?.currentStreak || 0,
-                longest: Math.max(...streaks.map(s => s.longestStreak), 0)
-            },
-            achievements: {
-                total: achievements.length,
-                byCategory: [],
-                recent: achievements.slice(-5)
-            },
-            tier: {
-                current: points?.currentTier || 'bronze',
-                progress: points?.tierProgress || 0,
-                nextTier: points?.nextTier || 'silver'
-            },
-            leaderboards: []
-        };
+    async getLeaderboard(programId: string, centerId: string, period: string, limit: number = 10) {
+        try {
+            return await Leaderboard.find({ programId, centerId, period })
+                .sort({ points: -1 })
+                .limit(limit);
+        } catch (error) {
+            throw new Error(`Failed to get leaderboard: ${error.message}`);
+        }
     }
 
-    // Helper methods
-    private calculateDaysDifference(date1: Date | undefined, date2: Date): number {
-        if (!date1) return 999;
-        const diff = Math.abs(date2.getTime() - date1.getTime());
-        return Math.floor(diff / (1000 * 60 * 60 * 24));
+    private async recalculateRanks(programId: string, centerId: string) {
+        try {
+            const periods = ['daily', 'weekly', 'monthly', 'all-time'];
+
+            for (const period of periods) {
+                const entries = await Leaderboard.find({ programId, centerId, period })
+                    .sort({ points: -1 });
+
+                for (let i = 0; i < entries.length; i++) {
+                    entries[i].rank = i + 1;
+                    await entries[i].save();
+                }
+            }
+        } catch (error) {
+            throw new Error(`Failed to recalculate ranks: ${error.message}`);
+        }
     }
 
-    private async getUserName(userId: string): Promise<string> {
-        return 'User Name';
+    // Gamification Profile Management
+    async getOrCreateProfile(childId: string) {
+        try {
+            let profile = await GamificationProfile.findOne({ childId });
+
+            if (!profile) {
+                profile = new GamificationProfile({ childId });
+                await profile.save();
+            }
+
+            return profile;
+        } catch (error) {
+            throw new Error(`Failed to get or create profile: ${error.message}`);
+        }
+    }
+
+    async updateProfileBadgeCount(childId: string) {
+        try {
+            const profile = await this.getOrCreateProfile(childId);
+            const badgeCount = await Badge.countDocuments({ childId, isActive: true });
+
+            profile.totalBadges = badgeCount;
+            await profile.save();
+
+            return profile;
+        } catch (error) {
+            throw new Error(`Failed to update profile badge count: ${error.message}`);
+        }
+    }
+
+    async updateProfilePoints(childId: string, points: number) {
+        try {
+            const profile = await this.getOrCreateProfile(childId);
+
+            profile.totalPoints += points;
+            profile.experiencePoints += points;
+
+            // Check for level up
+            const levelThreshold = 1000;
+            const newLevel = Math.floor(profile.experiencePoints / levelThreshold) + 1;
+
+            if (newLevel > profile.currentLevel) {
+                profile.currentLevel = newLevel;
+
+                // Emit level up event
+                await this.eventBus.publish('level.up', {
+                    childId,
+                    newLevel,
+                    totalPoints: profile.totalPoints,
+                });
+            }
+
+            // Update tier
+            profile.tier = this.calculateTier(profile.totalPoints);
+
+            await profile.save();
+            return profile;
+        } catch (error) {
+            throw new Error(`Failed to update profile points: ${error.message}`);
+        }
+    }
+
+    private calculateTier(points: number): 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond' {
+        if (points >= 10000) return 'diamond';
+        if (points >= 7500) return 'platinum';
+        if (points >= 5000) return 'gold';
+        if (points >= 2500) return 'silver';
+        return 'bronze';
+    }
+
+    async getProfile(childId: string) {
+        try {
+            return await this.getOrCreateProfile(childId);
+        } catch (error) {
+            throw new Error(`Failed to get profile: ${error.message}`);
+        }
+    }
+
+    // Reward Management
+    async awardReward(childId: string, type: string, amount: number, description: string) {
+        try {
+            const reward = new Reward({
+                childId,
+                type,
+                amount,
+                description,
+            });
+
+            await reward.save();
+
+            // Update profile points if it's a points reward
+            if (type === 'points') {
+                await this.updateProfilePoints(childId, amount);
+            }
+
+            // Emit event
+            await this.eventBus.publish('reward.awarded', {
+                childId,
+                rewardId: reward._id,
+                type,
+                amount,
+            });
+
+            return reward;
+        } catch (error) {
+            throw new Error(`Failed to award reward: ${error.message}`);
+        }
+    }
+
+    async redeemReward(rewardId: string) {
+        try {
+            const reward = await Reward.findByIdAndUpdate(
+                rewardId,
+                { isRedeemed: true, redeemedDate: new Date() },
+                { new: true }
+            );
+
+            // Emit event
+            await this.eventBus.publish('reward.redeemed', {
+                childId: reward.childId,
+                rewardId: reward._id,
+                type: reward.type,
+            });
+
+            return reward;
+        } catch (error) {
+            throw new Error(`Failed to redeem reward: ${error.message}`);
+        }
+    }
+
+    async getRewards(childId: string, redeemed?: boolean) {
+        try {
+            const query: any = { childId };
+            if (redeemed !== undefined) {
+                query.isRedeemed = redeemed;
+            }
+            return await Reward.find(query).sort({ createdAt: -1 });
+        } catch (error) {
+            throw new Error(`Failed to get rewards: ${error.message}`);
+        }
+    }
+
+    // Dashboard
+    async getGamificationDashboard(childId: string) {
+        try {
+            const profile = await this.getProfile(childId);
+            const badges = await this.getBadges(childId);
+            const streaks = await this.getStreaks(childId);
+            const activeChallenges = await this.getChallenges(childId, 'active');
+            const rewards = await this.getRewards(childId, false);
+
+            return {
+                profile,
+                badges,
+                streaks,
+                activeChallenges,
+                rewards,
+                summary: {
+                    totalBadges: badges.length,
+                    totalStreaks: streaks.length,
+                    activeChallenges: activeChallenges.length,
+                    pendingRewards: rewards.length,
+                },
+            };
+        } catch (error) {
+            throw new Error(`Failed to get gamification dashboard: ${error.message}`);
+        }
     }
 }
+
+export default new GamificationService();

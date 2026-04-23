@@ -1,5 +1,5 @@
 import { FilterQuery } from 'mongoose';
-import { BaseService } from '@shared/base/base.service';
+import { BaseService, EntityContext } from '@shared/base/base.service';
 import { Location } from './location.model';
 import { ILocation, ILocationCreate, ILocationUpdate, ILocationQuery } from './bcms.interface';
 import { AppError } from '@middleware/error.middleware';
@@ -7,7 +7,13 @@ import { HTTP_STATUS } from '@shared/constants';
 
 export class LocationService extends BaseService<ILocation> {
     constructor() {
-        super(Location);
+        super(Location, 'location');
+    }
+
+    protected getEntityContext(doc: any): EntityContext | null {
+        return {
+            organizationId: doc.businessUnitId?.toString(),
+        };
     }
 
     async createLocation(data: ILocationCreate): Promise<ILocation> {
@@ -17,7 +23,9 @@ export class LocationService extends BaseService<ILocation> {
             throw new AppError('Location with this code already exists', HTTP_STATUS.CONFLICT);
         }
 
-        return await this.create(data as Partial<ILocation>);
+        const location = await this.create(data as Partial<ILocation>);
+        this.emitRealtimeEvent('created', location);
+        return location;
     }
 
     async getLocations(query: ILocationQuery): Promise<ILocation[]> {
@@ -47,6 +55,7 @@ export class LocationService extends BaseService<ILocation> {
         if (!location) {
             throw new AppError('Location not found', HTTP_STATUS.NOT_FOUND);
         }
+        this.emitRealtimeEvent('updated', location);
         return location;
     }
 

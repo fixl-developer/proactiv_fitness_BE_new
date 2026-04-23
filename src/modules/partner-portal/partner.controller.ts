@@ -1,9 +1,4 @@
-import { Request, Response } from 'express';
 import { PartnerService } from './partner.service';
-import { asyncHandler } from '../../shared/utils/async-handler.util';
-import { sendSuccess } from '../../shared/utils/response.util';
-
-const partnerService = new PartnerService();
 
 export class PartnerController {
     private service: PartnerService;

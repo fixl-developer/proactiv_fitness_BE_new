@@ -14,6 +14,24 @@ export class ScheduleController {
     }
 
     /**
+     * Get available sessions for booking (public)
+     */
+    getAvailableSessions = asyncHandler(async (req: Request, res: Response) => {
+        const filters: any = {};
+
+        if (req.query.location) filters.location = req.query.location;
+        if (req.query.programType) filters.programType = req.query.programType;
+        if (req.query.ageGroup) filters.ageGroup = req.query.ageGroup;
+        if (req.query.coach) filters.coach = req.query.coach;
+        if (req.query.startDate) filters.startDate = new Date(req.query.startDate as string);
+        if (req.query.endDate) filters.endDate = new Date(req.query.endDate as string);
+
+        const sessions = await this.scheduleService.getAvailableSessions(filters);
+
+        ResponseUtil.success(res, sessions, 'Available sessions retrieved successfully');
+    });
+
+    /**
      * Generate new schedule
      */
     generateSchedule = asyncHandler(async (req: Request, res: Response) => {

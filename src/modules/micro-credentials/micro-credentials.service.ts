@@ -15,11 +15,14 @@ import {
     ICredentialPortfolio,
     IVerificationResult,
     CertificationStatus,
+    CertificationLevel,
+    BadgeType,
     VerificationStatus
 } from './micro-credentials.interface';
 import { BaseService } from '../../shared/base/base.service';
 import { AppError } from '../../shared/utils/app-error.util';
 import { HTTP_STATUS } from '../../shared/constants';
+import { User } from '../iam/user.model';
 
 export class MicroCredentialService extends BaseService<IMicroCredential> {
     constructor() {
@@ -168,261 +171,336 @@ export class MicroCredentialService extends BaseService<IMicroCredential> {
     /**
      * Verify credential
      */
-    async verifyCredential(verifyRequest: IVerifyCredentialRequest): Promise < IVerificationResult > {
-    try {
-        const issuedCredential = await IssuedCredential.findOne({
-            issuedCredentialId: verifyRequest.credentialId
-        });
+    async verifyCredential(verifyRequest: IVerifyCredentialRequest): Promise<IVerificationResult> {
+        try {
+            const issuedCredential = await IssuedCredential.findOne({
+                issuedCredentialId: verifyRequest.credentialId
+            });
 
-        if(!issuedCredential) {
-            return {
-                isValid: false,
-                verificationDate: new Date(),
-                verificationMethod: verifyRequest.verificationMethod,
-                errorMessage: 'Credential not found'
-            };
-        }
+            if (!issuedCredential) {
+                return {
+                    isValid: false,
+                    verificationDate: new Date(),
+                    verificationMethod: verifyRequest.verificationMethod,
+                    errorMessage: 'Credential not found'
+                };
+            }
 
             // Check verification code
             const credential = await MicroCredential.findOne({
-            credentialId: issuedCredential.credentialId
-        });
+                credentialId: issuedCredential.credentialId
+            });
 
-        if(!credential || credential.verificationSystem.verificationCode !== verifyRequest.verificationCode) {
-    return {
-        isValid: false,
-        verificationDate: new Date(),
-        verificationMethod: verifyRequest.verificationMethod,
-        errorMessage: 'Invalid verification code'
-    };
-}
+            if (!credential || credential.verificationSystem.verificationCode !== verifyRequest.verificationCode) {
+                return {
+                    isValid: false,
+                    verificationDate: new Date(),
+                    verificationMethod: verifyRequest.verificationMethod,
+                    errorMessage: 'Invalid verification code'
+                };
+            }
 
-// Check if expired
-if (issuedCredential.isExpired) {
-    return {
-        isValid: false,
-        verificationDate: new Date(),
-        verificationMethod: verifyRequest.verificationMethod,
-        errorMessage: 'Credential has expired'
-    };
-}
+            // Check if expired
+            if (issuedCredential.isExpired) {
+                return {
+                    isValid: false,
+                    verificationDate: new Date(),
+                    verificationMethod: verifyRequest.verificationMethod,
+                    errorMessage: 'Credential has expired'
+                };
+            }
 
-// Check if revoked
-if (issuedCredential.status === CertificationStatus.REVOKED) {
-    return {
-        isValid: false,
-        verificationDate: new Date(),
-        verificationMethod: verifyRequest.verificationMethod,
-        errorMessage: 'Credential has been revoked'
-    };
-}
+            // Check if revoked
+            if (issuedCredential.status === CertificationStatus.REVOKED) {
+                return {
+                    isValid: false,
+                    verificationDate: new Date(),
+                    verificationMethod: verifyRequest.verificationMethod,
+                    errorMessage: 'Credential has been revoked'
+                };
+            }
 
-// Record verification
-const verificationId = this.generateVerificationId();
-issuedCredential.verificationHistory.push({
-    verificationId,
-    verifiedBy: 'Public Verification',
-    verifiedDate: new Date(),
-    verificationMethod: verifyRequest.verificationMethod,
-    status: VerificationStatus.VERIFIED
-});
+            // Record verification
+            const verificationId = this.generateVerificationId();
+            issuedCredential.verificationHistory.push({
+                verificationId,
+                verifiedBy: 'Public Verification',
+                verifiedDate: new Date(),
+                verificationMethod: verifyRequest.verificationMethod,
+                status: VerificationStatus.VERIFIED
+            });
 
-await issuedCredential.save();
+            await issuedCredential.save();
 
-return {
-    isValid: true,
-    credentialInfo: {
-        name: issuedCredential.credentialName,
-        recipientName: issuedCredential.recipientName,
-        issuedDate: issuedCredential.issuedDate,
-        issuedBy: issuedCredential.issuedByName,
-        status: issuedCredential.status,
-        expirationDate: issuedCredential.expirationDate
-    },
-    verificationDate: new Date(),
-    verificationMethod: verifyRequest.verificationMethod
-};
+            return {
+                isValid: true,
+                credentialInfo: {
+                    name: issuedCredential.credentialName,
+                    recipientName: issuedCredential.recipientName,
+                    issuedDate: issuedCredential.issuedDate,
+                    issuedBy: issuedCredential.issuedByName,
+                    status: issuedCredential.status,
+                    expirationDate: issuedCredential.expirationDate
+                },
+                verificationDate: new Date(),
+                verificationMethod: verifyRequest.verificationMethod
+            };
         } catch (error: any) {
-    throw new AppError(
-        error.message || 'Failed to verify credential',
-        HTTP_STATUS.INTERNAL_SERVER_ERROR
-    );
-}
+            throw new AppError(
+                error.message || 'Failed to verify credential',
+                HTTP_STATUS.INTERNAL_SERVER_ERROR
+            );
+        }
     }
 
     /**
      * Get credential portfolio for recipient
      */
-    async getCredentialPortfolio(recipientId: string): Promise < ICredentialPortfolio > {
-    try {
-        const credentials = await IssuedCredential.find({ recipientId });
-        const recipientName = await this.getRecipientName(recipientId);
+    async getCredentialPortfolio(recipientId: string): Promise<ICredentialPortfolio> {
+        try {
+            const credentials = await IssuedCredential.find({ recipientId });
+            const recipientName = await this.getRecipientName(recipientId);
 
-        const activeCredentials = credentials.filter(c =>
-            c.status === CertificationStatus.EARNED && !c.isExpired
-        );
-        const expiredCredentials = credentials.filter(c => c.isExpired);
+            const activeCredentials = credentials.filter(c =>
+                c.status === CertificationStatus.EARNED && !c.isExpired
+            );
+            const expiredCredentials = credentials.filter(c => c.isExpired);
 
-        // Group by level
-        const credentialsByLevel = await this.groupCredentialsByLevel(credentials);
+            // Group by level
+            const credentialsByLevel = await this.groupCredentialsByLevel(credentials);
 
-        // Group by category
-        const credentialsByCategory = await this.groupCredentialsByCategory(credentials);
+            // Group by category
+            const credentialsByCategory = await this.groupCredentialsByCategory(credentials);
 
-        // Get recent credentials (last 30 days)
-        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-        const recentCredentials = credentials
-            .filter(c => c.issuedDate >= thirtyDaysAgo)
-            .map(c => this.mapToCredentialSummary(c))
-            .slice(0, 5);
+            // Get recent credentials (last 30 days)
+            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+            const recentCredentials = await Promise.all(
+                credentials
+                    .filter(c => c.issuedDate >= thirtyDaysAgo)
+                    .slice(0, 5)
+                    .map(c => this.mapToCredentialSummary(c))
+            );
 
-        // Get expiring credentials (next 30 days)
-        const thirtyDaysFromNow = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-        const expiringCredentials = credentials
-            .filter(c => c.expirationDate && c.expirationDate <= thirtyDaysFromNow && !c.isExpired)
-            .map(c => this.mapToCredentialSummary(c));
+            // Get expiring credentials (next 30 days)
+            const thirtyDaysFromNow = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+            const expiringCredentials = await Promise.all(
+                credentials
+                    .filter(c => c.expirationDate && c.expirationDate <= thirtyDaysFromNow && !c.isExpired)
+                    .map(c => this.mapToCredentialSummary(c))
+            );
 
-        return {
-            recipientId,
-            recipientName,
-            totalCredentials: credentials.length,
-            activeCredentials: activeCredentials.length,
-            expiredCredentials: expiredCredentials.length,
-            credentialsByLevel,
-            credentialsByCategory,
-            recentCredentials,
-            expiringCredentials
-        };
-    } catch(error: any) {
-        throw new AppError(
-            error.message || 'Failed to get credential portfolio',
-            HTTP_STATUS.INTERNAL_SERVER_ERROR
-        );
+            return {
+                recipientId,
+                recipientName,
+                totalCredentials: credentials.length,
+                activeCredentials: activeCredentials.length,
+                expiredCredentials: expiredCredentials.length,
+                credentialsByLevel,
+                credentialsByCategory,
+                recentCredentials,
+                expiringCredentials
+            };
+        } catch (error: any) {
+            throw new AppError(
+                error.message || 'Failed to get credential portfolio',
+                HTTP_STATUS.INTERNAL_SERVER_ERROR
+            );
+        }
     }
-}
 
     // Private helper methods
-    private async generateBadgeImage(credentialRequest: ICreateCredentialRequest): Promise < string > {
-    // Implementation to generate badge image
-    return `https://storage.example.com/badges/${credentialRequest.badgeType}_${credentialRequest.level}.png`;
-}
+    private async generateBadgeImage(credentialRequest: ICreateCredentialRequest): Promise<string> {
+        // Implementation to generate badge image
+        return `https://storage.example.com/badges/${credentialRequest.badgeType}_${credentialRequest.level}.png`;
+    }
 
-    private async generateColorScheme(level: any): Promise < any > {
-    const colorSchemes = {
-        bronze: { primary: '#CD7F32', secondary: '#8B4513', accent: '#FFD700' },
-        silver: { primary: '#C0C0C0', secondary: '#808080', accent: '#FFFFFF' },
-        gold: { primary: '#FFD700', secondary: '#FFA500', accent: '#FFFF00' },
-        platinum: { primary: '#E5E4E2', secondary: '#B8860B', accent: '#F0F8FF' },
-        diamond: { primary: '#B9F2FF', secondary: '#4169E1', accent: '#00BFFF' }
-    };
-    return colorSchemes[level] || colorSchemes.bronze;
-}
+    private async generateColorScheme(level: any): Promise<any> {
+        const colorSchemes = {
+            bronze: { primary: '#CD7F32', secondary: '#8B4513', accent: '#FFD700' },
+            silver: { primary: '#C0C0C0', secondary: '#808080', accent: '#FFFFFF' },
+            gold: { primary: '#FFD700', secondary: '#FFA500', accent: '#FFFF00' },
+            platinum: { primary: '#E5E4E2', secondary: '#B8860B', accent: '#F0F8FF' },
+            diamond: { primary: '#B9F2FF', secondary: '#4169E1', accent: '#00BFFF' }
+        };
+        return colorSchemes[level] || colorSchemes.bronze;
+    }
 
-    private async generateCertificateTemplate(credentialRequest: ICreateCredentialRequest): Promise < any > {
-    return {
-        templateId: `template_${credentialRequest.level}`,
-        layout: 'standard',
-        includeQRCode: true,
-        includeBlockchain: false,
-        customFields: [
-            { fieldName: 'credentialName', fieldValue: credentialRequest.name, isVariable: false },
-            { fieldName: 'recipientName', fieldValue: '{{recipientName}}', isVariable: true },
-            { fieldName: 'issuedDate', fieldValue: '{{issuedDate}}', isVariable: true }
-        ]
-    };
-}
+    private async generateCertificateTemplate(credentialRequest: ICreateCredentialRequest): Promise<any> {
+        return {
+            templateId: `template_${credentialRequest.level}`,
+            layout: 'standard',
+            includeQRCode: true,
+            includeBlockchain: false,
+            customFields: [
+                { fieldName: 'credentialName', fieldValue: credentialRequest.name, isVariable: false },
+                { fieldName: 'recipientName', fieldValue: '{{recipientName}}', isVariable: true },
+                { fieldName: 'issuedDate', fieldValue: '{{issuedDate}}', isVariable: true }
+            ]
+        };
+    }
 
-    private async generateDigitalCertificate(credential: IMicroCredential, issueRequest: IIssueCredentialRequest): Promise < any > {
-    const certificateId = this.generateCertificateId();
-    return {
-        certificateUrl: `https://certificates.proactiv.com/${certificateId}.pdf`,
-        certificateHash: this.generateCertificateHash(certificateId),
-        qrCodeUrl: `https://qr.proactiv.com/${certificateId}.png`,
-        verificationUrl: `https://verify.proactiv.com/${certificateId}`
-    };
-}
+    private async generateDigitalCertificate(credential: IMicroCredential, issueRequest: IIssueCredentialRequest): Promise<any> {
+        const certificateId = this.generateCertificateId();
+        return {
+            certificateUrl: `https://certificates.proactiv.com/${certificateId}.pdf`,
+            certificateHash: this.generateCertificateHash(certificateId),
+            qrCodeUrl: `https://qr.proactiv.com/${certificateId}.png`,
+            verificationUrl: `https://verify.proactiv.com/${certificateId}`
+        };
+    }
 
-    private async validateRequirements(credential: IMicroCredential, achievementData: any): Promise < void> {
-    // Implementation to validate all requirements are met
-    // This would check skills, attendance, behavior, performance requirements
-}
+    private async validateRequirements(credential: IMicroCredential, achievementData: any): Promise<void> {
+        // Implementation to validate all requirements are met
+        // This would check skills, attendance, behavior, performance requirements
+    }
 
     private calculateExpirationDate(expirationRules: any): Date | undefined {
-    if (!expirationRules.hasExpiration) return undefined;
+        if (!expirationRules.hasExpiration) return undefined;
 
-    const now = new Date();
-    const expirationDate = new Date(now);
-    expirationDate.setMonth(expirationDate.getMonth() + expirationRules.validityPeriod);
+        const now = new Date();
+        const expirationDate = new Date(now);
+        expirationDate.setMonth(expirationDate.getMonth() + expirationRules.validityPeriod);
 
-    return expirationDate;
-}
+        return expirationDate;
+    }
 
-    private async updateCredentialStatistics(credentialId: string): Promise < void> {
-    const credential = await MicroCredential.findOne({ credentialId });
-    if(!credential) return;
+    private async updateCredentialStatistics(credentialId: string): Promise<void> {
+        const credential = await MicroCredential.findOne({ credentialId });
+        if (!credential) return;
 
-    const issuedCredentials = await IssuedCredential.find({ credentialId });
+        const issuedCredentials = await IssuedCredential.find({ credentialId });
 
-    credential.statistics.totalIssued = issuedCredentials.length;
-    credential.statistics.totalActive = issuedCredentials.filter(c =>
-        c.status === CertificationStatus.EARNED && !c.isExpired
-    ).length;
-    credential.statistics.totalExpired = issuedCredentials.filter(c => c.isExpired).length;
+        credential.statistics.totalIssued = issuedCredentials.length;
+        credential.statistics.totalActive = issuedCredentials.filter(c =>
+            c.status === CertificationStatus.EARNED && !c.isExpired
+        ).length;
+        credential.statistics.totalExpired = issuedCredentials.filter(c => c.isExpired).length;
 
-    await credential.save();
-}
+        await credential.save();
+    }
 
-    private async groupCredentialsByLevel(credentials: IIssuedCredential[]): Promise < any[] > {
-    // Implementation to group credentials by level
-    return [];
-}
+    private async groupCredentialsByLevel(credentials: IIssuedCredential[]): Promise<{ level: CertificationLevel; count: number }[]> {
+        try {
+            const credentialIds = credentials.map(c => c.credentialId);
+            const credentialDefs = await MicroCredential.find({ credentialId: { $in: credentialIds } }).lean();
+            const levelMap = new Map<string, string>();
+            for (const def of credentialDefs) {
+                levelMap.set(def.credentialId, def.level);
+            }
 
-    private async groupCredentialsByCategory(credentials: IIssuedCredential[]): Promise < any[] > {
-    // Implementation to group credentials by category
-    return [];
-}
+            const counts: Record<string, number> = {};
+            for (const cred of credentials) {
+                const level = levelMap.get(cred.credentialId) || 'bronze';
+                counts[level] = (counts[level] || 0) + 1;
+            }
 
-    private mapToCredentialSummary(credential: IIssuedCredential): ICredentialSummary {
-    return {
-        credentialId: credential.issuedCredentialId,
-        name: credential.credentialName,
-        level: 'bronze' as any, // Would get from credential definition
-        status: credential.status,
-        issuedDate: credential.issuedDate,
-        expirationDate: credential.expirationDate,
-        isExpired: credential.isExpired,
-        verificationUrl: credential.digitalCertificate.verificationUrl,
-        badgeImageUrl: 'badge_url' // Would get from credential definition
-    };
-}
+            return Object.entries(counts).map(([level, count]) => ({
+                level: level as CertificationLevel,
+                count
+            }));
+        } catch (error: any) {
+            throw new AppError(
+                error.message || 'Failed to group credentials by level',
+                HTTP_STATUS.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
 
-    private async getBusinessUnitId(): Promise < string > {
-    return 'business_unit_id'; // Placeholder
-}
+    private async groupCredentialsByCategory(credentials: IIssuedCredential[]): Promise<{ category: string; count: number }[]> {
+        try {
+            const credentialIds = credentials.map(c => c.credentialId);
+            const credentialDefs = await MicroCredential.find({ credentialId: { $in: credentialIds } }).lean();
+            const categoryMap = new Map<string, string>();
+            for (const def of credentialDefs) {
+                categoryMap.set(def.credentialId, def.category);
+            }
 
-    private async getRecipientName(recipientId: string): Promise < string > {
-    return `Recipient ${recipientId}`;
-}
+            const counts: Record<string, number> = {};
+            for (const cred of credentials) {
+                const category = categoryMap.get(cred.credentialId) || 'uncategorized';
+                counts[category] = (counts[category] || 0) + 1;
+            }
 
-    private async getStaffName(staffId: string): Promise < string > {
-    return `Staff ${staffId}`;
-}
+            return Object.entries(counts).map(([category, count]) => ({
+                category,
+                count
+            }));
+        } catch (error: any) {
+            throw new AppError(
+                error.message || 'Failed to group credentials by category',
+                HTTP_STATUS.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
 
-    private async getLocationId(recipientId: string): Promise < string > {
-    return 'location_id'; // Placeholder
-}
+    private async mapToCredentialSummary(credential: IIssuedCredential): Promise<ICredentialSummary> {
+        const credentialDef = await MicroCredential.findOne({ credentialId: credential.credentialId }).lean();
+        return {
+            credentialId: credential.issuedCredentialId,
+            name: credential.credentialName,
+            level: credentialDef?.level as CertificationLevel || CertificationLevel.BRONZE,
+            status: credential.status,
+            issuedDate: credential.issuedDate,
+            expirationDate: credential.expirationDate,
+            isExpired: credential.isExpired,
+            verificationUrl: credential.digitalCertificate.verificationUrl,
+            badgeImageUrl: credentialDef?.badgeImageUrl || ''
+        };
+    }
+
+    private async getBusinessUnitId(): Promise<string> {
+        try {
+            const user = await User.findOne({ isDeleted: { $ne: true } }).select('organizationId').lean();
+            return (user as any)?.organizationId?.toString() || '';
+        } catch {
+            return '';
+        }
+    }
+
+    private async getRecipientName(recipientId: string): Promise<string> {
+        try {
+            const user = await User.findById(recipientId).select('firstName lastName').lean();
+            if (user) {
+                return `${user.firstName || ''} ${user.lastName || ''}`.trim();
+            }
+            return '';
+        } catch {
+            return '';
+        }
+    }
+
+    private async getStaffName(staffId: string): Promise<string> {
+        try {
+            const user = await User.findById(staffId).select('firstName lastName').lean();
+            if (user) {
+                return `${user.firstName || ''} ${user.lastName || ''}`.trim();
+            }
+            return '';
+        } catch {
+            return '';
+        }
+    }
+
+    private async getLocationId(recipientId: string): Promise<string> {
+        try {
+            const user = await User.findById(recipientId).select('locationId').lean();
+            return user?.locationId?.toString() || '';
+        } catch {
+            return '';
+        }
+    }
 
     private generateVerificationId(): string {
-    return `verify_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-}
+        return `verify_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
 
     private generateCertificateId(): string {
-    return `cert_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-}
+        return `cert_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
 
     private generateCertificateHash(certificateId: string): string {
-    return `hash_${certificateId}_${Math.random().toString(36).substr(2, 16)}`;
-}
+        return `hash_${certificateId}_${Math.random().toString(36).substr(2, 16)}`;
+    }
 }
 
 export class BadgeService extends BaseService<IBadgeSystem> {
@@ -606,37 +684,139 @@ export class BadgeService extends BaseService<IBadgeSystem> {
         return timeMap[difficulty] || 30;
     }
 
-    private async groupBadgesByCategory(earnedBadges: IEarnedBadge[]): Promise<any[]> {
-        // Implementation to group badges by category
-        return [];
+    private async groupBadgesByCategory(earnedBadges: IEarnedBadge[]): Promise<{ category: string; count: number; points: number }[]> {
+        try {
+            const badgeIds = earnedBadges.map(b => b.badgeId);
+            const badgeDefs = await BadgeSystem.find({ badgeId: { $in: badgeIds } }).lean();
+            const categoryMap = new Map<string, string>();
+            for (const def of badgeDefs) {
+                categoryMap.set(def.badgeId, def.category);
+            }
+
+            const grouped: Record<string, { count: number; points: number }> = {};
+            for (const badge of earnedBadges) {
+                const category = categoryMap.get(badge.badgeId) || 'uncategorized';
+                if (!grouped[category]) {
+                    grouped[category] = { count: 0, points: 0 };
+                }
+                grouped[category].count += 1;
+                grouped[category].points += badge.totalPoints || 0;
+            }
+
+            return Object.entries(grouped).map(([category, data]) => ({
+                category,
+                count: data.count,
+                points: data.points
+            }));
+        } catch (error: any) {
+            throw new AppError(
+                error.message || 'Failed to group badges by category',
+                HTTP_STATUS.INTERNAL_SERVER_ERROR
+            );
+        }
     }
 
-    private async calculateBadgeAchievements(earnedBadges: IEarnedBadge[]): Promise<any> {
-        // Implementation to calculate various badge achievements
-        return {
-            totalSkillBadges: 0,
-            totalAttendanceBadges: 0,
-            totalBehaviorBadges: 0,
-            totalLeadershipBadges: 0,
-            rareBadges: 0,
-            legendaryBadges: 0
-        };
+    private async calculateBadgeAchievements(earnedBadges: IEarnedBadge[]): Promise<{
+        totalSkillBadges: number;
+        totalAttendanceBadges: number;
+        totalBehaviorBadges: number;
+        totalLeadershipBadges: number;
+        rareBadges: number;
+        legendaryBadges: number;
+    }> {
+        try {
+            const badgeIds = earnedBadges.map(b => b.badgeId);
+            const badgeDefs = await BadgeSystem.find({ badgeId: { $in: badgeIds } }).lean();
+            const badgeInfoMap = new Map<string, { badgeType: string; rarity: string }>();
+            for (const def of badgeDefs) {
+                badgeInfoMap.set(def.badgeId, { badgeType: def.badgeType, rarity: def.rarity });
+            }
+
+            const achievements = {
+                totalSkillBadges: 0,
+                totalAttendanceBadges: 0,
+                totalBehaviorBadges: 0,
+                totalLeadershipBadges: 0,
+                rareBadges: 0,
+                legendaryBadges: 0
+            };
+
+            for (const badge of earnedBadges) {
+                const info = badgeInfoMap.get(badge.badgeId);
+                if (!info) continue;
+
+                switch (info.badgeType) {
+                    case BadgeType.SKILL_MASTERY:
+                        achievements.totalSkillBadges++;
+                        break;
+                    case BadgeType.ATTENDANCE:
+                        achievements.totalAttendanceBadges++;
+                        break;
+                    case BadgeType.BEHAVIOR:
+                        achievements.totalBehaviorBadges++;
+                        break;
+                    case BadgeType.LEADERSHIP:
+                        achievements.totalLeadershipBadges++;
+                        break;
+                }
+
+                if (info.rarity === 'rare' || info.rarity === 'epic') {
+                    achievements.rareBadges++;
+                }
+                if (info.rarity === 'legendary') {
+                    achievements.legendaryBadges++;
+                }
+            }
+
+            return achievements;
+        } catch (error: any) {
+            throw new AppError(
+                error.message || 'Failed to calculate badge achievements',
+                HTTP_STATUS.INTERNAL_SERVER_ERROR
+            );
+        }
     }
 
     private async getBusinessUnitId(): Promise<string> {
-        return 'business_unit_id'; // Placeholder
+        try {
+            const user = await User.findOne({ isDeleted: { $ne: true } }).select('organizationId').lean();
+            return (user as any)?.organizationId?.toString() || '';
+        } catch {
+            return '';
+        }
     }
 
     private async getRecipientName(recipientId: string): Promise<string> {
-        return `Recipient ${recipientId}`;
+        try {
+            const user = await User.findById(recipientId).select('firstName lastName').lean();
+            if (user) {
+                return `${user.firstName || ''} ${user.lastName || ''}`.trim();
+            }
+            return '';
+        } catch {
+            return '';
+        }
     }
 
     private async getStaffName(staffId: string): Promise<string> {
-        return `Staff ${staffId}`;
+        try {
+            const user = await User.findById(staffId).select('firstName lastName').lean();
+            if (user) {
+                return `${user.firstName || ''} ${user.lastName || ''}`.trim();
+            }
+            return '';
+        } catch {
+            return '';
+        }
     }
 
     private async getLocationId(recipientId: string): Promise<string> {
-        return 'location_id'; // Placeholder
+        try {
+            const user = await User.findById(recipientId).select('locationId').lean();
+            return user?.locationId?.toString() || '';
+        } catch {
+            return '';
+        }
     }
 
     private generateBadgeId(): string {

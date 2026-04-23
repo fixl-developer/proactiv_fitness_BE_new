@@ -11,6 +11,7 @@ build/
 # Environment variables
 .env
 .env.local
+.env.example
 .env.*.local
 
 # Logs
@@ -53,11 +54,11 @@ temp/
 # Documentation files (remove from tracking)
 *.md
 **/*.md
-<<<<<<< Updated upstream
 
 backend/.git/
 =======
 !README.md
 *.ps1
 *.txt
->>>>>>> Stashed changes
+*.json
+*.py

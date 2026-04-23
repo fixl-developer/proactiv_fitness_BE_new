@@ -87,6 +87,34 @@ export class BookingController {
         ResponseUtil.success(res, statistics, 'Booking statistics retrieved successfully');
     });
 
+    /**
+     * Create assessment booking (simplified website flow)
+     */
+    createAssessmentBooking = asyncHandler(async (req: Request, res: Response) => {
+        const result = await this.bookingService.createAssessmentBooking(req.body, req.user!.id);
+        ResponseUtil.success(res, result, 'Assessment booking created successfully', HTTP_STATUS.CREATED);
+    });
+
+    /**
+     * Create class booking (simplified website flow)
+     */
+    createClassBooking = asyncHandler(async (req: Request, res: Response) => {
+        const result = await this.bookingService.createClassBooking(req.body, req.user!.id);
+        ResponseUtil.success(res, result, 'Class booking created successfully', HTTP_STATUS.CREATED);
+    });
+
+    /**
+     * Get my bookings (logged-in user)
+     */
+    getMyBookings = asyncHandler(async (req: Request, res: Response) => {
+        const { status, bookingType } = req.query;
+        const bookings = await this.bookingService.getMyBookings(
+            req.user!.id,
+            { status: status as string, bookingType: bookingType as string }
+        );
+        ResponseUtil.success(res, bookings, 'User bookings retrieved successfully');
+    });
+
     private buildBookingFilters(query: any) {
         const filters: any = {};
 

@@ -15,13 +15,20 @@ import {
     SyncStatus,
     CheckInMethod
 } from './attendance.interface';
-import { BaseService } from '../../shared/base/base.service';
+import { BaseService, EntityContext } from '../../shared/base/base.service';
 import { AppError } from '../../shared/utils/app-error.util';
 import { HTTP_STATUS } from '../../shared/constants';
 
 export class AttendanceService extends BaseService<IAttendanceRecord> {
     constructor() {
-        super(AttendanceRecord);
+        super(AttendanceRecord, 'attendance');
+    }
+
+    protected getEntityContext(doc: any): EntityContext | null {
+        return {
+            locationId: doc.locationId?.toString(),
+            targetUserId: doc.personId?.toString(),
+        };
     }
 
     /**
@@ -105,6 +112,7 @@ export class AttendanceService extends BaseService<IAttendanceRecord> {
             // Send notifications if required
             await this.sendCheckInNotifications(attendanceRecord, rules);
 
+            this.emitRealtimeEvent('checkedIn', attendanceRecord);
             return attendanceRecord;
         } catch (error: any) {
             throw new AppError(
@@ -176,6 +184,7 @@ export class AttendanceService extends BaseService<IAttendanceRecord> {
             // Send notifications if required
             await this.sendCheckOutNotifications(attendanceRecord, rules);
 
+            this.emitRealtimeEvent('checkedOut', attendanceRecord);
             return attendanceRecord;
         } catch (error: any) {
             throw new AppError(

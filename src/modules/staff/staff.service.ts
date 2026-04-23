@@ -18,13 +18,20 @@ import {
     CertificationStatus,
     BackgroundCheckStatus
 } from './staff.interface';
-import { BaseService } from '../../shared/base/base.service';
+import { BaseService, EntityContext } from '../../shared/base/base.service';
 import { AppError } from '../../shared/utils/app-error.util';
 import { HTTP_STATUS } from '../../shared/constants';
 
 export class StaffService extends BaseService<IStaff> {
     constructor() {
-        super(Staff);
+        super(Staff, 'staff');
+    }
+
+    protected getEntityContext(doc: any): EntityContext | null {
+        return {
+            organizationId: doc.businessUnitId?.toString(),
+            locationId: doc.primaryLocationId?.toString(),
+        };
     }
 
     /**
@@ -64,6 +71,7 @@ export class StaffService extends BaseService<IStaff> {
             });
 
             await staff.save();
+            this.emitRealtimeEvent('created', staff);
             return staff;
         } catch (error: any) {
             throw new AppError(
@@ -100,6 +108,7 @@ export class StaffService extends BaseService<IStaff> {
 
             staff.updatedBy = updatedBy;
             await staff.save();
+            this.emitRealtimeEvent('updated', staff);
 
             return staff;
         } catch (error: any) {

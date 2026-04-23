@@ -7,7 +7,18 @@ import { body, param, query } from 'express-validator';
 const router = Router();
 const scheduleController = new ScheduleController();
 
-// Apply authentication to all routes
+// Public routes (no auth required)
+
+/**
+ * @route   GET /api/v1/scheduling/available
+ * @desc    Get available sessions/time slots for booking
+ * @access  Public
+ */
+router.get('/available',
+    scheduleController.getAvailableSessions
+);
+
+// Apply authentication to all routes below
 router.use(authenticate);
 
 // Validation rules

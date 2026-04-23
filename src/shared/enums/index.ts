@@ -1,12 +1,13 @@
 // User & Authentication Enums
 export enum UserRole {
-    SUPER_ADMIN = 'SUPER_ADMIN',
-    HQ_ADMIN = 'HQ_ADMIN',
+    ADMIN = 'ADMIN',
     REGIONAL_ADMIN = 'REGIONAL_ADMIN',
     FRANCHISE_OWNER = 'FRANCHISE_OWNER',
     LOCATION_MANAGER = 'LOCATION_MANAGER',
     COACH = 'COACH',
     PARENT = 'PARENT',
+    STUDENT = 'STUDENT',
+    USER = 'USER', // General user (self-registration)
     PARTNER_ADMIN = 'PARTNER_ADMIN',
     SUPPORT_STAFF = 'SUPPORT_STAFF',
 }

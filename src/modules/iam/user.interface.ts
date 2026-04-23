@@ -26,10 +26,33 @@ export interface IUser extends Document {
     status: UserStatus;
     permissions?: string[];
 
-    // Multi-tenancy
+    // Multi-tenancy & Hierarchy
     tenantId?: string;
-    organizationId?: string;
-    locationId?: string;
+    organizationId?: string;  // Business Unit / Franchise ID
+    regionId?: string;        // Region ID (for REGIONAL_ADMIN scope)
+    locationId?: string;      // Location ID (for LOCATION_MANAGER scope)
+    partnerType?: string;     // Partner type (for PARTNER_ADMIN)
+
+    // Parent/Student Linking
+    parentId?: string;
+    family?: {
+        parentId?: string;
+        members?: string[];
+    };
+
+    // Student Specifics
+    medicalInfo?: {
+        allergies?: string[];
+        medications?: string[];
+        emergencyContact?: string;
+        conditions?: string[];
+    };
+    currentProgram?: string;
+    level?: string;
+    assignedCoach?: string;
+    rating?: number;
+    achievements?: string[];
+    skills?: Record<string, number>;
 
     // Security
     isEmailVerified: boolean;
@@ -46,6 +69,29 @@ export interface IUser extends Document {
     // Refresh Token
     refreshToken?: string;
     refreshTokenExpires?: Date;
+
+    // Password history (last 5 hashed passwords)
+    passwordHistory?: string[];
+
+    // Active sessions
+    activeSessions?: Array<{
+        token: string;
+        device: string;
+        ip: string;
+        createdAt: Date;
+    }>;
+
+    // GDPR consent
+    gdprConsent?: {
+        dataProcessing: boolean;
+        marketing: boolean;
+        analytics: boolean;
+        consentDate?: Date;
+        consentIp?: string;
+    };
+
+    // Whether the user was created by an admin
+    createdByAdmin?: boolean;
 
     // Metadata
     metadata?: Record<string, any>;
@@ -74,7 +120,9 @@ export interface IUserCreate {
     language?: Language;
     tenantId?: string;
     organizationId?: string;
+    regionId?: string;
     locationId?: string;
+    partnerType?: string;
 }
 
 export interface IUserUpdate {

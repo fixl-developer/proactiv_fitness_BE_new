@@ -9,13 +9,20 @@ import {
     SkillLevel,
     AgeGroupType
 } from './program.interface';
-import { BaseService } from '../../shared/base/base.service';
+import { BaseService, EntityContext } from '../../shared/base/base.service';
 import { AppError } from '../../shared/utils/app-error.util';
 import { HTTP_STATUS } from '../../shared/constants';
 
 export class ProgramService extends BaseService<IProgram> {
     constructor() {
-        super(Program);
+        super(Program, 'program');
+    }
+
+    protected getEntityContext(doc: any): EntityContext | null {
+        return {
+            organizationId: doc.businessUnitId?.toString(),
+            locationId: doc.locationIds?.[0]?.toString(),
+        };
     }
 
     /**
@@ -36,6 +43,7 @@ export class ProgramService extends BaseService<IProgram> {
             });
 
             await program.save();
+            this.emitRealtimeEvent('created', program);
             return await this.findById(program._id.toString());
         } catch (error: any) {
             throw new AppError(
@@ -69,6 +77,7 @@ export class ProgramService extends BaseService<IProgram> {
 
             Object.assign(program, updateData, { updatedBy });
             await program.save();
+            this.emitRealtimeEvent('updated', program);
 
             return await this.findById(programId);
         } catch (error: any) {
