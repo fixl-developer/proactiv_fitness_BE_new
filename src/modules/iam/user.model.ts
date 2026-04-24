@@ -1,6 +1,6 @@
 import { Schema, model } from 'mongoose';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import { IUser } from './user.interface';
 import { UserRole, UserStatus, Gender, Language } from '@shared/enums';
 import { baseSchemaFields, baseSchemaOptions } from '@shared/base/base.model';
@@ -94,19 +94,80 @@ const userSchema = new Schema<IUser>(
         ],
 
         // Multi-tenancy
+        // @ts-ignore - Mongoose type issue
         tenantId: {
             type: String,
             index: true,
         },
+        // @ts-ignore - Mongoose type issue
         organizationId: {
             type: Schema.Types.ObjectId,
             ref: 'Organization',
             index: true,
         },
+        // Region assignment (for REGIONAL_ADMIN scope tracking)
+        // @ts-ignore - Mongoose type issue
+        regionId: {
+            type: Schema.Types.ObjectId,
+            ref: 'Region',
+            index: true,
+        },
+        // @ts-ignore - Mongoose type issue
         locationId: {
             type: Schema.Types.ObjectId,
             ref: 'Location',
             index: true,
+        },
+
+        // Parent/Student Linking
+        // @ts-ignore - Mongoose type issue
+        parentId: {
+            type: Schema.Types.ObjectId,
+            ref: 'User',
+            index: true,
+        },
+        family: {
+            // @ts-ignore - Mongoose type issue
+            parentId: {
+                type: Schema.Types.ObjectId,
+                ref: 'User',
+            },
+            // @ts-ignore - Mongoose type issue
+            members: [{
+                type: Schema.Types.ObjectId,
+                ref: 'User',
+            }],
+        },
+
+        // Student Specifics
+        medicalInfo: {
+            allergies: [String],
+            medications: [String],
+            emergencyContact: String,
+            conditions: [String],
+        },
+        currentProgram: String,
+        level: String,
+        // @ts-ignore - Mongoose type issue
+        assignedCoach: {
+            type: Schema.Types.ObjectId,
+            ref: 'User',
+        },
+        rating: {
+            type: Number,
+            default: 0,
+        },
+        achievements: [String],
+        skills: {
+            type: Map,
+            of: Number,
+            default: {},
+        },
+
+        // Partner type (for PARTNER_ADMIN users)
+        partnerType: {
+            type: String,
+            enum: ['school', 'gym', 'corporate', 'sports_academy', 'ngo', 'municipal', 'sports_club', 'other'],
         },
 
         // Security
@@ -158,6 +219,42 @@ const userSchema = new Schema<IUser>(
             select: false,
         },
 
+        // Password history — stores hashes of the last 5 passwords
+        passwordHistory: {
+            type: [String],
+            default: [],
+            select: false,
+        },
+
+        // Active sessions — limited to 3 concurrent sessions
+        activeSessions: {
+            type: [
+                {
+                    token: { type: String, required: true },
+                    device: { type: String, default: 'unknown' },
+                    ip: { type: String },
+                    createdAt: { type: Date, default: Date.now },
+                },
+            ],
+            default: [],
+            select: false,
+        },
+
+        // GDPR consent tracking
+        gdprConsent: {
+            dataProcessing: { type: Boolean, default: false },
+            marketing: { type: Boolean, default: false },
+            analytics: { type: Boolean, default: false },
+            consentDate: { type: Date },
+            consentIp: { type: String },
+        },
+
+        // Whether the user was created by an admin (can skip email verification)
+        createdByAdmin: {
+            type: Boolean,
+            default: false,
+        },
+
         // Metadata
         metadata: {
             type: Schema.Types.Mixed,
@@ -179,21 +276,31 @@ userSchema.index({ organizationId: 1 });
 userSchema.index({ locationId: 1 });
 userSchema.index({ firstName: 1, lastName: 1 });
 
-// Virtual for full name
-userSchema.virtual('fullName').get(function (this: IUser) {
-    return `${this.firstName} ${this.lastName}`;
-});
-
-// Pre-save middleware to hash password
+// Pre-save middleware to hash password and maintain password history
 userSchema.pre('save', async function (next) {
     // Only hash password if it's modified
-    if (!this.isModified('password')) {
+    const user = this as any;
+
+    if (!user.isModified('password')) {
         return next();
     }
 
     try {
+        // If there is an existing hashed password, push it into history
+        // before overwriting.  Keep only the most recent 5 entries.
+        if (user.password && !user.isNew) {
+            // The current value is the *old* hash (not yet overwritten)
+            if (!user.passwordHistory) {
+                user.passwordHistory = [];
+            }
+            user.passwordHistory.push(user.password);
+            if (user.passwordHistory.length > 5) {
+                user.passwordHistory = user.passwordHistory.slice(-5);
+            }
+        }
+
         const salt = await bcrypt.genSalt(envConfig.get().bcryptRounds);
-        this.password = await bcrypt.hash(this.password, salt);
+        user.password = await bcrypt.hash(user.password, salt);
         next();
     } catch (error: any) {
         next(error);
@@ -202,7 +309,8 @@ userSchema.pre('save', async function (next) {
 
 // Pre-save middleware to set fullName
 userSchema.pre('save', function (next) {
-    this.fullName = `${this.firstName} ${this.lastName}`;
+    const user = this as any;
+    user.fullName = `${user.firstName} ${user.lastName}`;
     next();
 });
 
@@ -228,9 +336,11 @@ userSchema.methods.generateAuthToken = function (): string {
         locationId: this.locationId,
     };
 
-    return jwt.sign(payload, envConfig.get().jwtSecret, {
-        expiresIn: envConfig.get().jwtExpiresIn,
-    });
+    const options: SignOptions = {
+        expiresIn: envConfig.get().jwtExpiresIn as any,
+    };
+
+    return jwt.sign(payload, envConfig.get().jwtSecret, options);
 };
 
 // Method to generate refresh token
@@ -240,9 +350,11 @@ userSchema.methods.generateRefreshToken = function (): string {
         type: 'refresh',
     };
 
-    return jwt.sign(payload, envConfig.get().jwtRefreshSecret, {
-        expiresIn: envConfig.get().jwtRefreshExpiresIn,
-    });
+    const options: SignOptions = {
+        expiresIn: envConfig.get().jwtRefreshExpiresIn as any,
+    };
+
+    return jwt.sign(payload, envConfig.get().jwtRefreshSecret, options);
 };
 
 // Method to check if account is locked

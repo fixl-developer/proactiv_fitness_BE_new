@@ -14,9 +14,11 @@ export class RoomController extends BaseController {
         const query: IRoomQuery = {
             locationId: req.query.locationId as string,
             type: req.query.type as any,
-            isActive: req.query.isActive === 'true',
             search: req.query.search as string,
         };
+        if (req.query.isActive !== undefined && req.query.isActive !== '') {
+            query.isActive = req.query.isActive === 'true';
+        }
 
         const rooms = await roomService.getRooms(query);
         return this.sendSuccess(res, rooms);

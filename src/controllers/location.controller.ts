@@ -11,12 +11,14 @@ export class LocationController extends BaseController {
     }
 
     async getAll(req: Request, res: Response) {
-        const query: ILocationQuery = {
+        const query: ILocationQuery & { isActive?: boolean } = {
             businessUnitId: req.query.businessUnitId as string,
             regionId: req.query.regionId as string,
-            isActive: req.query.isActive === 'true',
             search: req.query.search as string,
         };
+        if (req.query.isActive !== undefined && req.query.isActive !== '') {
+            query.isActive = req.query.isActive === 'true';
+        }
 
         const locations = await locationService.getLocations(query);
         return this.sendSuccess(res, locations);

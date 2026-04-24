@@ -41,39 +41,18 @@ export class BookingController {
      * Get all bookings
      */
     getBookings = asyncHandler(async (req: Request, res: Response) => {
-        const { page, limit, skip } = PaginationUtil.getPaginationParams(req.query);
         const filters = this.buildBookingFilters(req.query);
 
-        const { data, total } = await this.bookingService.getAll(filters, {
-            page,
-            limit,
-            skip,
-            sort: { createdAt: -1 },
-            populate: [
-                { path: 'familyId', select: 'familyName familyCode' },
-                { path: 'programId', select: 'name category' },
-                { path: 'locationId', select: 'name' },
-                { path: 'participants.childId', select: 'firstName lastName' }
-            ]
-        });
+        const result = await this.bookingService.findWithPagination(filters, req.query);
 
-        const meta = PaginationUtil.buildMeta(total, page, limit);
-        ResponseUtil.success(res, data, 'Bookings retrieved successfully', HTTP_STATUS.OK, meta);
+        ResponseUtil.success(res, result, 'Bookings retrieved successfully');
     });
 
     /**
      * Get booking by ID
      */
     getBookingById = asyncHandler(async (req: Request, res: Response) => {
-        const booking = await this.bookingService.getById(req.params.id, {
-            populate: [
-                { path: 'familyId' },
-                { path: 'programId' },
-                { path: 'sessionId' },
-                { path: 'locationId' },
-                { path: 'participants.childId' }
-            ]
-        });
+        const booking = await this.bookingService.findById(req.params.id);
 
         if (!booking) {
             throw new AppError('Booking not found', HTTP_STATUS.NOT_FOUND);
@@ -108,6 +87,34 @@ export class BookingController {
         ResponseUtil.success(res, statistics, 'Booking statistics retrieved successfully');
     });
 
+    /**
+     * Create assessment booking (simplified website flow)
+     */
+    createAssessmentBooking = asyncHandler(async (req: Request, res: Response) => {
+        const result = await this.bookingService.createAssessmentBooking(req.body, req.user!.id);
+        ResponseUtil.success(res, result, 'Assessment booking created successfully', HTTP_STATUS.CREATED);
+    });
+
+    /**
+     * Create class booking (simplified website flow)
+     */
+    createClassBooking = asyncHandler(async (req: Request, res: Response) => {
+        const result = await this.bookingService.createClassBooking(req.body, req.user!.id);
+        ResponseUtil.success(res, result, 'Class booking created successfully', HTTP_STATUS.CREATED);
+    });
+
+    /**
+     * Get my bookings (logged-in user)
+     */
+    getMyBookings = asyncHandler(async (req: Request, res: Response) => {
+        const { status, bookingType } = req.query;
+        const bookings = await this.bookingService.getMyBookings(
+            req.user!.id,
+            { status: status as string, bookingType: bookingType as string }
+        );
+        ResponseUtil.success(res, bookings, 'User bookings retrieved successfully');
+    });
+
     private buildBookingFilters(query: any) {
         const filters: any = {};
 
@@ -134,3 +141,4 @@ export class BookingController {
         return filters;
     }
 }
+

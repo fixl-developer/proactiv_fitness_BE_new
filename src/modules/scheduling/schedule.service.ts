@@ -22,13 +22,111 @@ import {
     ITimeSlot,
     IConflict
 } from './schedule.interface';
-import { BaseService } from '../../shared/base/base.service';
+import { BaseService, EntityContext } from '../../shared/base/base.service';
 import { AppError } from '../../shared/utils/app-error.util';
 import { HTTP_STATUS } from '../../shared/constants';
 
 export class ScheduleService extends BaseService<ISchedule> {
     constructor() {
-        super(Schedule);
+        super(Schedule, 'schedule');
+    }
+
+    protected getEntityContext(doc: any): EntityContext | null {
+        return {
+            organizationId: doc.businessUnitId?.toString(),
+            locationId: doc.locationIds?.[0]?.toString(),
+        };
+    }
+
+    /**
+     * Get available sessions for public booking
+     */
+    async getAvailableSessions(filters: any): Promise<any[]> {
+        try {
+            // Find published or active schedules
+            const activeSchedules = await Schedule.find({
+                status: { $in: [ScheduleStatus.PUBLISHED, ScheduleStatus.ACTIVE] }
+            }).select('_id');
+
+            const scheduleIds = activeSchedules.map(s => s._id);
+
+            if (scheduleIds.length === 0) {
+                return [];
+            }
+
+            // Build session query
+            const sessionQuery: FilterQuery<ISession> = {
+                scheduleId: { $in: scheduleIds },
+                status: { $in: [SessionStatus.SCHEDULED, SessionStatus.CONFIRMED] },
+                date: { $gte: new Date() }
+            };
+
+            if (filters.startDate) {
+                sessionQuery.date = { ...sessionQuery.date as any, $gte: filters.startDate };
+            }
+            if (filters.endDate) {
+                sessionQuery.date = { ...sessionQuery.date as any, $lte: filters.endDate };
+            }
+
+            // Fetch sessions with populated references
+            const sessions = await Session.find(sessionQuery)
+                .populate('programId', 'name category type ageGroup')
+                .populate('locationId', 'name address')
+                .populate('coachAssignments.coachId', 'firstName lastName name')
+                .sort({ date: 1, 'timeSlot.startTime': 1 })
+                .limit(100);
+
+            // Transform to frontend TimeSlot format
+            return sessions.map(session => {
+                const program: any = session.programId || {};
+                const location: any = session.locationId || {};
+                const primaryCoach = session.coachAssignments.find(ca => ca.role === 'primary');
+                const coach: any = primaryCoach?.coachId || {};
+
+                const booked = session.enrolledParticipants?.length || 0;
+                const capacity = session.maxCapacity || 10;
+                const waitlist = session.waitlistParticipants?.length || 0;
+
+                let status: string = 'available';
+                if (session.status === SessionStatus.CANCELLED) {
+                    status = 'cancelled';
+                } else if (booked >= capacity && waitlist > 0) {
+                    status = 'waitlist';
+                } else if (booked >= capacity) {
+                    status = 'full';
+                }
+
+                return {
+                    id: session._id.toString(),
+                    startTime: session.timeSlot?.startTime || '',
+                    endTime: session.timeSlot?.endTime || '',
+                    programType: program.type || program.category || 'class',
+                    programName: program.name || 'Session',
+                    coach: coach.name || `${coach.firstName || ''} ${coach.lastName || ''}`.trim() || 'TBA',
+                    location: location.name || 'TBA',
+                    ageGroup: program.ageGroup || 'All ages',
+                    capacity,
+                    booked,
+                    waitlist,
+                    price: 0,
+                    level: program.level || 'All levels',
+                    status,
+                    date: session.date?.toISOString().split('T')[0] || ''
+                };
+            }).filter(slot => {
+                // Apply frontend filters
+                if (filters.location && slot.location !== filters.location) return false;
+                if (filters.programType && slot.programType !== filters.programType) return false;
+                if (filters.ageGroup && slot.ageGroup !== filters.ageGroup) return false;
+                if (filters.coach && slot.coach !== filters.coach) return false;
+                return true;
+            });
+        } catch (error: any) {
+            throw new AppError(
+                error.message || 'Failed to get available sessions',
+                HTTP_STATUS.INTERNAL_SERVER_ERROR
+            );
+        }
     }
 
     /**
@@ -79,6 +177,7 @@ export class ScheduleService extends BaseService<ISchedule> {
             schedule.statistics.pendingConflicts = conflicts.length;
 
             await schedule.save();
+            this.emitRealtimeEvent('generated', schedule);
 
             // Calculate statistics
             const statistics = await this.calculateScheduleStatistics(schedule._id.toString());
@@ -105,7 +204,7 @@ export class ScheduleService extends BaseService<ISchedule> {
      */
     async publishSchedule(scheduleId: string, publishedBy: string): Promise<ISchedule> {
         try {
-            const schedule = await this.getById(scheduleId);
+            const schedule = await this.findById(scheduleId);
             if (!schedule) {
                 throw new AppError('Schedule not found', HTTP_STATUS.NOT_FOUND);
             }
@@ -129,6 +228,7 @@ export class ScheduleService extends BaseService<ISchedule> {
             schedule.updatedBy = publishedBy;
 
             await schedule.save();
+            this.emitRealtimeEvent('published', schedule);
 
             // Update all sessions to confirmed status
             await Session.updateMany(
@@ -192,6 +292,7 @@ export class ScheduleService extends BaseService<ISchedule> {
                 throw new AppError('Conflict not found', HTTP_STATUS.NOT_FOUND);
             }
 
+            // @ts-ignore
             const conflict = session.conflicts.id(conflictId);
             if (!conflict) {
                 throw new AppError('Conflict not found', HTTP_STATUS.NOT_FOUND);
@@ -270,11 +371,13 @@ export class ScheduleService extends BaseService<ISchedule> {
                 );
 
                 if (isAvailable) {
+                    // @ts-ignore - coachId is populated
+                    const coach: any = availability.coachId;
                     substitutes.push({
-                        coachId: availability.coachId._id,
-                        coachName: availability.coachId.name,
-                        skills: availability.coachId.skills || [],
-                        rating: availability.coachId.rating || 0,
+                        coachId: coach._id,
+                        coachName: coach.name,
+                        skills: coach.skills || [],
+                        rating: coach.rating || 0,
                         distance: 0 // Would calculate actual distance
                     });
                 }

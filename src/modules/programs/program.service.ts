@@ -9,13 +9,20 @@ import {
     SkillLevel,
     AgeGroupType
 } from './program.interface';
-import { BaseService } from '../../shared/base/base.service';
+import { BaseService, EntityContext } from '../../shared/base/base.service';
 import { AppError } from '../../shared/utils/app-error.util';
 import { HTTP_STATUS } from '../../shared/constants';
 
 export class ProgramService extends BaseService<IProgram> {
     constructor() {
-        super(Program);
+        super(Program, 'program');
+    }
+
+    protected getEntityContext(doc: any): EntityContext | null {
+        return {
+            organizationId: doc.businessUnitId?.toString(),
+            locationId: doc.locationIds?.[0]?.toString(),
+        };
     }
 
     /**
@@ -36,7 +43,8 @@ export class ProgramService extends BaseService<IProgram> {
             });
 
             await program.save();
-            return await this.getById(program._id.toString());
+            this.emitRealtimeEvent('created', program);
+            return await this.findById(program._id.toString());
         } catch (error: any) {
             throw new AppError(
                 error.message || 'Failed to create program',
@@ -54,7 +62,7 @@ export class ProgramService extends BaseService<IProgram> {
         updatedBy: string
     ): Promise<IProgram> {
         try {
-            const program = await this.getById(programId);
+            const program = await this.findById(programId);
             if (!program) {
                 throw new AppError('Program not found', HTTP_STATUS.NOT_FOUND);
             }
@@ -69,8 +77,9 @@ export class ProgramService extends BaseService<IProgram> {
 
             Object.assign(program, updateData, { updatedBy });
             await program.save();
+            this.emitRealtimeEvent('updated', program);
 
-            return await this.getById(programId);
+            return await this.findById(programId);
         } catch (error: any) {
             throw new AppError(
                 error.message || 'Failed to update program',
@@ -95,9 +104,7 @@ export class ProgramService extends BaseService<IProgram> {
             // Get programs
             const programs = await this.findWithPagination(
                 query,
-                page,
-                limit,
-                { [sortBy]: sortOrder === 'asc' ? 1 : -1 }
+                { page, limit, sortBy, sortOrder }
             );
 
             // Get total count
@@ -213,14 +220,34 @@ export class ProgramService extends BaseService<IProgram> {
         prerequisitePrograms?: string[]
     ): Promise<IProgramEnrollmentEligibility> {
         try {
-            const program = await this.getById(programId);
+            const program = await this.findById(programId);
             if (!program) {
                 throw new AppError('Program not found', HTTP_STATUS.NOT_FOUND);
             }
 
-            const eligibility = program.checkEligibility(childAge, childAgeType, skillLevel);
+            // Check age eligibility
+            const ageGroup = program.eligibilityRules.ageRestrictions;
+            const ageEligible = ageGroup.ageType === childAgeType &&
+                childAge >= ageGroup.minAge &&
+                childAge <= ageGroup.maxAge;
 
-            if (!eligibility.eligible) {
+            const reasons: string[] = [];
+            if (!ageEligible) {
+                reasons.push('Child age does not meet program requirements');
+            }
+
+            // Check skill level if required
+            if (program.eligibilityRules.skillLevelRequired && skillLevel) {
+                const skillLevels = [SkillLevel.BEGINNER, SkillLevel.INTERMEDIATE, SkillLevel.ADVANCED, SkillLevel.EXPERT];
+                const requiredIndex = skillLevels.indexOf(program.eligibilityRules.skillLevelRequired);
+                const childIndex = skillLevels.indexOf(skillLevel);
+
+                if (childIndex < requiredIndex) {
+                    reasons.push('Child skill level does not meet program requirements');
+                }
+            }
+
+            if (reasons.length > 0) {
                 // Find alternative programs
                 const alternatives = await this.findAlternativePrograms(
                     program,
@@ -231,7 +258,7 @@ export class ProgramService extends BaseService<IProgram> {
 
                 return {
                     eligible: false,
-                    reasons: eligibility.reasons,
+                    reasons,
                     alternatives
                 };
             }
@@ -275,7 +302,7 @@ export class ProgramService extends BaseService<IProgram> {
         totalPrice: number;
     }> {
         try {
-            const program = await this.getById(programId);
+            const program = await this.findById(programId);
             if (!program) {
                 throw new AppError('Program not found', HTTP_STATUS.NOT_FOUND);
             }
@@ -301,7 +328,7 @@ export class ProgramService extends BaseService<IProgram> {
             }
 
             const additionalFees = program.pricingModel.additionalFees || {};
-            const totalFees = Object.values(additionalFees).reduce((sum, fee) => sum + (fee || 0), 0);
+            const totalFees = Object.values(additionalFees).reduce((sum: number, fee: any) => sum + (fee || 0), 0);
             const totalPrice = discountedPrice + totalFees;
 
             return {
@@ -395,6 +422,38 @@ export class ProgramService extends BaseService<IProgram> {
     }
 
     /**
+     * Get program categories
+     */
+    async getCategories(businessUnitId?: string): Promise<any[]> {
+        try {
+            const matchStage: any = { isActive: true };
+
+            if (businessUnitId) {
+                matchStage.businessUnitId = new Types.ObjectId(businessUnitId);
+            }
+
+            const categories = await Program.aggregate([
+                { $match: matchStage },
+                {
+                    $group: {
+                        _id: '$category',
+                        count: { $sum: 1 },
+                        subcategories: { $addToSet: '$subcategory' }
+                    }
+                },
+                { $sort: { _id: 1 } }
+            ]);
+
+            return categories;
+        } catch (error: any) {
+            throw new AppError(
+                error.message || 'Failed to get categories',
+                HTTP_STATUS.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    /**
      * Duplicate program
      */
     async duplicateProgram(
@@ -403,7 +462,7 @@ export class ProgramService extends BaseService<IProgram> {
         createdBy: string
     ): Promise<IProgram> {
         try {
-            const originalProgram = await this.getById(programId);
+            const originalProgram = await this.findById(programId);
             if (!originalProgram) {
                 throw new AppError('Program not found', HTTP_STATUS.NOT_FOUND);
             }
@@ -424,7 +483,7 @@ export class ProgramService extends BaseService<IProgram> {
             });
 
             await duplicatedProgram.save();
-            return await this.getById(duplicatedProgram._id.toString());
+            return await this.findById(duplicatedProgram._id.toString());
         } catch (error: any) {
             throw new AppError(
                 error.message || 'Failed to duplicate program',
@@ -579,3 +638,4 @@ export class ProgramService extends BaseService<IProgram> {
         }
     }
 }
+

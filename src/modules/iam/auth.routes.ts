@@ -4,6 +4,7 @@ import parentRegistrationController from './parent-registration.controller';
 import { validate } from '@middleware/validation.middleware';
 import { authLimiter } from '@middleware/rate-limit.middleware';
 import { authenticate } from './auth.middleware';
+import { asyncHandler } from '@shared/utils/async-handler.util';
 import {
     registerValidation,
     loginValidation,
@@ -16,90 +17,92 @@ import {
 
 const router = Router();
 
+// Sanitize all incoming request bodies
+router.use(sanitizeInput());
+
 // Public routes (with rate limiting)
 router.post(
     '/register',
     authLimiter,
     validate(registerValidation),
-    authController.wrap(authController.register)
+    asyncHandler(authController.register.bind(authController))
 );
 
-// Parent registration (multi-step from frontend)
 router.post(
     '/register/parent',
     authLimiter,
-    parentRegistrationController.wrap(parentRegistrationController.registerParent)
+    asyncHandler(parentRegistrationController.registerParent.bind(parentRegistrationController))
 );
 
 router.post(
     '/register/check-email',
     authLimiter,
-    parentRegistrationController.wrap(parentRegistrationController.checkEmailAvailability)
+    asyncHandler(parentRegistrationController.checkEmailAvailability.bind(parentRegistrationController))
 );
 
 router.post(
     '/register/save-progress',
     authLimiter,
-    parentRegistrationController.wrap(parentRegistrationController.saveRegistrationProgress)
+    asyncHandler(parentRegistrationController.saveRegistrationProgress.bind(parentRegistrationController))
 );
 
 router.post(
     '/login',
     authLimiter,
     validate(loginValidation),
-    authController.wrap(authController.login)
+    asyncHandler(authController.login.bind(authController))
 );
 
 router.post(
     '/forgot-password',
     authLimiter,
     validate(passwordResetRequestValidation),
-    authController.wrap(authController.forgotPassword)
+    asyncHandler(authController.forgotPassword.bind(authController))
 );
 
 router.post(
     '/reset-password',
     authLimiter,
     validate(passwordResetValidation),
-    authController.wrap(authController.resetPassword)
+    asyncHandler(authController.resetPassword.bind(authController))
 );
 
 router.post(
     '/verify-email',
     validate(emailVerificationValidation),
-    authController.wrap(authController.verifyEmail)
+    asyncHandler(authController.verifyEmail.bind(authController))
 );
 
 router.post(
     '/refresh-token',
     validate(refreshTokenValidation),
-    authController.wrap(authController.refreshToken)
+    asyncHandler(authController.refreshToken.bind(authController))
 );
 
 // Protected routes (require authentication)
 router.post(
     '/logout',
     authenticate,
-    authController.wrap(authController.logout)
+    asyncHandler(authController.logout.bind(authController))
 );
 
 router.post(
     '/change-password',
     authenticate,
     validate(changePasswordValidation),
-    authController.wrap(authController.changePassword)
+    asyncHandler(authController.changePassword.bind(authController))
 );
 
 router.post(
     '/resend-verification',
     authenticate,
-    authController.wrap(authController.resendVerification)
+    asyncHandler(authController.resendVerification.bind(authController))
 );
 
 router.get(
     '/me',
     authenticate,
-    authController.wrap(authController.getCurrentUser)
+    asyncHandler(authController.getCurrentUser.bind(authController))
 );
 
 export default router;

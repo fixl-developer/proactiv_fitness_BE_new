@@ -17,26 +17,18 @@ export class RuleController {
      * Get all rules
      */
     getRules = asyncHandler(async (req: Request, res: Response) => {
-        const { page, limit, skip } = PaginationUtil.getPaginationParams(req.query);
         const filters = this.buildRuleFilters(req.query);
 
-        const { data, total } = await this.ruleService.getAll(filters, {
-            page,
-            limit,
-            skip,
-            sort: { priority: -1, createdAt: -1 }
-        });
+        const result = await this.ruleService.findWithPagination(filters, req.query);
 
-        const meta = PaginationUtil.buildMeta(total, page, limit);
-
-        ResponseUtil.success(res, data, 'Rules retrieved successfully', HTTP_STATUS.OK, meta);
+        ResponseUtil.success(res, result, 'Rules retrieved successfully');
     });
 
     /**
      * Get rule by ID
      */
     getRuleById = asyncHandler(async (req: Request, res: Response) => {
-        const rule = await this.ruleService.getById(req.params.id);
+        const rule = await this.ruleService.findById(req.params.id);
         if (!rule) {
             throw new AppError('Rule not found', HTTP_STATUS.NOT_FOUND);
         }
@@ -163,26 +155,18 @@ export class PolicyController {
      * Get all policies
      */
     getPolicies = asyncHandler(async (req: Request, res: Response) => {
-        const { page, limit, skip } = PaginationUtil.getPaginationParams(req.query);
         const filters = this.buildPolicyFilters(req.query);
 
-        const { data, total } = await this.policyService.getAll(filters, {
-            page,
-            limit,
-            skip,
-            sort: { createdAt: -1 }
-        });
+        const result = await this.policyService.findWithPagination(filters, req.query);
 
-        const meta = PaginationUtil.buildMeta(total, page, limit);
-
-        ResponseUtil.success(res, data, 'Policies retrieved successfully', HTTP_STATUS.OK, meta);
+        ResponseUtil.success(res, result, 'Policies retrieved successfully');
     });
 
     /**
      * Get policy by ID
      */
     getPolicyById = asyncHandler(async (req: Request, res: Response) => {
-        const policy = await this.policyService.getById(req.params.id);
+        const policy = await this.policyService.findById(req.params.id);
         if (!policy) {
             throw new AppError('Policy not found', HTTP_STATUS.NOT_FOUND);
         }
@@ -239,7 +223,7 @@ export class PolicyController {
      * Get policy statistics
      */
     getPolicyStatistics = asyncHandler(async (req: Request, res: Response) => {
-        const policy = await this.policyService.getById(req.params.id);
+        const policy = await this.policyService.findById(req.params.id);
         if (!policy) {
             throw new AppError('Policy not found', HTTP_STATUS.NOT_FOUND);
         }
@@ -287,23 +271,16 @@ export class RuleTemplateController {
         const { page, limit, skip } = PaginationUtil.getPaginationParams(req.query);
         const filters = this.buildTemplateFilters(req.query);
 
-        const { data, total } = await this.ruleTemplateService.getAll(filters, {
-            page,
-            limit,
-            skip,
-            sort: { usageCount: -1, createdAt: -1 }
-        });
+        const result = await this.ruleTemplateService.findWithPagination(filters, req.query);
 
-        const meta = PaginationUtil.buildMeta(total, page, limit);
-
-        ResponseUtil.success(res, data, 'Rule templates retrieved successfully', HTTP_STATUS.OK, meta);
+        ResponseUtil.success(res, result, 'Rule templates retrieved successfully');
     });
 
     /**
      * Get rule template by ID
      */
     getRuleTemplateById = asyncHandler(async (req: Request, res: Response) => {
-        const template = await this.ruleTemplateService.getById(req.params.id);
+        const template = await this.ruleTemplateService.findById(req.params.id);
         if (!template) {
             throw new AppError('Rule template not found', HTTP_STATUS.NOT_FOUND);
         }
@@ -337,3 +314,4 @@ export class RuleTemplateController {
         return filters;
     }
 }
+

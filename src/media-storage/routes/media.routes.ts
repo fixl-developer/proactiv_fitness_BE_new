@@ -67,15 +67,15 @@ export function createMediaStorageRoutes(controller: MediaStorageController): Ro
 
     // Admin endpoints
     router.get('/quota/:tenantId',
-        authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+        authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN),
         controller.getStorageQuota
     );
     router.put('/quota/:tenantId',
-        authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN),
+        authorize(UserRole.ADMIN),
         controller.updateStorageQuota
     );
     router.get('/audit/:fileId',
-        authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+        authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN),
         controller.getFileAuditTrail
     );
 

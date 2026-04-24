@@ -14,6 +14,24 @@ export class ScheduleController {
     }
 
     /**
+     * Get available sessions for booking (public)
+     */
+    getAvailableSessions = asyncHandler(async (req: Request, res: Response) => {
+        const filters: any = {};
+
+        if (req.query.location) filters.location = req.query.location;
+        if (req.query.programType) filters.programType = req.query.programType;
+        if (req.query.ageGroup) filters.ageGroup = req.query.ageGroup;
+        if (req.query.coach) filters.coach = req.query.coach;
+        if (req.query.startDate) filters.startDate = new Date(req.query.startDate as string);
+        if (req.query.endDate) filters.endDate = new Date(req.query.endDate as string);
+
+        const sessions = await this.scheduleService.getAvailableSessions(filters);
+
+        ResponseUtil.success(res, sessions, 'Available sessions retrieved successfully');
+    });
+
+    /**
      * Generate new schedule
      */
     generateSchedule = asyncHandler(async (req: Request, res: Response) => {
@@ -29,26 +47,18 @@ export class ScheduleController {
      * Get all schedules
      */
     getSchedules = asyncHandler(async (req: Request, res: Response) => {
-        const { page, limit, skip } = PaginationUtil.getPaginationParams(req.query);
         const filters = this.buildScheduleFilters(req.query);
 
-        const { data, total } = await this.scheduleService.getAll(filters, {
-            page,
-            limit,
-            skip,
-            sort: { createdAt: -1 }
-        });
+        const result = await this.scheduleService.findWithPagination(filters, req.query);
 
-        const meta = PaginationUtil.buildMeta(total, page, limit);
-
-        ResponseUtil.success(res, data, 'Schedules retrieved successfully', HTTP_STATUS.OK, meta);
+        ResponseUtil.success(res, result, 'Schedules retrieved successfully');
     });
 
     /**
      * Get schedule by ID
      */
     getScheduleById = asyncHandler(async (req: Request, res: Response) => {
-        const schedule = await this.scheduleService.getById(req.params.id);
+        const schedule = await this.scheduleService.findById(req.params.id);
         if (!schedule) {
             throw new AppError('Schedule not found', HTTP_STATUS.NOT_FOUND);
         }

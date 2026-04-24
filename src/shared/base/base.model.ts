@@ -28,7 +28,7 @@ export const baseSchemaFields = {
 // Base schema options
 export const baseSchemaOptions = {
     timestamps: true, // Adds createdAt and updatedAt
-    versionKey: false, // Removes __v
+    versionKey: '__v' as const, // Change to string instead of false
     toJSON: {
         virtuals: true,
         transform: (_doc: any, ret: any) => {
@@ -37,6 +37,7 @@ export const baseSchemaOptions = {
             delete ret.isDeleted;
             delete ret.deletedAt;
             delete ret.deletedBy;
+            delete ret.__v; // Also delete version key in JSON
             return ret;
         },
     },

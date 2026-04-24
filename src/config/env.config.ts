@@ -72,6 +72,20 @@ interface IEnvConfig {
 
     // Multi-tenancy
     defaultTenant: string;
+
+    // Cloudinary (Image Upload)
+    cloudinaryCloudName: string;
+    cloudinaryApiKey: string;
+    cloudinaryApiSecret: string;
+
+    // AI / OpenAI
+    openaiApiKey: string;
+    openaiModel: string;
+    openaiTemperature: number;
+    openaiMaxTokens: number;
+    openaiRateLimitPerMinute: number;
+    enableAi: boolean;
+    aiCacheTtl: number;
 }
 
 class EnvConfig {
@@ -87,9 +101,9 @@ class EnvConfig {
             appName: process.env.APP_NAME || 'Proactiv Fitness Platform',
 
             // Database
-            mongodbUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/proactiv_fitness',
+            mongodbUri: process.env.MONGODB_URI || 'mongodb+srv://proactiv_user:kUaE38F2HR72LsI4@cluster0.dqredjc.mongodb.net/proactiv_fitness_db?appName=Cluster0',
             mongodbTestUri:
-                process.env.MONGODB_TEST_URI || 'mongodb://localhost:27017/proactiv_fitness_test',
+                process.env.MONGODB_TEST_URI || 'mongodb+srv://proactiv_user:kUaE38F2HR72LsI4@cluster0.dqredjc.mongodb.net/proactiv_fitness_test?appName=Cluster0',
 
             // Redis
             redisHost: process.env.REDIS_HOST || 'localhost',
@@ -103,7 +117,7 @@ class EnvConfig {
             jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
 
             // CORS
-            corsOrigin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000'],
+            corsOrigin: process.env.CORS_ORIGIN?.split(',').map(o => o.trim()) || ['http://localhost:3000'],
 
             // Rate Limiting
             rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10),
@@ -148,6 +162,20 @@ class EnvConfig {
 
             // Multi-tenancy
             defaultTenant: process.env.DEFAULT_TENANT || 'proactiv-hq',
+
+            // Cloudinary (Image Upload)
+            cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
+            cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || '',
+            cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || '',
+
+            // AI / OpenAI
+            openaiApiKey: process.env.OPENAI_API_KEY || '',
+            openaiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+            openaiTemperature: parseFloat(process.env.OPENAI_TEMPERATURE || '0.7'),
+            openaiMaxTokens: parseInt(process.env.OPENAI_MAX_TOKENS || '2048', 10),
+            openaiRateLimitPerMinute: parseInt(process.env.OPENAI_RATE_LIMIT_PER_MINUTE || '60', 10),
+            enableAi: process.env.ENABLE_AI !== 'false',
+            aiCacheTtl: parseInt(process.env.AI_CACHE_TTL || '300', 10),
         };
 
         this.validate();

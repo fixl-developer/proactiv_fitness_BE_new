@@ -28,22 +28,21 @@ export class EventBusController {
         const { page, limit, skip } = PaginationUtil.getPaginationParams(req.query);
         const filters = this.buildEventFilters(req.query);
 
-        const { data, total } = await this.eventBusService.getAll(filters, {
+        const { data, total } = await this.eventBusService.findAll(filters, {
             page,
             limit,
             skip,
             sort: { occurredAt: -1 }
         });
 
-        const meta = PaginationUtil.buildMeta(total, page, limit);
-        ResponseUtil.success(res, data, 'Events retrieved successfully', HTTP_STATUS.OK, meta);
+        ResponseUtil.success(res, result, 'Events retrieved successfully');
     });
 
     /**
      * Get event by ID
      */
     getEventById = asyncHandler(async (req: Request, res: Response) => {
-        const event = await this.eventBusService.getById(req.params.id);
+        const event = await this.eventBusService.findById(req.params.id);
         if (!event) {
             throw new AppError('Event not found', HTTP_STATUS.NOT_FOUND);
         }
@@ -114,14 +113,13 @@ export class EventSubscriptionController {
         const filters = this.buildSubscriptionFilters(req.query);
 
         // Using EventSubscription model directly for subscriptions
-        const subscriptions = await this.eventBusService.getAll(filters, {
+        const subscriptions = await this.eventBusService.findAll(filters, {
             page,
             limit,
             skip,
             sort: { createdAt: -1 }
         });
 
-        const meta = PaginationUtil.buildMeta(subscriptions.total, page, limit);
         ResponseUtil.success(res, subscriptions.data, 'Subscriptions retrieved successfully', HTTP_STATUS.OK, meta);
     });
 
@@ -188,15 +186,14 @@ export class MessageQueueController {
         const { page, limit, skip } = PaginationUtil.getPaginationParams(req.query);
         const filters = { isActive: true };
 
-        const { data, total } = await this.messageQueueService.getAll(filters, {
+        const { data, total } = await this.messageQueueService.findAll(filters, {
             page,
             limit,
             skip,
             sort: { createdAt: -1 }
         });
 
-        const meta = PaginationUtil.buildMeta(total, page, limit);
-        ResponseUtil.success(res, data, 'Queues retrieved successfully', HTTP_STATUS.OK, meta);
+        ResponseUtil.success(res, result, 'Queues retrieved successfully');
     });
 
     /**
@@ -239,3 +236,4 @@ export class MessageQueueController {
         ResponseUtil.success(res, statistics, 'Queue statistics retrieved successfully');
     });
 }
+

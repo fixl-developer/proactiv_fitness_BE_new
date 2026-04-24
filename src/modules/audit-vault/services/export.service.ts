@@ -3,7 +3,7 @@ import { createSign, createVerify } from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { BaseAuditLog, ExportJob } from '../interfaces';
+import { AuditLog, ExportJob } from '../interfaces';
 import { AuditLogFilter } from './query.service';
 import logger from '../../../shared/utils/logger.util';
 
@@ -85,7 +85,7 @@ export class ExportService {
             if (!job) throw new Error('Job not found');
 
             // Query audit logs
-            const auditCollection = this.db.collection<BaseAuditLog>('audit_logs');
+            const auditCollection = this.db.collection<AuditLog>('audit_logs');
             const logs = await this.queryLogsForExport(auditCollection, job.request.filter);
 
             // Generate export file
@@ -140,7 +140,7 @@ export class ExportService {
     private async queryLogsForExport(
         collection: any,
         filter: AuditLogFilter
-    ): Promise<BaseAuditLog[]> {
+    ): Promise<AuditLog[]> {
         const mongoFilter: any = { tenantId: filter.tenantId };
 
         // Apply filters
@@ -163,7 +163,7 @@ export class ExportService {
      * Generate export file
      */
     private async generateExportFile(
-        logs: BaseAuditLog[],
+        logs: AuditLog[],
         format: 'json' | 'csv' | 'pdf',
         jobId: string
     ): Promise<string> {
@@ -193,7 +193,7 @@ export class ExportService {
     /**
      * Generate JSON export
      */
-    private async generateJsonExport(logs: BaseAuditLog[], filePath: string): Promise<void> {
+    private async generateJsonExport(logs: AuditLog[], filePath: string): Promise<void> {
         const exportData = {
             metadata: {
                 exportedAt: new Date().toISOString(),
@@ -209,7 +209,7 @@ export class ExportService {
     /**
      * Generate CSV export
      */
-    private async generateCsvExport(logs: BaseAuditLog[], filePath: string): Promise<void> {
+    private async generateCsvExport(logs: AuditLog[], filePath: string): Promise<void> {
         const headers = [
             'logId',
             'timestamp',
@@ -250,7 +250,7 @@ export class ExportService {
     /**
      * Generate PDF export (simplified implementation)
      */
-    private async generatePdfExport(logs: BaseAuditLog[], filePath: string): Promise<void> {
+    private async generatePdfExport(logs: AuditLog[], filePath: string): Promise<void> {
         // This is a simplified implementation
         // In production, you'd use a proper PDF library like puppeteer or pdfkit
 

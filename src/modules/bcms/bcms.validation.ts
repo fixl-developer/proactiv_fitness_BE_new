@@ -1,5 +1,5 @@
-import { body, param, query } from 'express-validator';
-import { BusinessUnitType, LocationStatus, Currency, Language } from '@shared/enums';
+import { body, param } from 'express-validator';
+import { BusinessUnitType, LocationStatus, Language } from '@shared/enums';
 
 // Country validations
 export const createCountryValidation = [
@@ -14,8 +14,9 @@ export const createCountryValidation = [
     body('currency')
         .notEmpty()
         .withMessage('Currency is required')
-        .isIn(Object.values(Currency))
-        .withMessage('Invalid currency'),
+        .toUpperCase()
+        .matches(/^[A-Z]{3}$/)
+        .withMessage('Currency must be a 3-letter ISO 4217 code (e.g., USD, ARS, INR)'),
     body('timezone').trim().notEmpty().withMessage('Timezone is required'),
     body('languages')
         .isArray({ min: 1 })
@@ -29,8 +30,9 @@ export const updateCountryValidation = [
     body('name').optional().trim().notEmpty().withMessage('Country name cannot be empty'),
     body('currency')
         .optional()
-        .isIn(Object.values(Currency))
-        .withMessage('Invalid currency'),
+        .toUpperCase()
+        .matches(/^[A-Z]{3}$/)
+        .withMessage('Currency must be a 3-letter ISO 4217 code (e.g., USD, ARS, INR)'),
     body('timezone').optional().trim().notEmpty().withMessage('Timezone cannot be empty'),
     body('languages')
         .optional()

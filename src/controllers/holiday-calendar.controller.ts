@@ -11,12 +11,14 @@ export class HolidayCalendarController extends BaseController {
     }
 
     async getAll(req: Request, res: Response) {
-        const query: IHolidayCalendarQuery = {
+        const query: IHolidayCalendarQuery & { search?: string } = {
             regionId: req.query.regionId as string,
             year: req.query.year ? parseInt(req.query.year as string) : undefined,
-            isActive: req.query.isActive === 'true',
             search: req.query.search as string,
         };
+        if (req.query.isActive !== undefined && req.query.isActive !== '') {
+            query.isActive = req.query.isActive === 'true';
+        }
 
         const holidayCalendars = await holidayCalendarService.getHolidayCalendars(query);
         return this.sendSuccess(res, holidayCalendars);
