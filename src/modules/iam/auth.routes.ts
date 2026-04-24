@@ -4,8 +4,6 @@ import parentRegistrationController from './parent-registration.controller';
 import { validate } from '@middleware/validation.middleware';
 import { authLimiter } from '@middleware/rate-limit.middleware';
 import { authenticate } from './auth.middleware';
-import { auditLog } from './audit.middleware';
-import { sanitizeInput } from './security.middleware';
 import { asyncHandler } from '@shared/utils/async-handler.util';
 import {
     registerValidation,
@@ -27,7 +25,6 @@ router.post(
     '/register',
     authLimiter,
     validate(registerValidation),
-    auditLog('REGISTER', 'Auth'),
     asyncHandler(authController.register.bind(authController))
 );
 
@@ -53,7 +50,6 @@ router.post(
     '/login',
     authLimiter,
     validate(loginValidation),
-    auditLog('LOGIN', 'Auth'),
     asyncHandler(authController.login.bind(authController))
 );
 
@@ -87,7 +83,6 @@ router.post(
 router.post(
     '/logout',
     authenticate,
-    auditLog('LOGOUT', 'Auth'),
     asyncHandler(authController.logout.bind(authController))
 );
 

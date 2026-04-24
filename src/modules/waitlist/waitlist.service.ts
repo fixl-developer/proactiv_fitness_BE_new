@@ -1,6 +1,9 @@
+import { Injectable } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { AppError } from '../../shared/utils/app-error.util';
-import { HTTP_STATUS } from '../../shared/constants';
+import { BaseService } from '../../shared/services/base.service';
+import { AppError } from '../../shared/utils/app-error';
+import { HTTP_STATUS } from '../../shared/constants/http-status';
 import { WaitlistEntry } from './waitlist.model';
 import {
     IWaitlistEntry,
@@ -10,11 +13,12 @@ import {
     WaitlistPriority
 } from './waitlist.interface';
 
-export class WaitlistService {
-    private waitlistModel: Model<IWaitlistEntry>;
-
-    constructor(waitlistModel: Model<IWaitlistEntry>) {
-        this.waitlistModel = waitlistModel;
+@Injectable()
+export class WaitlistService extends BaseService<IWaitlistEntry> {
+    constructor(
+        @InjectModel(WaitlistEntry.name) private waitlistModel: Model<IWaitlistEntry>
+    ) {
+        super(waitlistModel);
     }
 
     /**
@@ -69,86 +73,6 @@ export class WaitlistService {
         } catch (error: any) {
             throw new AppError(
                 error.message || 'Failed to fetch waitlist entries',
-                HTTP_STATUS.INTERNAL_SERVER_ERROR
-            );
-        }
-    }
-
-    /**
-     * Get waitlist entries for a specific class
-     */
-    async getClassWaitlist(classId: string, filters?: any): Promise<IWaitlistEntry[]> {
-        try {
-            const query: any = { classId };
-
-            if (filters?.status) {
-                query.status = filters.status;
-            }
-
-            if (filters?.priority) {
-                query.priority = filters.priority;
-            }
-
-            const limit = filters?.limit ? parseInt(filters.limit) : 50;
-            const offset = filters?.offset ? parseInt(filters.offset) : 0;
-            const sortBy = filters?.sortBy || 'position';
-            const sortOrder = filters?.sortOrder === 'desc' ? -1 : 1;
-
-            return await this.waitlistModel
-                .find(query)
-                .populate('studentId', 'firstName lastName email')
-                .populate('classId', 'name schedule')
-                .sort({ [sortBy]: sortOrder })
-                .limit(limit)
-                .skip(offset)
-                .exec();
-        } catch (error: any) {
-            throw new AppError(
-                error.message || 'Failed to fetch class waitlist',
-                HTTP_STATUS.INTERNAL_SERVER_ERROR
-            );
-        }
-    }
-
-    /**
-     * Get waitlist entries for a student
-     */
-    async getStudentWaitlist(studentId: string): Promise<IWaitlistEntry[]> {
-        try {
-            return await this.waitlistModel
-                .find({ studentId })
-                .populate('classId', 'name schedule')
-                .populate('businessUnitId', 'name')
-                .sort({ createdAt: -1 })
-                .exec();
-        } catch (error: any) {
-            throw new AppError(
-                error.message || 'Failed to fetch student waitlist entries',
-                HTTP_STATUS.INTERNAL_SERVER_ERROR
-            );
-        }
-    }
-
-    /**
-     * Get single waitlist entry
-     */
-    async getWaitlistEntry(entryId: string): Promise<IWaitlistEntry> {
-        try {
-            const entry = await this.waitlistModel
-                .findById(entryId)
-                .populate('studentId')
-                .populate('classId')
-                .populate('businessUnitId')
-                .exec();
-
-            if (!entry) {
-                throw new AppError('Waitlist entry not found', HTTP_STATUS.NOT_FOUND);
-            }
-
-            return entry;
-        } catch (error: any) {
-            throw new AppError(
-                error.message || 'Failed to fetch waitlist entry',
                 HTTP_STATUS.INTERNAL_SERVER_ERROR
             );
         }
@@ -214,71 +138,12 @@ export class WaitlistService {
             await this.createEnrollment(entry);
 
             // Move up remaining waitlist positions
-            await this.updateWaitlistPositions(entry.classId.toString(), entry.position);
+            await this.updateWaitlistPositions(entry.classId, entry.position);
 
             return entry;
         } catch (error: any) {
             throw new AppError(
                 error.message || 'Failed to accept offer',
-                HTTP_STATUS.INTERNAL_SERVER_ERROR
-            );
-        }
-    }
-
-    /**
-     * Reject waitlist offer
-     */
-    async rejectOffer(entryId: string, reason?: string): Promise<IWaitlistEntry> {
-        try {
-            const entry = await this.waitlistModel.findById(entryId);
-            if (!entry) {
-                throw new AppError('Waitlist entry not found', HTTP_STATUS.NOT_FOUND);
-            }
-
-            if (entry.status !== WaitlistStatus.OFFERED) {
-                throw new AppError('No active offer to reject', HTTP_STATUS.BAD_REQUEST);
-            }
-
-            entry.status = WaitlistStatus.ACTIVE;
-            entry.rejectionReason = reason;
-            entry.rejectionDate = new Date();
-            entry.offerDate = undefined;
-            entry.offerExpiryDate = undefined;
-
-            await entry.save();
-
-            return entry;
-        } catch (error: any) {
-            throw new AppError(
-                error.message || 'Failed to reject offer',
-                HTTP_STATUS.INTERNAL_SERVER_ERROR
-            );
-        }
-    }
-
-    /**
-     * Update waitlist entry priority
-     */
-    async updatePriority(entryId: string, priority: string): Promise<IWaitlistEntry> {
-        try {
-            if (!['HIGH', 'MEDIUM', 'LOW'].includes(priority)) {
-                throw new AppError('Invalid priority value', HTTP_STATUS.BAD_REQUEST);
-            }
-
-            const entry = await this.waitlistModel.findByIdAndUpdate(
-                entryId,
-                { priority },
-                { new: true }
-            );
-
-            if (!entry) {
-                throw new AppError('Waitlist entry not found', HTTP_STATUS.NOT_FOUND);
-            }
-
-            return entry;
-        } catch (error: any) {
-            throw new AppError(
-                error.message || 'Failed to update priority',
                 HTTP_STATUS.INTERNAL_SERVER_ERROR
             );
         }
@@ -295,7 +160,7 @@ export class WaitlistService {
             }
 
             const position = entry.position;
-            const classId = entry.classId.toString();
+            const classId = entry.classId;
 
             await this.waitlistModel.findByIdAndDelete(entryId);
 

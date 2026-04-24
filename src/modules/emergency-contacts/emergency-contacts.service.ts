@@ -1,6 +1,9 @@
+import { Injectable } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { AppError } from '../../shared/utils/app-error.util';
-import { HTTP_STATUS } from '../../shared/constants';
+import { BaseService } from '../../shared/services/base.service';
+import { AppError } from '../../shared/utils/app-error';
+import { HTTP_STATUS } from '../../shared/constants/http-status';
 import { EmergencyContact } from './emergency-contacts.model';
 import {
     IEmergencyContact,
@@ -9,11 +12,12 @@ import {
     EmergencyContactStatus
 } from './emergency-contacts.interface';
 
-export class EmergencyContactsService {
-    private emergencyContactModel: Model<IEmergencyContact>;
-
-    constructor(emergencyContactModel: Model<IEmergencyContact>) {
-        this.emergencyContactModel = emergencyContactModel;
+@Injectable()
+export class EmergencyContactsService extends BaseService<IEmergencyContact> {
+    constructor(
+        @InjectModel(EmergencyContact.name) private emergencyContactModel: Model<IEmergencyContact>
+    ) {
+        super(emergencyContactModel);
     }
 
     /**
@@ -143,22 +147,5 @@ export class EmergencyContactsService {
     private async getBusinessUnitId(studentId: string): Promise<string> {
         // Implementation would fetch student's business unit
         return 'default-location-id';
-    }
-
-    /**
-     * Delete emergency contact
-     */
-    async delete(contactId: string): Promise<void> {
-        try {
-            const result = await this.emergencyContactModel.findByIdAndDelete(contactId);
-            if (!result) {
-                throw new AppError('Emergency contact not found', HTTP_STATUS.NOT_FOUND);
-            }
-        } catch (error: any) {
-            throw new AppError(
-                error.message || 'Failed to delete emergency contact',
-                HTTP_STATUS.INTERNAL_SERVER_ERROR
-            );
-        }
     }
 }
