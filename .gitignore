@@ -60,4 +60,4 @@ backend/.git/
 !README.md
 *.ps1
 *.txt
-
+*.py
