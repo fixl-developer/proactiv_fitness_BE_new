@@ -3,6 +3,6 @@ import aiCommunicationController from './controller';
 
 const router = Router();
 
-router.use('/ai-communication', aiCommunicationController);
+router.use('/', aiCommunicationController);
 
 export default router;

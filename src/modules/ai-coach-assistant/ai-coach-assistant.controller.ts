@@ -38,4 +38,27 @@ router.get('/corrections/:studentId', authenticate, async (req: Request, res: Re
     }
 });
 
+// Predict progress
+router.get('/predict-progress', authenticate, async (req: Request, res: Response) => {
+    try {
+        const { studentId, tenantId } = req.query;
+        const userId = req.user?.id;
+
+        if (!studentId) {
+            res.status(400).json({ success: false, message: 'studentId is required' });
+            return;
+        }
+
+        const prediction = await assistantService.predictProgress(
+            userId,
+            studentId as string,
+            tenantId as string
+        );
+
+        res.json({ success: true, data: prediction });
+    } catch (error: any) {
+        res.status(400).json({ success: false, error: error.message });
+    }
+});
+
 export default router;

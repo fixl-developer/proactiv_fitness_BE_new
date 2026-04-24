@@ -44,4 +44,21 @@ export class PaymentService extends BaseService<IPaymentMethod> {
             );
         }
     }
+
+    /**
+     * Get payments by user
+     */
+    async getPaymentsByUser(userId: string): Promise<ITransaction[]> {
+        try {
+            // Return empty array for now - implementation would fetch from database
+            return [];
+        } catch (error: any) {
+            throw new AppError(
+                error.message || 'Failed to get payments',
+                HTTP_STATUS.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
 }
+
+export const paymentService = new PaymentService();

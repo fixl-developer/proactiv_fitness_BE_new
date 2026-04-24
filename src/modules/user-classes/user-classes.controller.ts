@@ -71,6 +71,21 @@ export class UserClassesController {
         }
     }
 
+    async getUpcomingClasses(req: Request, res: Response): Promise<void> {
+        try {
+            const userId = req.user?.id;
+            if (!userId) {
+                res.status(401).json({ success: false, message: 'Unauthorized' });
+                return;
+            }
+
+            const classes = await userClassesService.getUpcomingClasses(userId);
+            res.status(200).json({ success: true, data: classes });
+        } catch (error: any) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
     async getClassAttendance(req: Request, res: Response): Promise<void> {
         try {
             const userId = req.user?.id;
@@ -101,6 +116,21 @@ export class UserClassesController {
 
             await userClassesService.submitFeedback(userId, classId, feedbackData);
             res.status(200).json({ success: true, message: 'Feedback submitted' });
+        } catch (error: any) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    async getUpcomingClasses(req: Request, res: Response): Promise<void> {
+        try {
+            const userId = req.user?.id;
+            if (!userId) {
+                res.status(401).json({ success: false, message: 'Unauthorized' });
+                return;
+            }
+
+            const classes = await userClassesService.getUpcomingClasses(userId);
+            res.status(200).json({ success: true, data: classes });
         } catch (error: any) {
             res.status(500).json({ success: false, message: error.message });
         }

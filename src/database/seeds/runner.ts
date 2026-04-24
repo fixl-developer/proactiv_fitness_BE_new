@@ -40,20 +40,7 @@ async function runSeeds() {
         try {
             const existing = await User.findOne({ email: userData.email });
             if (existing) {
-                // Update role, status, isEmailVerified if they changed
-                const updates: any = {};
-                if (existing.role !== userData.role) updates.role = userData.role;
-                if (existing.status !== userData.status) updates.status = userData.status;
-                if (!existing.isEmailVerified && userData.isEmailVerified) updates.isEmailVerified = true;
-                if (userData.firstName && existing.firstName !== userData.firstName) updates.firstName = userData.firstName;
-                if (userData.lastName && existing.lastName !== userData.lastName) updates.lastName = userData.lastName;
-
-                if (Object.keys(updates).length > 0) {
-                    await User.updateOne({ _id: existing._id }, { $set: updates });
-                    console.log(`  🔄 ${userData.email} — updated: ${Object.keys(updates).join(', ')}`);
-                } else {
-                    console.log(`  ⏭  ${userData.email} (${userData.role}) — already up to date`);
-                }
+                console.log(`  ⏭  ${userData.email} (${userData.role}) — already exists, skipped`);
                 skipped++;
                 continue;
             }

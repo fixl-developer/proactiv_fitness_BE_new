@@ -109,6 +109,21 @@ export class UserAchievementsController {
             res.status(500).json({ success: false, message: error.message });
         }
     }
+
+    async getStats(req: Request, res: Response): Promise<void> {
+        try {
+            const userId = req.user?.id;
+            if (!userId) {
+                res.status(401).json({ success: false, message: 'Unauthorized' });
+                return;
+            }
+
+            const stats = await userAchievementsService.getStats(userId);
+            res.status(200).json({ success: true, data: stats });
+        } catch (error: any) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
 }
 
 export const userAchievementsController = new UserAchievementsController();

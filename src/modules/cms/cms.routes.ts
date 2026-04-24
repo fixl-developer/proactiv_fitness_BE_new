@@ -93,7 +93,7 @@ function setupCRUD(
 
     router.post(path,
         authenticate, authorize(...adminRoles),
-        ...createValidators, validate,
+        validate(createValidators),
         crud.create
     );
 
@@ -106,21 +106,21 @@ function setupCRUD(
     // Get By ID
     router.get(`${path}/:id`,
         authenticate, authorize(...adminRoles),
-        param('id').isMongoId().withMessage('Valid ID required'), validate,
+        validate([param('id').isMongoId().withMessage('Valid ID required')]),
         crud.getById
     );
 
     // Update
     router.patch(`${path}/:id`,
         authenticate, authorize(...adminRoles),
-        param('id').isMongoId().withMessage('Valid ID required'), validate,
+        validate([param('id').isMongoId().withMessage('Valid ID required')]),
         crud.update
     );
 
     // Delete
     router.delete(`${path}/:id`,
         authenticate, authorize(...adminRoles),
-        param('id').isMongoId().withMessage('Valid ID required'), validate,
+        validate([param('id').isMongoId().withMessage('Valid ID required')]),
         crud.delete
     );
 }

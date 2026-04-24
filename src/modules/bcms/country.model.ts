@@ -1,6 +1,6 @@
 import { Schema, model } from 'mongoose';
 import { ICountry } from './bcms.interface';
-import { Currency, Language } from '@shared/enums';
+import { Language } from '@shared/enums';
 import { baseSchemaFields, baseSchemaOptions } from '@shared/base/base.model';
 
 const countrySchema = new Schema<ICountry>(
@@ -22,8 +22,12 @@ const countrySchema = new Schema<ICountry>(
         },
         currency: {
             type: String,
-            enum: Object.values(Currency),
             required: [true, 'Currency is required'],
+            uppercase: true,
+            trim: true,
+            minlength: [3, 'Currency must be an ISO 4217 3-letter code'],
+            maxlength: [3, 'Currency must be an ISO 4217 3-letter code'],
+            match: [/^[A-Z]{3}$/, 'Currency must be 3 uppercase letters (ISO 4217, e.g., USD, ARS, INR)'],
         },
         timezone: {
             type: String,

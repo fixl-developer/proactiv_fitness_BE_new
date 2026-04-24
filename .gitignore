@@ -61,3 +61,5 @@ backend/.git/
 *.ps1
 *.txt
 *.py
+*.json
+*.py

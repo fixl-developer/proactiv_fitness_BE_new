@@ -10,7 +10,7 @@ export class UserDashboardService {
             const [profile, progress, bookings, payments, wallet] = await Promise.all([
                 userProfileService.getProfile(userId),
                 userProgressService.getProgress(userId),
-                bookingService.getBookingsByUser(userId),
+                bookingService.getMyBookings(userId),
                 paymentService.getPaymentsByUser(userId),
                 walletService.getWallet(userId)
             ]);
@@ -53,7 +53,7 @@ export class UserDashboardService {
         const [profile, progress, bookings] = await Promise.all([
             userProfileService.getProfileStats(userId),
             userProgressService.getProgress(userId),
-            bookingService.getBookingsByUser(userId)
+            bookingService.getMyBookings(userId)
         ]);
 
         return {
@@ -72,7 +72,7 @@ export class UserDashboardService {
     }
 
     async getUpcoming(userId: string): Promise<any[]> {
-        const bookings = await bookingService.getBookingsByUser(userId);
+        const bookings = await bookingService.getMyBookings(userId);
         return bookings?.filter((b: any) =>
             b.status === 'confirmed' && new Date(b.date) > new Date()
         ).slice(0, 10) || [];

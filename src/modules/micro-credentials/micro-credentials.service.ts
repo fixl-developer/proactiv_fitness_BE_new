@@ -168,7 +168,6 @@ export class MicroCredentialService extends BaseService<IMicroCredential> {
     private generateIssuedCredentialId(): string {
         return `issued_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
-
     /**
      * Verify credential
      */
