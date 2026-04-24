@@ -122,6 +122,9 @@ import adminSystemRoutes from './admin-system.routes';
 // === NEW: Missing Modules Routes (students, waitlist, social, budget, leads, etc.) ===
 import missingModulesRoutes from './missing-modules.routes';
 
+// === NEW: IAM dynamic RBAC (custom roles & permissions CRUD) ===
+import iamRbacRoutes from './iam-rbac.routes';
+
 // === BCMS (Business Configuration Management) ===
 import { termRoutes, holidayCalendarRoutes, countryRoutes, regionRoutes, businessUnitRoutes, locationRoutes, roomRoutes } from '../modules/bcms';
 
@@ -225,6 +228,17 @@ router.use('/referrals', referralsRoutes);
 router.use('/certificates', certificatesRoutes);
 router.use('/health-metrics', healthMetricsRoutes);
 
+// Aliases so frontend calls under /user/* prefix resolve to the same modules.
+// (Frontend pages were written as /user/attendance, /user/schedule, etc.)
+router.use('/user/schedule', scheduleRoutes);
+router.use('/user/notifications', notificationsRoutes);
+router.use('/user/health-metrics', healthMetricsRoutes);
+router.use('/user/certificates', certificatesRoutes);
+router.use('/user/feedback', feedbackRoutes);
+router.use('/user/downloads', downloadsRoutes);
+router.use('/user/referrals', referralsRoutes);
+router.use('/user/my-classes', userClassesRoutes);
+
 // =============================================
 // OPERATIONS (existing)
 // =============================================
@@ -250,6 +264,12 @@ router.use('/parent-engagement', parentEngagementRoutes);
 router.use('/parent-roi', parentRoiRoutes);
 router.use('/financial-ledger', financialLedgerRoutes);
 router.use('/integrations', integrationsRoutes);
+
+// Aliases for /user/* frontend prefix (continued — these come after their base modules are imported)
+router.use('/user/attendance', attendanceRoutes);
+router.use('/user/payments', paymentsRoutes);
+router.use('/user/wallet', walletRoutes);
+router.use('/user/support', supportRoutes);
 
 // =============================================
 // BCMS (Business Configuration)
@@ -332,6 +352,7 @@ router.use('/global-intelligence', globalIntelligenceRoutes);
 router.use('/wearables', wearablesRoutes);
 router.use('/virtual-training', virtualTrainingRoutes);
 router.use('/nutrition', nutritionRoutes);
+router.use('/user/nutrition', nutritionRoutes); // alias for /user/nutrition/meals calls
 router.use('/athlete-passport', athletePassportRoutes);
 
 // Platform & Infrastructure (these have internal prefix, mount at /)
@@ -435,8 +456,66 @@ router.get('/system/analytics', async (_req: Request, res: Response) => {
     }
 });
 
-router.get('/automation', (_req: Request, res: Response) => {
-    res.json({ message: 'Automation routes - Phase 4 complete' });
+// AI Chatbot
+router.use('/ai', aiChatbotRoutes);
+
+// =============================================
+// DASHBOARD & ANALYTICS (real data from MongoDB)
+// =============================================
+router.use('/', dashboardRoutes);
+
+// =============================================
+// NEW: Admin Alias Routes (maps frontend /admin/* paths to backend modules)
+// =============================================
+router.use('/', adminAliasRoutes);
+
+// =============================================
+// NEW: Admin Dashboard (real MongoDB data)
+// =============================================
+router.use('/admin/dashboard', adminDashboardRoutes);
+
+// =============================================
+// NEW: Admin Customers
+// =============================================
+router.use('/admin/customers', adminCustomersRoutes);
+
+// =============================================
+// NEW: Admin Settings
+// =============================================
+router.use('/admin/settings', adminSettingsRoutes);
+
+// =============================================
+// NEW: Admin System (API, Database, Features, Security, Logs)
+// =============================================
+router.use('/admin/system', adminSystemRoutes);
+
+// =============================================
+// NEW: Missing Modules (students, waitlist, social, budget, leads, campaigns, sop, semantic-search, IAM)
+// =============================================
+// Mount IAM RBAC BEFORE missing-modules so the dynamic CRUD endpoints
+// take precedence over any legacy handlers. (missing-modules now has
+// no /iam/roles or /iam/permissions stubs, but keep order explicit.)
+router.use('/', iamRbacRoutes);
+router.use('/', missingModulesRoutes);
+
+// Audit logs endpoint - real data from AuditVault
+router.get('/audit/logs', async (req: Request, res: Response) => {
+    try {
+        const { AuditVaultModel } = require('../modules/audit-vault/audit-vault.model');
+        const { action, status, search, limit: limitStr } = req.query;
+        const filter: any = {};
+        if (action) filter.action = action;
+        if (search) filter.$or = [
+            { action: { $regex: search, $options: 'i' } },
+            { entityType: { $regex: search, $options: 'i' } },
+            { reason: { $regex: search, $options: 'i' } },
+        ];
+        const limit = parseInt(limitStr as string) || 100;
+        const logs = await AuditVaultModel.find(filter).sort({ createdAt: -1 }).limit(limit).lean();
+        res.json({ success: true, data: logs });
+    } catch (error: any) {
+        res.json({ success: true, data: [] });
+    }
 });
 
 router.post('/audit/logs', async (req: Request, res: Response) => {

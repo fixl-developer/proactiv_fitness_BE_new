@@ -13,9 +13,11 @@ export class RegionController extends BaseController {
     async getAll(req: Request, res: Response) {
         const query: IRegionQuery = {
             countryId: req.query.countryId as string,
-            isActive: req.query.isActive === 'true',
             search: req.query.search as string,
         };
+        if (req.query.isActive !== undefined && req.query.isActive !== '') {
+            query.isActive = req.query.isActive === 'true';
+        }
 
         const regions = await regionService.getRegions(query);
         return this.sendSuccess(res, regions);

@@ -12,9 +12,12 @@ export class CountryController extends BaseController {
 
     async getAll(req: Request, res: Response) {
         const query: ICountryQuery = {
-            isActive: req.query.isActive === 'true',
             search: req.query.search as string,
         };
+
+        if (req.query.isActive !== undefined) {
+            query.isActive = req.query.isActive === 'true';
+        }
 
         const countries = await countryService.getCountries(query);
         return this.sendSuccess(res, countries);

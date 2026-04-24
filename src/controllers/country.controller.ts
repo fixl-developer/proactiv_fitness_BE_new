@@ -11,10 +11,13 @@ export class CountryController extends BaseController {
     }
 
     async getAll(req: Request, res: Response) {
+        // Only apply isActive filter if explicitly provided (otherwise list ALL statuses).
         const query: ICountryQuery = {
-            isActive: req.query.isActive === 'true',
             search: req.query.search as string,
         };
+        if (req.query.isActive !== undefined && req.query.isActive !== '') {
+            query.isActive = req.query.isActive === 'true';
+        }
 
         const countries = await countryService.getCountries(query);
         return this.sendSuccess(res, countries);

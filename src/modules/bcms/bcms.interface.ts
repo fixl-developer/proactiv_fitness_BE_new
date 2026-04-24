@@ -1,12 +1,12 @@
 import { Document } from 'mongoose';
-import { BusinessUnitType, LocationStatus, Currency, Language } from '@shared/enums';
+import { BusinessUnitType, LocationStatus, Language } from '@shared/enums';
 import { IAddress, IContactInfo } from '@shared/interfaces/common.interface';
 
 // ==================== COUNTRY ====================
 export interface ICountry extends Document {
     name: string;
     code: string; // ISO 3166-1 alpha-2 (e.g., JP, US, SG)
-    currency: Currency;
+    currency: string; // ISO 4217 3-letter code (e.g., USD, ARS, INR)
     timezone: string;
     languages: Language[];
     isActive: boolean;
@@ -16,14 +16,14 @@ export interface ICountry extends Document {
 export interface ICountryCreate {
     name: string;
     code: string;
-    currency: Currency;
+    currency: string;
     timezone: string;
     languages: Language[];
 }
 
 export interface ICountryUpdate {
     name?: string;
-    currency?: Currency;
+    currency?: string;
     timezone?: string;
     languages?: Language[];
     isActive?: boolean;
@@ -347,7 +347,7 @@ export interface ICountryResponse {
     id: string;
     name: string;
     code: string;
-    currency: Currency;
+    currency: string;
     timezone: string;
     languages: Language[];
     isActive: boolean;
