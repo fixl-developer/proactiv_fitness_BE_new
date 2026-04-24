@@ -50,7 +50,11 @@ const contactInfoSchema = new Schema({
 // Certification Schema
 const certificationSchema = new Schema({
     // @ts-ignore - Mongoose type issue
-    certificationId: { type: String, required: true, unique: true },
+    // NOTE: unique removed — this is a sub-document inside the Staff.certifications array.
+    // Mongoose was building a unique index on the nested array which rejects multiple staff
+    // with no certifications (they all get `null` or `undefined`). Uniqueness should be
+    // enforced at the app layer via generated IDs when certifications are actually added.
+    certificationId: { type: String, required: true },
     name: { type: String, required: true, trim: true },
     issuingOrganization: { type: String, required: true, trim: true },
     issueDate: { type: Date, required: true },
@@ -64,7 +68,11 @@ const certificationSchema = new Schema({
 
 // Background Check Schema
 const backgroundCheckSchema = new Schema({
-    checkId: { type: String, required: true, unique: true },
+    // Sub-document array — `unique` at this level creates a global index on
+    // backgroundChecks.checkId and fails when multiple Staff docs have empty
+    // backgroundChecks arrays (they all get `null`). Uniqueness is generated at
+    // app layer instead.
+    checkId: { type: String, required: true },
     type: { type: String, enum: ['criminal', 'employment', 'education', 'reference', 'medical'], required: true },
     provider: { type: String, required: true, trim: true },
     requestDate: { type: Date, required: true },
@@ -87,7 +95,9 @@ const availabilitySlotSchema = new Schema({
 
 // Time Off Request Schema
 const timeOffRequestSchema = new Schema({
-    requestId: { type: String, required: true, unique: true },
+    // Same reason as backgroundCheckSchema.checkId — sub-document unique
+    // indexes break empty-array inserts.
+    requestId: { type: String, required: true },
     type: { type: String, enum: Object.values(LeaveType), required: true },
     startDate: { type: Date, required: true },
     endDate: { type: Date, required: true },
@@ -324,7 +334,9 @@ staffSchema.index({ businessUnitId: 1, staffType: 1, status: 1 });
 staffSchema.index({ primaryLocationId: 1, isActive: 1 });
 staffSchema.index({ 'personalInfo.firstName': 1, 'personalInfo.lastName': 1 });
 staffSchema.index({ 'contactInfo.email': 1 });
-staffSchema.index({ skills: 1, specializations: 1 });
+// MongoDB disallows compound indexes on parallel arrays — index each separately
+staffSchema.index({ skills: 1 });
+staffSchema.index({ specializations: 1 });
 staffSchema.index({ currentAvailabilityStatus: 1, isActive: 1 });
 
 staffScheduleSchema.index({ staffId: 1, date: 1 });

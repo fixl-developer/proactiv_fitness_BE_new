@@ -38,8 +38,17 @@ router.get('/dashboard', async (req: Request, res: Response) => {
         // Get user's region info
         const region = await Region.findOne({ isActive: true }).lean();
 
-        // Date ranges for "this month" vs "last month" comparison
+        // Time range selector (7d / 30d / 90d) — affects revenue chart & "period" stats
+        const timeRange = (req.query.timeRange as string) || '30d';
         const now = new Date();
+        let rangeStart = new Date(now);
+        switch (timeRange) {
+            case '7d': rangeStart.setDate(now.getDate() - 7); break;
+            case '90d': rangeStart.setDate(now.getDate() - 90); break;
+            default: rangeStart.setDate(now.getDate() - 30); break;
+        }
+
+        // Date ranges for "this month" vs "last month" comparison (independent of timeRange)
         const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
         const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
@@ -80,8 +89,23 @@ router.get('/dashboard', async (req: Request, res: Response) => {
             Location.find({ status: 'ACTIVE' }).select('name capacity code').lean().catch(() => []),
             // Staff grouped by role
             User.aggregate([{ $match: { role: { $in: ['COACH', 'LOCATION_MANAGER', 'SUPPORT_STAFF', 'FRANCHISE_OWNER'] }, status: 'ACTIVE' } }, { $group: { _id: '$role', count: { $sum: 1 } } }]).catch(() => []),
-            // Recent bookings for revenue chart
-            (async () => { try { const { Booking } = require('../modules/booking/booking.model'); return await Booking.aggregate([{ $match: { 'payment.status': { $in: ['paid', 'COMPLETED', 'completed'] } } }, { $group: { _id: { $month: '$createdAt' }, revenue: { $sum: '$payment.amount' }, count: { $sum: 1 } } }, { $sort: { _id: 1 } }]); } catch { return []; } })()
+            // Recent bookings for revenue chart - scoped to selected timeRange
+            (async () => {
+                try {
+                    const { Booking } = require('../modules/booking/booking.model');
+                    // For 7d bucket by day, for 30d by week, for 90d by month
+                    const groupExpr = timeRange === '7d'
+                        ? { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }
+                        : timeRange === '90d'
+                            ? { $dateToString: { format: '%Y-%m', date: '$createdAt' } }
+                            : { $dateToString: { format: '%Y-W%U', date: '$createdAt' } };
+                    return await Booking.aggregate([
+                        { $match: { 'payment.status': { $in: ['paid', 'COMPLETED', 'completed'] }, createdAt: { $gte: rangeStart } } },
+                        { $group: { _id: groupExpr, revenue: { $sum: '$payment.amount' }, count: { $sum: 1 } } },
+                        { $sort: { _id: 1 } }
+                    ]);
+                } catch { return []; }
+            })()
         ]);
 
         // Compute real changes
@@ -107,15 +131,25 @@ router.get('/dashboard', async (req: Request, res: Response) => {
             utilization: staffUtilization
         }));
 
-        // Build real revenue chart from bookings aggregation
-        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const revenueData = (recentBookings as any[]).length > 0
-            ? (recentBookings as any[]).map((r: any) => ({
-                month: monthNames[(r._id - 1) % 12] || `M${r._id}`,
+        // Build real revenue chart from bookings aggregation — labels depend on bucket
+        const revenueData = (recentBookings as any[]).map((r: any) => {
+            let label: string;
+            if (timeRange === '7d') {
+                // _id is "YYYY-MM-DD"
+                try { label = new Date(r._id).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); } catch { label = String(r._id); }
+            } else if (timeRange === '90d') {
+                // _id is "YYYY-MM"
+                try { const [y, m] = String(r._id).split('-'); label = new Date(parseInt(y), parseInt(m) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }); } catch { label = String(r._id); }
+            } else {
+                // _id is "YYYY-WN" (week)
+                label = String(r._id).replace(/^\d{4}-W/, 'W');
+            }
+            return {
+                month: label,
                 revenue: r.revenue || 0,
                 target: Math.round((r.revenue || 0) * 1.1)
-            }))
-            : [];
+            };
+        });
 
         // Build real dynamic alerts
         const alerts: any[] = [];
@@ -143,6 +177,7 @@ router.get('/dashboard', async (req: Request, res: Response) => {
             data: {
                 regionName: region?.name || 'My Region',
                 regionCode: region?.code || 'REG-001',
+                timeRange,
                 totalLocations,
                 totalStaff,
                 totalStudents,
@@ -158,7 +193,7 @@ router.get('/dashboard', async (req: Request, res: Response) => {
                 staffChange: staffThisMonth,
                 studentsChange: studentsThisMonth,
                 studentGrowth,
-                // Dynamic chart data
+                // Dynamic chart data - already scoped to timeRange
                 revenueData,
                 locationPerformance,
                 staffPerformance,
@@ -713,6 +748,13 @@ router.get('/approvals', async (req: Request, res: Response) => {
             details: `Hiring ${u.firstName} ${u.lastName} as ${u.role}`
         }));
 
+        // Merge user-created approvals from Region metadata
+        try {
+            const region = await Region.findOne({ isActive: true }).lean();
+            const custom: any = (region as any)?.metadata?.customApprovals;
+            if (Array.isArray(custom) && custom.length > 0) approvals = [...custom, ...approvals];
+        } catch {}
+
         // Add some system-generated approvals if none exist
         if (approvals.length === 0) {
             approvals = [
@@ -735,6 +777,37 @@ router.get('/approvals', async (req: Request, res: Response) => {
             pageSize: limit,
             totalPages: Math.ceil(total / limit)
         });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+router.post('/approvals', async (req: Request, res: Response) => {
+    try {
+        const { type, title, description, priority, location, details } = req.body || {};
+        if (!type || !title) {
+            return res.status(400).json({ success: false, message: 'type and title are required' });
+        }
+        // Persist in Region metadata.customApprovals (demo persistence)
+        const region = await Region.findOne({ isActive: true });
+        if (!region) return res.status(404).json({ success: false, message: 'Region not found' });
+        const newItem = {
+            id: `req-${Date.now()}`,
+            type: String(type).toUpperCase(),
+            title,
+            description: description || '',
+            requestedBy: req.user?.email || 'system',
+            requestedDate: new Date().toISOString(),
+            status: 'PENDING',
+            priority: (priority || 'MEDIUM').toUpperCase(),
+            location: location || 'Regional',
+            details: details || ''
+        };
+        const existing = Array.isArray(region.metadata?.customApprovals) ? region.metadata.customApprovals : [];
+        region.metadata = { ...(region.metadata || {}), customApprovals: [...existing, newItem] };
+        region.markModified('metadata');
+        await region.save();
+        res.status(201).json({ success: true, data: newItem });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -866,18 +939,35 @@ router.post('/settings/regenerate-api-key', async (req: Request, res: Response) 
 // =============================================
 // BUDGET
 // =============================================
+// Default budget seed — used if no custom items saved
+const DEFAULT_BUDGET_ITEMS = [
+    { id: 'b1', category: 'Personnel', allocated: 250000, spent: 180000 },
+    { id: 'b2', category: 'Operations', allocated: 120000, spent: 95000 },
+    { id: 'b3', category: 'Marketing', allocated: 80000, spent: 45000 },
+    { id: 'b4', category: 'Technology', allocated: 50000, spent: 38000 },
+];
+
+async function loadBudgetItems(): Promise<any[]> {
+    const region = await Region.findOne({ isActive: true }).lean();
+    const custom: any = (region as any)?.metadata?.budgetItems;
+    if (Array.isArray(custom)) return custom;
+    return DEFAULT_BUDGET_ITEMS;
+}
+
 router.get('/budget', async (req: Request, res: Response) => {
     try {
         const { period = 'Q1-2026' } = req.query;
 
         const locations = await Location.find({ status: 'ACTIVE' }).select('name').lean();
-
-        const budgetItems = [
-            { id: 'b1', category: 'Personnel', allocated: 250000, spent: 180000, remaining: 70000 },
-            { id: 'b2', category: 'Operations', allocated: 120000, spent: 95000, remaining: 25000 },
-            { id: 'b3', category: 'Marketing', allocated: 80000, spent: 45000, remaining: 35000 },
-            { id: 'b4', category: 'Technology', allocated: 50000, spent: 38000, remaining: 12000 },
-        ];
+        const rawItems = await loadBudgetItems();
+        const budgetItems = rawItems.map((i: any) => ({
+            id: i.id,
+            category: i.category,
+            allocated: Number(i.allocated) || 0,
+            spent: Number(i.spent) || 0,
+            remaining: (Number(i.allocated) || 0) - (Number(i.spent) || 0),
+            notes: i.notes || ''
+        }));
 
         const locationBudgets = locations.map((loc: any) => ({
             locationId: loc._id.toString(),
@@ -886,19 +976,73 @@ router.get('/budget', async (req: Request, res: Response) => {
             spent: Math.round(Math.random() * 40000 + 20000),
         }));
 
-        const totalAllocated = budgetItems.reduce((sum, i) => sum + i.allocated, 0);
-        const totalSpent = budgetItems.reduce((sum, i) => sum + i.spent, 0);
+        const totalAllocated = budgetItems.reduce((sum: number, i: any) => sum + (i.allocated || 0), 0);
+        const totalSpent = budgetItems.reduce((sum: number, i: any) => sum + (i.spent || 0), 0);
 
         res.json({
             success: true,
             data: {
                 period,
-                summary: { totalAllocated, totalSpent, remaining: totalAllocated - totalSpent, utilizationRate: Math.round((totalSpent / totalAllocated) * 100) },
+                summary: { totalAllocated, totalSpent, remaining: totalAllocated - totalSpent, utilizationRate: totalAllocated > 0 ? Math.round((totalSpent / totalAllocated) * 100) : 0 },
                 items: budgetItems,
                 locationBudgets,
-                alerts: totalSpent / totalAllocated > 0.8 ? [{ type: 'WARNING', message: 'Budget utilization above 80%' }] : []
+                alerts: totalAllocated > 0 && totalSpent / totalAllocated > 0.8 ? [{ type: 'WARNING', message: 'Budget utilization above 80%' }] : []
             }
         });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+router.post('/budget', async (req: Request, res: Response) => {
+    try {
+        const { category, allocated, spent, notes } = req.body || {};
+        if (!category || allocated == null) {
+            return res.status(400).json({ success: false, message: 'category and allocated are required' });
+        }
+        const region = await Region.findOne({ isActive: true });
+        if (!region) return res.status(404).json({ success: false, message: 'Region not found' });
+        const current = Array.isArray(region.metadata?.budgetItems) ? region.metadata.budgetItems : DEFAULT_BUDGET_ITEMS;
+        const newItem = { id: `b-${Date.now()}`, category, allocated: Number(allocated), spent: Number(spent) || 0, notes: notes || '' };
+        region.metadata = { ...(region.metadata || {}), budgetItems: [...current, newItem] };
+        region.markModified('metadata');
+        await region.save();
+        res.status(201).json({ success: true, data: newItem });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+router.put('/budget/:id', async (req: Request, res: Response) => {
+    try {
+        const region = await Region.findOne({ isActive: true });
+        if (!region) return res.status(404).json({ success: false, message: 'Region not found' });
+        const current = Array.isArray(region.metadata?.budgetItems) ? region.metadata.budgetItems : DEFAULT_BUDGET_ITEMS;
+        const idx = current.findIndex((i: any) => i.id === req.params.id);
+        if (idx === -1) return res.status(404).json({ success: false, message: 'Budget item not found' });
+        const updated = { ...current[idx], ...req.body, id: current[idx].id };
+        if (updated.allocated != null) updated.allocated = Number(updated.allocated);
+        if (updated.spent != null) updated.spent = Number(updated.spent);
+        const next = [...current]; next[idx] = updated;
+        region.metadata = { ...(region.metadata || {}), budgetItems: next };
+        region.markModified('metadata');
+        await region.save();
+        res.json({ success: true, data: updated });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+router.delete('/budget/:id', async (req: Request, res: Response) => {
+    try {
+        const region = await Region.findOne({ isActive: true });
+        if (!region) return res.status(404).json({ success: false, message: 'Region not found' });
+        const current = Array.isArray(region.metadata?.budgetItems) ? region.metadata.budgetItems : DEFAULT_BUDGET_ITEMS;
+        const next = current.filter((i: any) => i.id !== req.params.id);
+        region.metadata = { ...(region.metadata || {}), budgetItems: next };
+        region.markModified('metadata');
+        await region.save();
+        res.json({ success: true, message: 'Budget item deleted' });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -907,20 +1051,36 @@ router.get('/budget', async (req: Request, res: Response) => {
 // =============================================
 // COMPLIANCE
 // =============================================
+const DEFAULT_COMPLIANCE_ITEMS = [
+    { id: 'c1', category: 'SAFETY', title: 'Safety Certifications', status: 'COMPLIANT', completionRate: 95, dueDate: '2026-06-30', lastAudit: '2026-01-15' },
+    { id: 'c2', category: 'PERSONNEL', title: 'Background Checks', status: 'COMPLIANT', completionRate: 100, dueDate: '2026-12-31', lastAudit: '2026-02-01' },
+    { id: 'c3', category: 'FACILITY', title: 'Facility Inspections', status: 'NEEDS_ATTENTION', completionRate: 75, dueDate: '2026-04-30', lastAudit: '2025-12-01' },
+    { id: 'c4', category: 'INSURANCE', title: 'Insurance Coverage', status: 'COMPLIANT', completionRate: 100, dueDate: '2027-01-01', lastAudit: '2026-01-01' },
+    { id: 'c5', category: 'DATA', title: 'Data Privacy (GDPR/CCPA)', status: 'COMPLIANT', completionRate: 90, dueDate: '2026-12-31', lastAudit: '2026-03-01' },
+];
+
+function computeComplianceStatus(rate: number): string {
+    if (rate >= 90) return 'COMPLIANT';
+    if (rate >= 70) return 'NEEDS_ATTENTION';
+    return 'NON_COMPLIANT';
+}
+
+async function loadComplianceItems(): Promise<any[]> {
+    const region = await Region.findOne({ isActive: true }).lean();
+    const custom: any = (region as any)?.metadata?.complianceItems;
+    if (Array.isArray(custom)) return custom;
+    return DEFAULT_COMPLIANCE_ITEMS;
+}
+
 router.get('/compliance', async (_req: Request, res: Response) => {
     try {
         const locations = await Location.find({ status: 'ACTIVE' }).select('name').lean();
         const totalLocations = locations.length;
+        const complianceItems = await loadComplianceItems();
 
-        const complianceItems = [
-            { id: 'c1', category: 'SAFETY', title: 'Safety Certifications', status: 'COMPLIANT', completionRate: 95, dueDate: '2026-06-30', lastAudit: '2026-01-15' },
-            { id: 'c2', category: 'PERSONNEL', title: 'Background Checks', status: 'COMPLIANT', completionRate: 100, dueDate: '2026-12-31', lastAudit: '2026-02-01' },
-            { id: 'c3', category: 'FACILITY', title: 'Facility Inspections', status: 'NEEDS_ATTENTION', completionRate: 75, dueDate: '2026-04-30', lastAudit: '2025-12-01' },
-            { id: 'c4', category: 'INSURANCE', title: 'Insurance Coverage', status: 'COMPLIANT', completionRate: 100, dueDate: '2027-01-01', lastAudit: '2026-01-01' },
-            { id: 'c5', category: 'DATA', title: 'Data Privacy (GDPR/CCPA)', status: 'COMPLIANT', completionRate: 90, dueDate: '2026-12-31', lastAudit: '2026-03-01' },
-        ];
-
-        const overallRate = Math.round(complianceItems.reduce((s, i) => s + i.completionRate, 0) / complianceItems.length);
+        const overallRate = complianceItems.length > 0
+            ? Math.round(complianceItems.reduce((s: number, i: any) => s + (Number(i.completionRate) || 0), 0) / complianceItems.length)
+            : 0;
 
         res.json({
             success: true,
@@ -928,9 +1088,75 @@ router.get('/compliance', async (_req: Request, res: Response) => {
                 overallComplianceRate: overallRate,
                 totalLocations,
                 items: complianceItems,
-                alerts: complianceItems.filter(i => i.status === 'NEEDS_ATTENTION').map(i => ({ title: i.title, message: `Completion at ${i.completionRate}%` }))
+                alerts: complianceItems.filter((i: any) => i.status === 'NEEDS_ATTENTION' || i.status === 'NON_COMPLIANT').map((i: any) => ({ title: i.title, message: `Completion at ${i.completionRate}%` }))
             }
         });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+router.post('/compliance', async (req: Request, res: Response) => {
+    try {
+        const { category, title, dueDate, completionRate, notes } = req.body || {};
+        if (!category || !title) {
+            return res.status(400).json({ success: false, message: 'category and title are required' });
+        }
+        const region = await Region.findOne({ isActive: true });
+        if (!region) return res.status(404).json({ success: false, message: 'Region not found' });
+        const current = Array.isArray(region.metadata?.complianceItems) ? region.metadata.complianceItems : DEFAULT_COMPLIANCE_ITEMS;
+        const rate = Number(completionRate) || 0;
+        const newItem = {
+            id: `c-${Date.now()}`,
+            category: String(category).toUpperCase(),
+            title,
+            status: computeComplianceStatus(rate),
+            completionRate: rate,
+            dueDate: dueDate || '',
+            lastAudit: new Date().toISOString().split('T')[0],
+            notes: notes || ''
+        };
+        region.metadata = { ...(region.metadata || {}), complianceItems: [...current, newItem] };
+        region.markModified('metadata');
+        await region.save();
+        res.status(201).json({ success: true, data: newItem });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+router.put('/compliance/:id', async (req: Request, res: Response) => {
+    try {
+        const region = await Region.findOne({ isActive: true });
+        if (!region) return res.status(404).json({ success: false, message: 'Region not found' });
+        const current = Array.isArray(region.metadata?.complianceItems) ? region.metadata.complianceItems : DEFAULT_COMPLIANCE_ITEMS;
+        const idx = current.findIndex((i: any) => i.id === req.params.id);
+        if (idx === -1) return res.status(404).json({ success: false, message: 'Compliance item not found' });
+        const updated: any = { ...current[idx], ...req.body, id: current[idx].id };
+        if (updated.completionRate != null) {
+            updated.completionRate = Number(updated.completionRate);
+            updated.status = computeComplianceStatus(updated.completionRate);
+        }
+        const next = [...current]; next[idx] = updated;
+        region.metadata = { ...(region.metadata || {}), complianceItems: next };
+        region.markModified('metadata');
+        await region.save();
+        res.json({ success: true, data: updated });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+router.delete('/compliance/:id', async (req: Request, res: Response) => {
+    try {
+        const region = await Region.findOne({ isActive: true });
+        if (!region) return res.status(404).json({ success: false, message: 'Region not found' });
+        const current = Array.isArray(region.metadata?.complianceItems) ? region.metadata.complianceItems : DEFAULT_COMPLIANCE_ITEMS;
+        const next = current.filter((i: any) => i.id !== req.params.id);
+        region.metadata = { ...(region.metadata || {}), complianceItems: next };
+        region.markModified('metadata');
+        await region.save();
+        res.json({ success: true, message: 'Compliance item deleted' });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -939,6 +1165,22 @@ router.get('/compliance', async (_req: Request, res: Response) => {
 // =============================================
 // BENCHMARKS
 // =============================================
+const DEFAULT_BENCHMARK_TARGETS = [
+    { id: 'bm1', metric: 'Revenue/Location', target: 150000, unit: 'USD', national: 150000 },
+    { id: 'bm2', metric: 'Student Enrollment', target: 250, unit: 'students', national: 250 },
+    { id: 'bm3', metric: 'Staff Utilization', target: 80, unit: '%', national: 80 },
+    { id: 'bm4', metric: 'Customer Satisfaction', target: 4.2, unit: '/5', national: 4.2 },
+    { id: 'bm5', metric: 'Class Occupancy', target: 75, unit: '%', national: 75 },
+    { id: 'bm6', metric: 'Retention Rate', target: 88, unit: '%', national: 88 },
+];
+
+async function loadBenchmarkTargets(): Promise<any[]> {
+    const region = await Region.findOne({ isActive: true }).lean();
+    const custom: any = (region as any)?.metadata?.benchmarkTargets;
+    if (Array.isArray(custom) && custom.length > 0) return custom;
+    return DEFAULT_BENCHMARK_TARGETS;
+}
+
 router.get('/benchmarks', async (_req: Request, res: Response) => {
     try {
         const [totalStudents, totalStaff, totalLocations] = await Promise.all([
@@ -950,14 +1192,32 @@ router.get('/benchmarks', async (_req: Request, res: Response) => {
         const revenuePerLocation = totalLocations > 0 ? Math.round(850000 / totalLocations) : 0;
         const studentsPerLocation = totalLocations > 0 ? Math.round(totalStudents / totalLocations) : 0;
 
-        const metrics = [
-            { metric: 'Revenue/Location', regional: revenuePerLocation, national: 150000, status: revenuePerLocation >= 150000 ? 'EXCEEDING' : revenuePerLocation >= 120000 ? 'ON_TARGET' : 'BELOW' },
-            { metric: 'Student Enrollment', regional: studentsPerLocation, national: 250, status: studentsPerLocation >= 250 ? 'EXCEEDING' : studentsPerLocation >= 200 ? 'ON_TARGET' : 'BELOW' },
-            { metric: 'Staff Utilization', regional: 83, national: 80, status: 'EXCEEDING' },
-            { metric: 'Customer Satisfaction', regional: 4.5, national: 4.2, status: 'EXCEEDING' },
-            { metric: 'Class Occupancy', regional: 78, national: 75, status: 'ON_TARGET' },
-            { metric: 'Retention Rate', regional: 92, national: 88, status: 'EXCEEDING' },
-        ];
+        const targets = await loadBenchmarkTargets();
+
+        // Compute actual values per metric dynamically where possible
+        const actualMap: Record<string, number> = {
+            'Revenue/Location': revenuePerLocation,
+            'Student Enrollment': studentsPerLocation,
+            'Staff Utilization': 83,
+            'Customer Satisfaction': 4.5,
+            'Class Occupancy': 78,
+            'Retention Rate': 92,
+        };
+
+        const metrics = targets.map((t: any) => {
+            const regional = actualMap[t.metric] ?? 0;
+            const target = Number(t.target) || 0;
+            const status = target === 0 ? 'ON_TARGET' : regional >= target * 1.05 ? 'EXCEEDING' : regional >= target * 0.9 ? 'ON_TARGET' : 'BELOW';
+            return {
+                id: t.id,
+                metric: t.metric,
+                regional,
+                national: t.national ?? target,
+                target,
+                unit: t.unit || '',
+                status
+            };
+        });
 
         const locations = await Location.find({ status: 'ACTIVE' }).select('name capacity').lean();
         const locationBenchmarks = locations.map((loc: any) => ({
@@ -978,6 +1238,65 @@ router.get('/benchmarks', async (_req: Request, res: Response) => {
                 trendData: generateMonthlyData('benchmark')
             }
         });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+router.post('/benchmarks', async (req: Request, res: Response) => {
+    try {
+        const { metric, target, unit, notes } = req.body || {};
+        if (!metric || target == null) {
+            return res.status(400).json({ success: false, message: 'metric and target are required' });
+        }
+        const region = await Region.findOne({ isActive: true });
+        if (!region) return res.status(404).json({ success: false, message: 'Region not found' });
+        const current = Array.isArray(region.metadata?.benchmarkTargets) && region.metadata.benchmarkTargets.length > 0
+            ? region.metadata.benchmarkTargets
+            : DEFAULT_BENCHMARK_TARGETS;
+        const newItem = { id: `bm-${Date.now()}`, metric, target: Number(target), unit: unit || '', national: Number(target), notes: notes || '' };
+        region.metadata = { ...(region.metadata || {}), benchmarkTargets: [...current, newItem] };
+        region.markModified('metadata');
+        await region.save();
+        res.status(201).json({ success: true, data: newItem });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+router.put('/benchmarks/:id', async (req: Request, res: Response) => {
+    try {
+        const region = await Region.findOne({ isActive: true });
+        if (!region) return res.status(404).json({ success: false, message: 'Region not found' });
+        const current = Array.isArray(region.metadata?.benchmarkTargets) && region.metadata.benchmarkTargets.length > 0
+            ? region.metadata.benchmarkTargets
+            : DEFAULT_BENCHMARK_TARGETS;
+        const idx = current.findIndex((i: any) => i.id === req.params.id);
+        if (idx === -1) return res.status(404).json({ success: false, message: 'Benchmark not found' });
+        const updated = { ...current[idx], ...req.body, id: current[idx].id };
+        if (updated.target != null) updated.target = Number(updated.target);
+        const next = [...current]; next[idx] = updated;
+        region.metadata = { ...(region.metadata || {}), benchmarkTargets: next };
+        region.markModified('metadata');
+        await region.save();
+        res.json({ success: true, data: updated });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+router.delete('/benchmarks/:id', async (req: Request, res: Response) => {
+    try {
+        const region = await Region.findOne({ isActive: true });
+        if (!region) return res.status(404).json({ success: false, message: 'Region not found' });
+        const current = Array.isArray(region.metadata?.benchmarkTargets) && region.metadata.benchmarkTargets.length > 0
+            ? region.metadata.benchmarkTargets
+            : DEFAULT_BENCHMARK_TARGETS;
+        const next = current.filter((i: any) => i.id !== req.params.id);
+        region.metadata = { ...(region.metadata || {}), benchmarkTargets: next };
+        region.markModified('metadata');
+        await region.save();
+        res.json({ success: true, message: 'Benchmark target deleted' });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }

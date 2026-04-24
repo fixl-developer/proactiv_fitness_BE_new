@@ -698,48 +698,8 @@ router.get('/iam/users/:id', async (req: Request, res: Response) => {
     }
 });
 
-// GET /iam/roles
-router.get('/iam/roles', (_req: Request, res: Response) => {
-    res.json({
-        success: true,
-        data: [
-            { id: 'ADMIN', name: 'Admin', description: 'Full system access', level: 1 },
-            { id: 'REGIONAL_ADMIN', name: 'Regional Admin', description: 'Regional management access', level: 2 },
-            { id: 'FRANCHISE_OWNER', name: 'Franchise Owner', description: 'Franchise management access', level: 3 },
-            { id: 'LOCATION_MANAGER', name: 'Location Manager', description: 'Location-level management', level: 4 },
-            { id: 'COACH', name: 'Coach', description: 'Coaching and class management', level: 5 },
-            { id: 'SUPPORT_STAFF', name: 'Support Staff', description: 'Customer support access', level: 5 },
-            { id: 'PARENT', name: 'Parent', description: 'Parent/guardian access', level: 6 },
-            { id: 'STUDENT', name: 'Student', description: 'Student access', level: 7 },
-            { id: 'USER', name: 'User', description: 'Basic user access', level: 7 },
-            { id: 'PARTNER_ADMIN', name: 'Partner Admin', description: 'Partner portal access', level: 4 },
-        ],
-    });
-});
-
-// GET /iam/permissions
-router.get('/iam/permissions', (_req: Request, res: Response) => {
-    res.json({
-        success: true,
-        data: [
-            { id: 'users:read', name: 'View Users', category: 'users' },
-            { id: 'users:write', name: 'Manage Users', category: 'users' },
-            { id: 'bookings:read', name: 'View Bookings', category: 'bookings' },
-            { id: 'bookings:write', name: 'Manage Bookings', category: 'bookings' },
-            { id: 'programs:read', name: 'View Programs', category: 'programs' },
-            { id: 'programs:write', name: 'Manage Programs', category: 'programs' },
-            { id: 'finance:read', name: 'View Finance', category: 'finance' },
-            { id: 'finance:write', name: 'Manage Finance', category: 'finance' },
-            { id: 'staff:read', name: 'View Staff', category: 'staff' },
-            { id: 'staff:write', name: 'Manage Staff', category: 'staff' },
-            { id: 'reports:read', name: 'View Reports', category: 'reports' },
-            { id: 'reports:write', name: 'Generate Reports', category: 'reports' },
-            { id: 'settings:read', name: 'View Settings', category: 'settings' },
-            { id: 'settings:write', name: 'Manage Settings', category: 'settings' },
-            { id: 'system:admin', name: 'System Administration', category: 'system' },
-        ],
-    });
-});
+// Note: /iam/roles and /iam/permissions CRUD moved to iam-rbac.routes.ts
+// (routes/index.ts mounts iamRbacRoutes which supersedes these stubs)
 
 // GET /iam/sessions/active
 router.get('/iam/sessions/active', async (_req: Request, res: Response) => {
