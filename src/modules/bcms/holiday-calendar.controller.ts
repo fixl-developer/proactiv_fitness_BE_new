@@ -11,12 +11,15 @@ export class HolidayCalendarController extends BaseController {
     }
 
     async getAll(req: Request, res: Response) {
+        // Only apply isActive filter if explicitly provided (otherwise list ALL statuses).
         const query: IHolidayCalendarQuery = {
             countryId: req.query.countryId as string,
             regionId: req.query.regionId as string,
             year: req.query.year ? parseInt(req.query.year as string) : undefined,
-            isActive: req.query.isActive === 'true',
         };
+        if (req.query.isActive !== undefined && req.query.isActive !== '') {
+            query.isActive = req.query.isActive === 'true';
+        }
 
         const calendars = await holidayCalendarService.getHolidayCalendars(query);
         return this.sendSuccess(res, calendars);

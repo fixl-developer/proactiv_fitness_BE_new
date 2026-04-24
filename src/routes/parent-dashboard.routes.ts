@@ -27,6 +27,19 @@ router.get('/dashboard', async (req: Request, res: Response) => {
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
         const yearStart = new Date(now.getFullYear(), 0, 1);
 
+        // Date-range scope for "filtered" stats/lists. `today` / `7d` / `30d`.
+        const timeRange = (req.query.timeRange as string) || 'today';
+        const rangeStart = new Date(now);
+        if (timeRange === '7d') {
+            rangeStart.setDate(rangeStart.getDate() - 7);
+            rangeStart.setHours(0, 0, 0, 0);
+        } else if (timeRange === '30d') {
+            rangeStart.setDate(rangeStart.getDate() - 30);
+            rangeStart.setHours(0, 0, 0, 0);
+        } else {
+            rangeStart.setHours(0, 0, 0, 0);
+        }
+
         const [
             childrenResult,
             bookingsResult,
@@ -124,9 +137,51 @@ router.get('/dashboard', async (req: Request, res: Response) => {
         );
         const pendingAmount = pendingBookings.reduce((sum: number, b: any) => sum + (b.payment?.amount || 0), 0);
 
+        // Range-scoped stats (driven by timeRange query param)
+        const rangeBookings = bookings.filter((b: any) => new Date(b.createdAt) >= rangeStart);
+        const rangeSpent = rangeBookings
+            .filter((b: any) => ['paid', 'COMPLETED', 'completed'].includes(b.payment?.status))
+            .reduce((sum: number, b: any) => sum + (b.payment?.amount || 0), 0);
+        const rangeAttendance = attendance.filter((a: any) => new Date(a.checkInTime || a.createdAt || now) >= rangeStart);
+        const rangeCompleted = rangeBookings.filter((b: any) => ['completed', 'COMPLETED'].includes(b.status)).length;
+        const rangeUpcoming = rangeBookings.filter((b: any) => ['confirmed', 'pending', 'CONFIRMED', 'PENDING'].includes(b.status)).length;
+
+        // Alerts derived from real data: recent attendance + pending payments + upcoming classes
+        const alerts: any[] = [];
+        const latestAttendance = attendance[0];
+        if (latestAttendance && ['checked_in', 'checked_out', 'present'].includes(latestAttendance.status)) {
+            alerts.push({
+                type: 'success',
+                title: 'Class Attended',
+                message: `Your child checked in on ${new Date(latestAttendance.checkInTime || latestAttendance.createdAt).toLocaleDateString()}`,
+                time: new Date(latestAttendance.checkInTime || latestAttendance.createdAt).toISOString(),
+                priority: 'low',
+            });
+        }
+        if (pendingAmount > 0) {
+            alerts.push({
+                type: 'warning',
+                title: 'Pending Payment',
+                message: `You have HK$${pendingAmount.toLocaleString()} pending across ${pendingBookings.length} booking${pendingBookings.length === 1 ? '' : 's'}`,
+                time: new Date().toISOString(),
+                priority: 'high',
+            });
+        }
+        if (upcoming.length > 0) {
+            const next = upcoming[0];
+            alerts.push({
+                type: 'info',
+                title: 'Upcoming Class',
+                message: `${next.programName || next.session?.className || 'Class'} on ${next.session?.date || next.date || 'soon'}`,
+                time: new Date().toISOString(),
+                priority: 'low',
+            });
+        }
+
         res.json({
             success: true,
             data: {
+                timeRange,
                 stats: {
                     totalChildren: children.length,
                     activePrograms: bookings.filter((b: any) => ['confirmed', 'CONFIRMED', 'active'].includes(b.status)).length,
@@ -140,7 +195,14 @@ router.get('/dashboard', async (req: Request, res: Response) => {
                     attendanceRate: attendance.length > 0
                         ? Math.round((attendance.filter((a: any) => ['checked_in', 'checked_out', 'present'].includes(a.status)).length / attendance.length) * 100)
                         : 0,
+                    // Range-scoped metrics — change when timeRange changes
+                    rangeSpent,
+                    rangeBookings: rangeBookings.length,
+                    rangeCompleted,
+                    rangeUpcoming,
+                    rangeAttendance: rangeAttendance.length,
                 },
+                alerts,
                 children: children.map((c: any) => ({
                     id: c._id,
                     name: c.fullName || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Child',
@@ -178,11 +240,14 @@ router.get('/dashboard', async (req: Request, res: Response) => {
         res.json({
             success: true,
             data: {
+                timeRange: (req.query.timeRange as string) || 'today',
                 stats: {
                     totalChildren: 0, activePrograms: 0, totalSpent: 0, monthlySpent: 0,
                     pendingPayments: 0, accountBalance: 0, upcomingClasses: 0,
                     completedClasses: 0, totalBookings: 0, attendanceRate: 0,
+                    rangeSpent: 0, rangeBookings: 0, rangeCompleted: 0, rangeUpcoming: 0, rangeAttendance: 0,
                 },
+                alerts: [],
                 children: [],
                 upcomingClasses: [],
                 recentPayments: [],
@@ -401,6 +466,70 @@ router.get('/payments', async (req: Request, res: Response) => {
 });
 
 // =============================================
+// PAY FOR BOOKING (record payment)
+// =============================================
+router.post('/payments', async (req: Request, res: Response) => {
+    try {
+        const { Booking } = require('../modules/booking/booking.model');
+        const parentId = getParentId(req);
+        const { bookingId, amount, method, notes } = req.body || {};
+
+        if (!bookingId) return res.status(400).json({ success: false, message: 'bookingId is required' });
+        if (amount === undefined || amount === null || Number.isNaN(Number(amount)) || Number(amount) <= 0) {
+            return res.status(400).json({ success: false, message: 'amount must be a positive number' });
+        }
+        if (!method) return res.status(400).json({ success: false, message: 'Payment method is required' });
+
+        const booking = await Booking.findOne({
+            _id: bookingId,
+            $or: [{ userId: parentId }, { parentId: parentId }],
+        });
+        if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+
+        booking.payment = {
+            ...(booking.payment || {}),
+            amount: Number(amount),
+            method,
+            status: 'paid',
+            paidAt: new Date(),
+            notes: notes || '',
+        };
+        await booking.save();
+
+        res.json({ success: true, data: booking, message: 'Payment recorded successfully' });
+    } catch (error: any) {
+        console.error('Create payment error:', error);
+        res.status(500).json({ success: false, message: error.message || 'Failed to record payment' });
+    }
+});
+
+// Get pending bookings that can be paid (helper for Make Payment drawer)
+router.get('/payments/pending', async (req: Request, res: Response) => {
+    try {
+        const { Booking } = require('../modules/booking/booking.model');
+        const parentId = getParentId(req);
+        const pending = await Booking.find({
+            $or: [{ userId: parentId }, { parentId: parentId }],
+            'payment.status': { $in: ['pending', 'PENDING', 'unpaid', 'UNPAID'] },
+            'payment.amount': { $gt: 0 },
+        }).sort({ createdAt: -1 }).limit(50).lean();
+        res.json({
+            success: true,
+            data: pending.map((b: any) => ({
+                id: b._id,
+                child: b.childName || b.customer?.name || 'Student',
+                program: b.programName || b.session?.className || 'Program',
+                amount: b.payment?.amount || 0,
+                dueDate: b.payment?.dueDate || b.session?.date || b.createdAt,
+            })),
+        });
+    } catch (error: any) {
+        console.error('Pending payments error:', error);
+        res.json({ success: true, data: [] });
+    }
+});
+
+// =============================================
 // PROFILE
 // =============================================
 router.get('/profile', async (req: Request, res: Response) => {
@@ -544,6 +673,69 @@ router.put('/children/:childId', async (req: Request, res: Response) => {
     } catch (error: any) {
         console.error('Update child error:', error);
         res.status(500).json({ success: false, message: 'Failed to update child' });
+    }
+});
+
+// =============================================
+// RESCHEDULE BOOKING
+// =============================================
+router.put('/bookings/:bookingId/reschedule', async (req: Request, res: Response) => {
+    try {
+        const { Booking } = require('../modules/booking/booking.model');
+        const { bookingId } = req.params;
+        const { newDate, newTime, reason } = req.body;
+
+        if (!newDate || !newTime) {
+            return res.status(400).json({ success: false, message: 'newDate and newTime are required' });
+        }
+
+        const booking = await Booking.findById(bookingId);
+        if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+
+        const previous = {
+            date: booking.session?.date || booking.date,
+            time: booking.session?.startTime || booking.time,
+        };
+
+        if (booking.session) {
+            booking.session.date = newDate;
+            booking.session.startTime = newTime;
+        } else {
+            booking.date = newDate;
+            booking.time = newTime;
+        }
+        booking.rescheduledAt = new Date();
+        booking.rescheduleReason = reason || '';
+        booking.reschedulePrevious = previous;
+        await booking.save();
+
+        res.json({ success: true, data: booking, message: 'Booking rescheduled successfully' });
+    } catch (error: any) {
+        console.error('Reschedule booking error:', error);
+        res.status(500).json({ success: false, message: 'Failed to reschedule booking' });
+    }
+});
+
+// =============================================
+// EDIT BOOKING (notes / special requests / participants)
+// =============================================
+router.put('/bookings/:bookingId', async (req: Request, res: Response) => {
+    try {
+        const { Booking } = require('../modules/booking/booking.model');
+        const { bookingId } = req.params;
+        const updates = req.body || {};
+        const allowed: any = {};
+        if (typeof updates.childName === 'string') allowed.childName = updates.childName;
+        if (typeof updates.specialRequests === 'string') allowed.specialRequests = updates.specialRequests;
+        if (typeof updates.notes === 'string') allowed.notes = updates.notes;
+        if (Array.isArray(updates.participants)) allowed.participants = updates.participants;
+
+        const updated = await Booking.findByIdAndUpdate(bookingId, { $set: allowed }, { new: true }).lean();
+        if (!updated) return res.status(404).json({ success: false, message: 'Booking not found' });
+        res.json({ success: true, data: updated, message: 'Booking updated successfully' });
+    } catch (error: any) {
+        console.error('Edit booking error:', error);
+        res.status(500).json({ success: false, message: 'Failed to update booking' });
     }
 });
 
@@ -717,6 +909,54 @@ router.delete('/waitlist/:id', async (req: Request, res: Response) => {
         res.json({ success: true, message: 'Removed from waitlist' });
     } catch (error: any) {
         res.status(500).json({ success: false, message: 'Failed to remove from waitlist' });
+    }
+});
+
+// Join a waitlist (creates a waitlisted Booking)
+router.post('/waitlist', async (req: Request, res: Response) => {
+    try {
+        const { Booking } = require('../modules/booking/booking.model');
+        const { Session } = require('../modules/scheduling/schedule.model');
+        const parentId = getParentId(req);
+        const { sessionId, childId, childName, notes } = req.body || {};
+
+        if (!sessionId) return res.status(400).json({ success: false, message: 'sessionId is required' });
+        if (!childName || !String(childName).trim()) return res.status(400).json({ success: false, message: 'childName is required' });
+
+        let sessionDetails: any = null;
+        try { sessionDetails = await Session.findById(sessionId).lean(); } catch { sessionDetails = null; }
+
+        const existingWaiting = await Booking.countDocuments({
+            sessionId,
+            status: { $in: ['waitlisted', 'WAITLISTED'] },
+        });
+
+        const entry = await Booking.create({
+            userId: parentId,
+            parentId: parentId,
+            childId: childId || undefined,
+            childName,
+            sessionId,
+            programName: sessionDetails?.className || sessionDetails?.programName || 'Class',
+            status: 'waitlisted',
+            type: 'waitlist',
+            waitlistPosition: existingWaiting + 1,
+            specialRequests: notes ? [notes] : [],
+            session: sessionDetails ? {
+                className: sessionDetails.className,
+                date: sessionDetails.date,
+                startTime: sessionDetails.startTime,
+                location: sessionDetails.location,
+                coach: sessionDetails.coach,
+            } : undefined,
+            payment: { amount: sessionDetails?.price || 0, status: 'pending', method: 'pending' },
+            createdAt: new Date(),
+        });
+
+        res.json({ success: true, data: { id: entry._id, position: entry.waitlistPosition }, message: 'Added to waitlist' });
+    } catch (error: any) {
+        console.error('Join waitlist error:', error);
+        res.status(500).json({ success: false, message: error.message || 'Failed to join waitlist' });
     }
 });
 

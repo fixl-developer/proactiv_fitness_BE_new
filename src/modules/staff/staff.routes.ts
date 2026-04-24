@@ -98,53 +98,53 @@ router.get('/:staffId/performance', staffController.getStaffPerformance);
 router.put('/:staffId/performance', staffController.updateStaffPerformance);
 
 // Support Staff Dashboard routes
-router.get('/staff/dashboard', staffController.getSupportDashboard);
-router.get('/staff/tickets', staffController.getSupportTickets);
-router.post('/staff/tickets', staffController.createSupportTicket);
-router.put('/staff/tickets/:ticketId', staffController.updateSupportTicket);
-router.get('/staff/inquiries', staffController.getCustomerInquiries);
-router.post('/staff/inquiries/:inquiryId/respond', staffController.respondToInquiry);
-router.get('/staff/knowledge-base', staffController.getKnowledgeBaseArticles);
-router.post('/staff/knowledge-base', staffController.createKnowledgeBaseArticle);
-router.put('/staff/knowledge-base/:articleId', staffController.updateKnowledgeBaseArticle);
-router.delete('/staff/knowledge-base/:articleId', staffController.deleteKnowledgeBaseArticle);
-router.get('/staff/analytics', staffController.getSupportAnalytics);
-router.get('/staff/settings', staffController.getStaffSettings);
-router.put('/staff/settings', staffController.updateStaffSettings);
+router.get('/dashboard', staffController.getSupportDashboard);
+router.get('/tickets', staffController.getSupportTickets);
+router.post('/tickets', staffController.createSupportTicket);
+router.put('/tickets/:ticketId', staffController.updateSupportTicket);
+router.get('/inquiries', staffController.getCustomerInquiries);
+router.post('/inquiries/:inquiryId/respond', staffController.respondToInquiry);
+router.get('/knowledge-base', staffController.getKnowledgeBaseArticles);
+router.post('/knowledge-base', staffController.createKnowledgeBaseArticle);
+router.put('/knowledge-base/:articleId', staffController.updateKnowledgeBaseArticle);
+router.delete('/knowledge-base/:articleId', staffController.deleteKnowledgeBaseArticle);
+router.get('/analytics', staffController.getSupportAnalytics);
+router.get('/settings', staffController.getStaffSettings);
+router.put('/settings', staffController.updateStaffSettings);
 
 // Live Chat routes
-router.get('/staff/live-chat/sessions', staffController.getLiveChatSessions);
-router.get('/staff/live-chat/:chatId/messages', staffController.getChatMessages);
-router.post('/staff/live-chat/:chatId/messages', staffController.sendChatMessage);
+router.get('/live-chat/sessions', staffController.getLiveChatSessions);
+router.get('/live-chat/:chatId/messages', staffController.getChatMessages);
+router.post('/live-chat/:chatId/messages', staffController.sendChatMessage);
 
 // Advanced Features routes
 // Live Chat
-router.get('/staff/live-chat/sessions', staffController.getLiveChatSessions);
-router.get('/staff/live-chat/:chatId/messages', staffController.getChatMessages);
-router.post('/staff/live-chat/:chatId/messages', staffController.sendChatMessage);
+router.get('/live-chat/sessions', staffController.getLiveChatSessions);
+router.get('/live-chat/:chatId/messages', staffController.getChatMessages);
+router.post('/live-chat/:chatId/messages', staffController.sendChatMessage);
 
 // Escalations
-router.get('/staff/escalations', staffController.getEscalations);
-router.post('/staff/escalations', staffController.createEscalation);
+router.get('/escalations', staffController.getEscalations);
+router.post('/escalations', staffController.createEscalation);
 
 // Schedules (Advanced)
-router.get('/staff/schedules-advanced', staffController.getStaffSchedulesAdvanced);
+router.get('/schedules-advanced', staffController.getStaffSchedulesAdvanced);
 
 // Training
-router.get('/staff/training/modules', staffController.getTrainingModules);
-router.get('/staff/training/paths', staffController.getTrainingPaths);
-router.get('/staff/training/progress', staffController.getUserTrainingProgress);
+router.get('/training/modules', staffController.getTrainingModules);
+router.get('/training/paths', staffController.getTrainingPaths);
+router.get('/training/progress', staffController.getUserTrainingProgress);
 
 // Reports
-router.get('/staff/reports/:type', staffController.getReports);
+router.get('/reports/:type', staffController.getReports);
 
 // Automation
-router.get('/staff/automation/rules', staffController.getAutomationRules);
+router.get('/automation/rules', staffController.getAutomationRules);
 
 // Quality Assurance
-router.get('/staff/quality/metrics', staffController.getQualityMetrics);
+router.get('/quality/metrics', staffController.getQualityMetrics);
 
 // Communication
-router.get('/staff/communication/announcements', staffController.getAnnouncements);
+router.get('/communication/announcements', staffController.getAnnouncements);
 
 export { router as staffRoutes };

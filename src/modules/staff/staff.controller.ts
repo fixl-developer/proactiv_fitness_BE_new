@@ -14,6 +14,8 @@ import { AppError } from '../../shared/utils/app-error.util';
 import { HTTP_STATUS } from '../../shared/constants';
 import userService from '../iam/user.service';
 import { UserRole } from '../../shared/enums';
+import { Staff } from './staff.model';
+import { StaffType, StaffStatus } from './staff.interface';
 
 export class StaffController extends BaseController {
     private staffService: StaffService;
@@ -1147,6 +1149,109 @@ export class StaffController extends BaseController {
         return this.sendSuccess(res, {
             message: 'Announcements retrieved successfully',
             data: { announcements }
+        });
+    });
+
+    createChatSession = asyncHandler(async (req: Request, res: Response) => {
+        return this.sendSuccess(res, {
+            message: 'Chat session created',
+            data: { sessionId: `chat-${Date.now()}`, status: 'open', ...req.body }
+        });
+    });
+
+    getQualityReviews = asyncHandler(async (req: Request, res: Response) => {
+        return this.sendSuccess(res, {
+            message: 'Quality reviews retrieved',
+            data: { reviews: [] }
+        });
+    });
+
+    // ==================== COACH MANAGEMENT ====================
+    // A "coach" is a Staff record with staffType === 'coach'.
+
+    getCoaches = asyncHandler(async (req: Request, res: Response) => {
+        const { page = 1, limit = 10, status, locationId, searchText } = req.query;
+        const result = await this.staffService.getStaffMembers(
+            {
+                staffType: StaffType.COACH,
+                status: status as any,
+                locationId: locationId as any,
+                searchText: searchText as any,
+            } as any,
+            Number(page),
+            Number(limit)
+        );
+        return this.sendSuccess(res, {
+            message: 'Coaches retrieved successfully',
+            data: result,
+        });
+    });
+
+    createCoachWithUser = asyncHandler(async (req: Request, res: Response) => {
+        const actorId = req.user?.id;
+        if (!actorId) {
+            throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        }
+
+        const {
+            firstName, lastName, email, password, phone,
+            specializations = [], skills = [], experienceYears = 0,
+            locationId, organizationId, maxHoursPerWeek,
+            ...rest
+        } = req.body || {};
+
+        if (!firstName || !lastName || !email || !password) {
+            throw new AppError('firstName, lastName, email and password are required', HTTP_STATUS.BAD_REQUEST);
+        }
+
+        const newUser = await userService.createUser({
+            firstName,
+            lastName,
+            email,
+            password,
+            phone,
+            role: UserRole.COACH,
+        } as any);
+
+        const staffPayload: any = {
+            staffType: StaffType.COACH,
+            status: StaffStatus.ACTIVE,
+            userId: (newUser as any)._id || (newUser as any).id,
+            personalInfo: { firstName, lastName },
+            contactInfo: { email, phone },
+            specializations,
+            skills,
+            experienceYears,
+            locationIds: locationId ? [locationId] : [],
+            primaryLocationId: locationId,
+            businessUnitId: organizationId,
+            maxHoursPerWeek,
+            ...rest,
+        };
+
+        const staff = await this.staffService.createStaff(staffPayload, actorId);
+
+        return this.sendSuccess(res, {
+            message: 'Coach created successfully',
+            data: { user: newUser, staff },
+        });
+    });
+
+    getCoachStatistics = asyncHandler(async (_req: Request, res: Response) => {
+        const [totalCoaches, activeCoaches, onLeaveCoaches, expAgg] = await Promise.all([
+            Staff.countDocuments({ staffType: StaffType.COACH, isDeleted: { $ne: true } }),
+            Staff.countDocuments({ staffType: StaffType.COACH, status: StaffStatus.ACTIVE, isDeleted: { $ne: true } }),
+            Staff.countDocuments({ staffType: StaffType.COACH, status: StaffStatus.ON_LEAVE, isDeleted: { $ne: true } }),
+            Staff.aggregate([
+                { $match: { staffType: StaffType.COACH, isDeleted: { $ne: true } } },
+                { $group: { _id: null, avg: { $avg: '$experienceYears' } } },
+            ]),
+        ]);
+        const avgExperience = Math.round(((expAgg?.[0]?.avg ?? 0) as number) * 10) / 10;
+
+        return this.sendSuccess(res, {
+            message: 'Coach statistics retrieved',
+            data: { totalCoaches, activeCoaches, onLeaveCoaches, avgExperience },
         });
     });
 }

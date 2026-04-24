@@ -5,18 +5,18 @@ const router = Router();
 const reportingController = new ReportingController();
 
 // Report Management
-router.post('/reports', reportingController.createReport);
-router.get('/reports', reportingController.getReports);
-router.get('/reports/:reportId', reportingController.getReport);
-router.put('/reports/:reportId', reportingController.updateReport);
-router.delete('/reports/:reportId', reportingController.deleteReport);
+router.post('/', reportingController.createReport);
+router.get('/', reportingController.getReports);
+router.get('/:reportId', reportingController.getReport);
+router.put('/:reportId', reportingController.updateReport);
+router.delete('/:reportId', reportingController.deleteReport);
 
 // Report Execution
-router.post('/reports/execute', reportingController.executeReport);
-router.get('/reports/:reportId/executions', reportingController.getReportExecutions);
+router.post('/execute', reportingController.executeReport);
+router.get('/:reportId/executions', reportingController.getReportExecutions);
 router.get('/executions/:executionId', reportingController.getReportExecution);
 router.get('/executions/:executionId/download', reportingController.downloadReport);
-router.post('/reports/schedule', reportingController.scheduleReport);
+router.post('/schedule', reportingController.scheduleReport);
 
 // Dashboard Management
 router.post('/dashboards', reportingController.createDashboard);

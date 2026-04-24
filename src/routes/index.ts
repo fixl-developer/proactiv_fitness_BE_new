@@ -38,7 +38,7 @@ import reportingRoutes from '../modules/reporting/reporting.routes';
 import supportRoutes from '../modules/support/support.routes';
 import franchiseRoutes from '../modules/franchise/franchise.routes';
 import crmRoutes from '../modules/crm/crm.routes';
-import notificationsRoutes from '../modules/notifications/notifications.routes';
+// notificationsRoutes already imported above (line 23) — duplicate removed 2026-04-24
 import { notificationTemplateRoutes } from '../modules/notifications/notification-template.routes';
 import gamificationRoutes from '../modules/gamification/gamification.routes';
 import walletRoutes from '../modules/wallet/wallet.routes';
@@ -85,8 +85,10 @@ import nutritionRoutes from '../modules/nutrition/nutrition.routes';
 import localizationRoutes from '../modules/localization/localization.routes';
 
 // === Emergency Contacts & Waitlist ===
-import emergencyContactsRoutes from '../modules/emergency-contacts/emergency-contacts.routes';
-import waitlistRoutes from '../modules/waitlist/waitlist.routes';
+// DISABLED 2026-04-24: emergency-contacts module uses NestJS decorators but backend is Express
+// import emergencyContactsRoutes from '../modules/emergency-contacts/emergency-contacts.routes';
+// DISABLED 2026-04-24: waitlist module uses NestJS decorators but backend is Express
+// import waitlistRoutes from '../modules/waitlist/waitlist.routes';
 
 // === CMS (Content Management System) ===
 import { cmsPublicRoutes, cmsAdminRoutes } from '../modules/cms/cms.routes';
@@ -306,12 +308,12 @@ router.use('/data/delete', dataDeletionRoutes);
 router.use('/community', communityRoutes);
 router.use('/marketplace', marketplaceRoutes);
 router.use('/', referralLoyaltyRoutes);     // internal: /referral-loyalty
-router.use('/micro-credentials', microCredentialRoutes);
+router.use('/', microCredentialRoutes); // FIXED: internal paths serve /micro-credentials/* and /badges/*
 router.use('/', exitProtocolRoutes);        // internal: /exit-protocol
 
 // Staff & Workforce
 router.use('/workforce', workforceRoutes);
-router.use('/safety', safetyRoutes);
+router.use('/', safetyRoutes); // FIXED: internal paths already prefixed with /safety
 
 // Pricing & Commerce
 router.use('/dynamic-pricing', dynamicPricingRoutes);
@@ -353,7 +355,7 @@ router.use('/wearables', wearablesRoutes);
 router.use('/virtual-training', virtualTrainingRoutes);
 router.use('/nutrition', nutritionRoutes);
 router.use('/user/nutrition', nutritionRoutes); // alias for /user/nutrition/meals calls
-router.use('/athlete-passport', athletePassportRoutes);
+router.use('/', athletePassportRoutes); // FIXED: internal paths already prefixed with /athlete-passport
 
 // Platform & Infrastructure (these have internal prefix, mount at /)
 router.use('/integration-gateway', integrationGatewayRoutes);
@@ -370,8 +372,8 @@ router.use('/localization', localizationRoutes);
 // =============================================
 // EMERGENCY CONTACTS & WAITLIST
 // =============================================
-router.use('/emergency-contacts', emergencyContactsRoutes);
-router.use('/waitlist', waitlistRoutes);
+// router.use('/emergency-contacts', emergencyContactsRoutes); // DISABLED - NestJS module in Express backend
+// router.use('/waitlist', waitlistRoutes); // DISABLED - NestJS module in Express backend
 
 // Class-based routes (converted to Express routers)
 router.use('/marketing', classToRouter(MarketingRoutes));

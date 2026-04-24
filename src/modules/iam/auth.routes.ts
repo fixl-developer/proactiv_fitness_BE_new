@@ -4,6 +4,7 @@ import parentRegistrationController from './parent-registration.controller';
 import { validate } from '@middleware/validation.middleware';
 import { authLimiter } from '@middleware/rate-limit.middleware';
 import { authenticate } from './auth.middleware';
+import { sanitizeInput } from './security.middleware';
 import { asyncHandler } from '@shared/utils/async-handler.util';
 import {
     registerValidation,

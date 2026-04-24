@@ -5,8 +5,8 @@ const router = Router();
 const controller = new SearchController();
 
 // Basic Search
-router.get('/search', (req, res) => controller.search(req, res));
-router.post('/search/advanced', (req, res) => controller.advancedSearch(req, res));
+router.get('/', (req, res) => controller.search(req, res));
+router.post('/advanced', (req, res) => controller.advancedSearch(req, res));
 
 // Suggestions & Facets
 router.get('/suggestions', (req, res) => controller.getSuggestions(req, res));

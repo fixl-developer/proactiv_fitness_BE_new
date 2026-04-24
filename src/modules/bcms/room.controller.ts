@@ -11,13 +11,16 @@ export class RoomController extends BaseController {
     }
 
     async getAll(req: Request, res: Response) {
+        // Only apply isActive filter if explicitly provided (otherwise list ALL statuses).
         const query: IRoomQuery = {
             locationId: req.query.locationId as string,
             type: req.query.type as string,
-            isActive: req.query.isActive === 'true',
             minCapacity: req.query.minCapacity ? parseInt(req.query.minCapacity as string) : undefined,
             search: req.query.search as string,
         };
+        if (req.query.isActive !== undefined && req.query.isActive !== '') {
+            query.isActive = req.query.isActive === 'true';
+        }
 
         const rooms = await roomService.getRooms(query);
         return this.sendSuccess(res, rooms);
