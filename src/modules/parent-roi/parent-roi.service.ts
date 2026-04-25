@@ -361,10 +361,10 @@ export class ParentROIService {
         });
 
         if (!dashboard) {
-            dashboard = await this.calculateROI({ familyId, childId, periodStart: startDate, periodEnd: endDate }, userId);
+            dashboard = await this.calculateROI({ familyId, childId, periodStart: startDate, periodEnd: endDate }, userId) as any;
         }
 
-        return dashboard;
+        return dashboard as any;
     }
 
     private async sendReportEmail(report: IROIReport): Promise<void> {

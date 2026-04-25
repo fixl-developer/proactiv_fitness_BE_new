@@ -353,7 +353,7 @@ export class ChildService extends BaseService<IChildProfile> {
                 throw new AppError('Child not found', HTTP_STATUS.NOT_FOUND);
             }
 
-            child.skillLevels.set(skill, level);
+            (child.skillLevels as any).set(skill, level);
             child.updatedBy = updatedBy;
             await child.save();
 

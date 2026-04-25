@@ -1,6 +1,15 @@
 import { Router, Request, Response } from 'express';
 import { AdvancedVideoProcessingService } from './advanced-video-processing.service';
-import { authenticate, authorize } from '@modules/iam/auth.middleware';
+import { authenticate } from '@modules/iam/auth.middleware';
+
+// Local authorize wrapper that accepts an array of role strings.
+// (auth.middleware exports a spread-style authorize; this file's call sites pass an array.)
+const authorize = (roles: string[]) => (req: any, res: any, next: any) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+        return res.status(403).json({ success: false, message: 'Forbidden' });
+    }
+    next();
+};
 
 const router = Router();
 const service = new AdvancedVideoProcessingService();
@@ -56,3 +65,4 @@ router.get('/:videoId/analytics', authenticate, async (req: Request, res: Respon
 });
 
 export default router;
+

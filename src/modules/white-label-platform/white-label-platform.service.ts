@@ -36,7 +36,7 @@ export class WhiteLabelPlatformService {
                 tenantId,
                 createdAt: new Date(),
                 updatedAt: new Date()
-            };
+            } as any;
 
             await WhiteLabelPlatformModel.create(branding);
             return branding;
@@ -67,7 +67,7 @@ export class WhiteLabelPlatformService {
                 monthlyRecurringRevenue: Math.random() * 10000,
                 churnRate: Math.random() * 10,
                 createdAt: new Date()
-            };
+            } as any;
 
             return analytics;
         } catch (error) {
@@ -82,7 +82,7 @@ export class WhiteLabelPlatformService {
                 tenantId,
                 createdAt: new Date(),
                 updatedAt: new Date()
-            };
+            } as any;
 
             await WhiteLabelPlatformModel.create(pricing);
             return pricing;

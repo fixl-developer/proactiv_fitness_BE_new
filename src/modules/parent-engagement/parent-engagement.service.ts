@@ -6,7 +6,7 @@ export class ParentEngagementService {
 
     async generateProgressVideo(childId: string, period: 'weekly' | 'monthly' | 'quarterly', includePhotos: boolean, includeMetrics: boolean): Promise<IProgressVideo> {
         try {
-            const video: IProgressVideo = {
+            const video = {
                 childId,
                 period,
                 generatedAt: new Date(),
@@ -24,12 +24,12 @@ export class ParentEngagementService {
                 status: 'completed',
                 createdAt: new Date(),
                 updatedAt: new Date()
-            };
+            } as any;
 
             await ParentEngagementModel.create(video);
-            return video;
-        } catch (error) {
-            throw new Error(`Failed to generate progress video: ${error.message}`);
+            return video as IProgressVideo;
+        } catch (error: any) {
+            throw new Error(`Failed to generate progress video: ${error?.message || error}`);
         }
     }
 
@@ -44,7 +44,7 @@ export class ParentEngagementService {
     async shareVideo(videoId: string, recipientEmails: string[], message: string): Promise<any> {
         try {
             for (const email of recipientEmails) {
-                await this.notificationService.sendEmail({
+                await (this.notificationService as any).sendEmail({
                     to: email,
                     subject: 'Your child\'s progress video is ready!',
                     template: 'progress-video-share',
@@ -52,8 +52,8 @@ export class ParentEngagementService {
                 });
             }
             return { success: true, sharedWith: recipientEmails.length };
-        } catch (error) {
-            throw new Error(`Failed to share video: ${error.message}`);
+        } catch (error: any) {
+            throw new Error(`Failed to share video: ${error?.message || error}`);
         }
     }
 
@@ -111,9 +111,9 @@ export class ParentEngagementService {
 
     async getEducationContent(): Promise<IEducationContent[]> {
         try {
-            return await ParentEngagementModel.find({ type: 'education' }).sort({ createdAt: -1 });
-        } catch (error) {
-            throw new Error(`Failed to get education content: ${error.message}`);
+            return (await ParentEngagementModel.find({ type: 'education' }).sort({ createdAt: -1 })) as any as IEducationContent[];
+        } catch (error: any) {
+            throw new Error(`Failed to get education content: ${error?.message || error}`);
         }
     }
 
@@ -129,7 +129,7 @@ export class ParentEngagementService {
             await ParentEngagementModel.create(report);
 
             // Send report to parent
-            await this.notificationService.sendEmail({
+            await (this.notificationService as any).sendEmail({
                 to: reportData.parentEmail,
                 subject: `Progress Report for ${reportData.childName}`,
                 template: 'progress-report',
@@ -144,9 +144,9 @@ export class ParentEngagementService {
 
     async getProgressReports(childId: string): Promise<IProgressReport[]> {
         try {
-            return await ParentEngagementModel.find({ childId, type: 'report' }).sort({ generatedAt: -1 });
-        } catch (error) {
-            throw new Error(`Failed to get progress reports: ${error.message}`);
+            return (await ParentEngagementModel.find({ childId, type: 'report' }).sort({ generatedAt: -1 })) as any as IProgressReport[];
+        } catch (error: any) {
+            throw new Error(`Failed to get progress reports: ${error?.message || error}`);
         }
     }
 
@@ -178,9 +178,9 @@ export class ParentEngagementService {
 
     async getWorkshops(): Promise<IWorkshop[]> {
         try {
-            return await ParentEngagementModel.find({ type: 'workshop' }).sort({ scheduledDate: 1 });
-        } catch (error) {
-            throw new Error(`Failed to get workshops: ${error.message}`);
+            return (await ParentEngagementModel.find({ type: 'workshop' }).sort({ scheduledDate: 1 })) as any as IWorkshop[];
+        } catch (error: any) {
+            throw new Error(`Failed to get workshops: ${error?.message || error}`);
         }
     }
 
@@ -216,9 +216,9 @@ export class ParentEngagementService {
     async getSatisfactionSurvey(parentId: string): Promise<ISatisfactionSurvey> {
         try {
             const survey = await ParentEngagementModel.findOne({ parentId, type: 'survey' });
-            return survey as ISatisfactionSurvey;
-        } catch (error) {
-            throw new Error(`Failed to get satisfaction survey: ${error.message}`);
+            return survey as any as ISatisfactionSurvey;
+        } catch (error: any) {
+            throw new Error(`Failed to get satisfaction survey: ${error?.message || error}`);
         }
     }
 }

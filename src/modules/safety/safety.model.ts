@@ -68,7 +68,7 @@ const authorizedGuardianSchema = new Schema<IAuthorizedGuardian>({
     isVerified: { type: Boolean, default: false, index: true },
     verificationMethod: [{ type: String, enum: Object.values(VerificationMethod) }],
     verificationDate: Date,
-    verifiedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    verifiedBy: { type: String, ref: 'User' },
 
     // Authorization Details
     canPickup: { type: Boolean, default: true },
@@ -90,7 +90,7 @@ const authorizedGuardianSchema = new Schema<IAuthorizedGuardian>({
     isActive: { type: Boolean, default: true, index: true },
     isBlocked: { type: Boolean, default: false, index: true },
     blockReason: { type: String, trim: true },
-    blockedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    blockedBy: { type: String, ref: 'User' },
     blockedAt: Date,
 
     // Emergency Authorization
@@ -101,12 +101,12 @@ const authorizedGuardianSchema = new Schema<IAuthorizedGuardian>({
     legalDocuments: [legalDocumentSchema],
 
     // Business Context
-    businessUnitId: { type: Schema.Types.ObjectId, ref: 'BusinessUnit', required: true, index: true },
-    locationIds: [{ type: Schema.Types.ObjectId, ref: 'Location' }],
+    businessUnitId: { type: String, ref: 'BusinessUnit', required: true, index: true },
+    locationIds: [{ type: String, ref: 'Location' }],
 
     // Audit
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true }
+    createdBy: { type: String, ref: 'User', required: true },
+    updatedBy: { type: String, ref: 'User', required: true }
 }, {
     ...baseSchemaOptions,
     timestamps: true
@@ -131,8 +131,8 @@ const pickupRecordSchema = new Schema<IPickupRecord>({
     status: { type: String, enum: Object.values(PickupStatus), default: PickupStatus.PENDING, index: true },
 
     // Location Information
-    locationId: { type: Schema.Types.ObjectId, ref: 'Location', required: true, index: true },
-    roomId: { type: Schema.Types.ObjectId, ref: 'Room' },
+    locationId: { type: String, ref: 'Location', required: true, index: true },
+    roomId: { type: String, ref: 'Room' },
     pickupLocation: { type: String, trim: true },
 
     // Verification
@@ -148,9 +148,9 @@ const pickupRecordSchema = new Schema<IPickupRecord>({
     },
 
     // Staff Information
-    authorizedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    authorizedBy: { type: String, ref: 'User', required: true },
     authorizedByName: { type: String, required: true, trim: true },
-    witnessedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    witnessedBy: { type: String, ref: 'User' },
     witnessedByName: { type: String, trim: true },
 
     // Late Pickup Handling
@@ -164,7 +164,7 @@ const pickupRecordSchema = new Schema<IPickupRecord>({
     // Emergency Information
     isEmergencyPickup: { type: Boolean, default: false, index: true },
     emergencyReason: { type: String, trim: true },
-    emergencyApprovedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    emergencyApprovedBy: { type: String, ref: 'User' },
     emergencyDocumentation: [String],
 
     // Special Instructions
@@ -178,11 +178,11 @@ const pickupRecordSchema = new Schema<IPickupRecord>({
     notes: { type: String, trim: true },
 
     // Business Context
-    businessUnitId: { type: Schema.Types.ObjectId, ref: 'BusinessUnit', required: true, index: true },
+    businessUnitId: { type: String, ref: 'BusinessUnit', required: true, index: true },
 
     // Audit
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true }
+    createdBy: { type: String, ref: 'User', required: true },
+    updatedBy: { type: String, ref: 'User', required: true }
 }, {
     ...baseSchemaOptions,
     timestamps: true
@@ -272,12 +272,12 @@ const restrictionOrderSchema = new Schema<IRestrictionOrder>({
     notificationRecipients: [String],
 
     // Business Context
-    businessUnitId: { type: Schema.Types.ObjectId, ref: 'BusinessUnit', required: true, index: true },
-    locationIds: [{ type: Schema.Types.ObjectId, ref: 'Location' }],
+    businessUnitId: { type: String, ref: 'BusinessUnit', required: true, index: true },
+    locationIds: [{ type: String, ref: 'Location' }],
 
     // Audit
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true }
+    createdBy: { type: String, ref: 'User', required: true },
+    updatedBy: { type: String, ref: 'User', required: true }
 }, {
     ...baseSchemaOptions,
     timestamps: true
@@ -354,12 +354,12 @@ const emergencyProtocolSchema = new Schema<IEmergencyProtocol>({
     nextReviewDate: Date,
 
     // Business Context
-    businessUnitId: { type: Schema.Types.ObjectId, ref: 'BusinessUnit', required: true, index: true },
-    locationIds: [{ type: Schema.Types.ObjectId, ref: 'Location' }],
+    businessUnitId: { type: String, ref: 'BusinessUnit', required: true, index: true },
+    locationIds: [{ type: String, ref: 'Location' }],
 
     // Audit
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true }
+    createdBy: { type: String, ref: 'User', required: true },
+    updatedBy: { type: String, ref: 'User', required: true }
 }, {
     ...baseSchemaOptions,
     timestamps: true
@@ -378,12 +378,12 @@ const emergencyIncidentSchema = new Schema<IEmergencyIncident>({
     description: { type: String, required: true, trim: true, maxlength: 2000 },
     occurredAt: { type: Date, required: true, index: true },
     reportedAt: { type: Date, required: true, index: true },
-    reportedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    reportedBy: { type: String, ref: 'User', required: true },
     reporterName: { type: String, required: true, trim: true },
 
     // Location Information
-    locationId: { type: Schema.Types.ObjectId, ref: 'Location', required: true, index: true },
-    roomId: { type: Schema.Types.ObjectId, ref: 'Room' },
+    locationId: { type: String, ref: 'Location', required: true, index: true },
+    roomId: { type: String, ref: 'Room' },
     specificLocation: { type: String, required: true, trim: true },
     coordinates: {
         latitude: { type: Number, min: -90, max: 90 },
@@ -470,17 +470,17 @@ const emergencyIncidentSchema = new Schema<IEmergencyIncident>({
 
     // Resolution
     resolvedAt: Date,
-    resolvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    resolvedBy: { type: String, ref: 'User' },
     resolutionSummary: { type: String, trim: true },
     lessonsLearned: [String],
     preventiveMeasures: [String],
 
     // Business Context
-    businessUnitId: { type: Schema.Types.ObjectId, ref: 'BusinessUnit', required: true, index: true },
+    businessUnitId: { type: String, ref: 'BusinessUnit', required: true, index: true },
 
     // Audit
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true }
+    createdBy: { type: String, ref: 'User', required: true },
+    updatedBy: { type: String, ref: 'User', required: true }
 }, {
     ...baseSchemaOptions,
     timestamps: true
@@ -606,17 +606,17 @@ const crisisModeSchema = new Schema<ICrisisMode>({
     title: { type: String, required: true, trim: true, maxlength: 200 },
     description: { type: String, required: true, trim: true, maxlength: 2000 },
     triggeredAt: { type: Date, required: true, index: true },
-    triggeredBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    triggeredBy: { type: String, ref: 'User', required: true },
     triggeredByName: { type: String, required: true, trim: true },
 
     // Location Information
-    locationId: { type: Schema.Types.ObjectId, ref: 'Location', required: true, index: true },
+    locationId: { type: String, ref: 'Location', required: true, index: true },
     affectedAreas: [{ type: String, trim: true }],
     evacuationRequired: { type: Boolean, default: false },
     lockdownRequired: { type: Boolean, default: false },
 
     // Response Team
-    incidentCommander: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    incidentCommander: { type: String, ref: 'User', required: true },
     responseTeam: [{
         memberId: { type: String, required: true },
         memberName: { type: String, required: true, trim: true },
@@ -647,16 +647,16 @@ const crisisModeSchema = new Schema<ICrisisMode>({
 
     // Resolution
     resolvedAt: Date,
-    resolvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    resolvedBy: { type: String, ref: 'User' },
     resolutionSummary: { type: String, trim: true },
     postIncidentActions: [String],
 
     // Business Context
-    businessUnitId: { type: Schema.Types.ObjectId, ref: 'BusinessUnit', required: true, index: true },
+    businessUnitId: { type: String, ref: 'BusinessUnit', required: true, index: true },
 
     // Audit
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true }
+    createdBy: { type: String, ref: 'User', required: true },
+    updatedBy: { type: String, ref: 'User', required: true }
 }, {
     ...baseSchemaOptions,
     timestamps: true
@@ -675,12 +675,12 @@ const incidentReportSchema = new Schema<IIncidentReport>({
     description: { type: String, required: true, trim: true, maxlength: 2000 },
     occurredAt: { type: Date, required: true, index: true },
     reportedAt: { type: Date, required: true, index: true },
-    reportedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    reportedBy: { type: String, ref: 'User', required: true },
     reporterName: { type: String, required: true, trim: true },
 
     // Location Information
-    locationId: { type: Schema.Types.ObjectId, ref: 'Location', required: true, index: true },
-    roomId: { type: Schema.Types.ObjectId, ref: 'Room' },
+    locationId: { type: String, ref: 'Location', required: true, index: true },
+    roomId: { type: String, ref: 'Room' },
     specificLocation: { type: String, required: true, trim: true },
 
     // People Involved
@@ -756,18 +756,18 @@ const incidentReportSchema = new Schema<IIncidentReport>({
     equipmentChanges: [String],
 
     // Approval Workflow
-    reviewedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    reviewedBy: { type: String, ref: 'User' },
     reviewedAt: Date,
-    approvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    approvedBy: { type: String, ref: 'User' },
     approvedAt: Date,
     reviewComments: { type: String, trim: true },
 
     // Business Context
-    businessUnitId: { type: Schema.Types.ObjectId, ref: 'BusinessUnit', required: true, index: true },
+    businessUnitId: { type: String, ref: 'BusinessUnit', required: true, index: true },
 
     // Audit
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true }
+    createdBy: { type: String, ref: 'User', required: true },
+    updatedBy: { type: String, ref: 'User', required: true }
 }, {
     ...baseSchemaOptions,
     timestamps: true
@@ -789,7 +789,7 @@ const emergencyBroadcastSchema = new Schema<IEmergencyBroadcast>({
     // Targeting
     recipients: {
         recipientType: { type: String, enum: ['all_staff', 'location_staff', 'parents', 'emergency_contacts', 'specific_users'], required: true },
-        locationIds: [{ type: Schema.Types.ObjectId, ref: 'Location' }],
+        locationIds: [{ type: String, ref: 'Location' }],
         userIds: [String],
         roles: [String]
     },
@@ -798,7 +798,7 @@ const emergencyBroadcastSchema = new Schema<IEmergencyBroadcast>({
     channels: [{ type: String, enum: ['email', 'sms', 'push', 'app', 'public_address'] }],
     scheduledFor: Date,
     sentAt: Date,
-    sentBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    sentBy: { type: String, ref: 'User', required: true },
 
     // Delivery Status
     deliveryStats: {
@@ -813,12 +813,12 @@ const emergencyBroadcastSchema = new Schema<IEmergencyBroadcast>({
     incidentId: { type: String, index: true },
 
     // Business Context
-    businessUnitId: { type: Schema.Types.ObjectId, ref: 'BusinessUnit', required: true, index: true },
-    locationIds: [{ type: Schema.Types.ObjectId, ref: 'Location' }],
+    businessUnitId: { type: String, ref: 'BusinessUnit', required: true, index: true },
+    locationIds: [{ type: String, ref: 'Location' }],
 
     // Audit
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true }
+    createdBy: { type: String, ref: 'User', required: true },
+    updatedBy: { type: String, ref: 'User', required: true }
 }, {
     ...baseSchemaOptions,
     timestamps: true

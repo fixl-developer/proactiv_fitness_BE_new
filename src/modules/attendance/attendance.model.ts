@@ -83,9 +83,9 @@ const attendanceRecordSchema = new Schema<IAttendanceRecord>({
     className: { type: String, trim: true },
 
     // Location Information
-    locationId: { type: Schema.Types.ObjectId, ref: 'Location', required: true, index: true },
+    locationId: { type: String, ref: 'Location', required: true, index: true },
     // @ts-ignore - Mongoose type issue
-    roomId: { type: Schema.Types.ObjectId, ref: 'Room' },
+    roomId: { type: String, ref: 'Room' },
 
     // Check-in Details
     checkInTime: { type: Date, required: true, index: true },
@@ -115,10 +115,10 @@ const attendanceRecordSchema = new Schema<IAttendanceRecord>({
     actualDuration: { type: Number, min: 0 },
 
     // Verification
-    verifiedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    verifiedBy: { type: String, ref: 'User' },
     verificationTime: Date,
     requiresApproval: { type: Boolean, default: false },
-    approvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    approvedBy: { type: String, ref: 'User' },
     approvedAt: Date,
 
     // Parent/Guardian Information
@@ -139,11 +139,11 @@ const attendanceRecordSchema = new Schema<IAttendanceRecord>({
     syncErrors: [String],
 
     // Business Context
-    businessUnitId: { type: Schema.Types.ObjectId, ref: 'BusinessUnit', required: true, index: true },
+    businessUnitId: { type: String, ref: 'BusinessUnit', required: true, index: true },
 
     // Audit
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true }
+    createdBy: { type: String, ref: 'User', required: true },
+    updatedBy: { type: String, ref: 'User', required: true }
 }, {
     ...baseSchemaOptions,
     timestamps: true
@@ -164,9 +164,9 @@ const attendanceSessionSchema = new Schema<IAttendanceSession>({
     actualEndTime: Date,
 
     // Location Information
-    locationId: { type: Schema.Types.ObjectId, ref: 'Location', required: true, index: true },
+    locationId: { type: String, ref: 'Location', required: true, index: true },
     // @ts-ignore - Mongoose type issue
-    roomId: { type: Schema.Types.ObjectId, ref: 'Room' },
+    roomId: { type: String, ref: 'Room' },
 
     // Capacity Information
     maxCapacity: { type: Number, required: true, min: 1 },
@@ -205,11 +205,11 @@ const attendanceSessionSchema = new Schema<IAttendanceSession>({
     attendanceNotes: { type: String, trim: true },
 
     // Business Context
-    businessUnitId: { type: Schema.Types.ObjectId, ref: 'BusinessUnit', required: true, index: true },
+    businessUnitId: { type: String, ref: 'BusinessUnit', required: true, index: true },
 
     // Audit
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true }
+    createdBy: { type: String, ref: 'User', required: true },
+    updatedBy: { type: String, ref: 'User', required: true }
 }, {
     ...baseSchemaOptions,
     timestamps: true
@@ -224,9 +224,9 @@ const attendanceDeviceSchema = new Schema<IAttendanceDevice>({
     deviceType: { type: String, enum: Object.values(DeviceType), required: true },
 
     // Location Assignment
-    locationId: { type: Schema.Types.ObjectId, ref: 'Location', required: true, index: true },
+    locationId: { type: String, ref: 'Location', required: true, index: true },
     // @ts-ignore - Mongoose type issue
-    roomId: { type: Schema.Types.ObjectId, ref: 'Room' },
+    roomId: { type: String, ref: 'Room' },
     isPortable: { type: Boolean, default: false },
 
     // Configuration
@@ -263,11 +263,11 @@ const attendanceDeviceSchema = new Schema<IAttendanceDevice>({
 
     // Business Context
     // @ts-ignore - Mongoose type issue
-    businessUnitId: { type: Schema.Types.ObjectId, ref: 'BusinessUnit', required: true, index: true },
+    businessUnitId: { type: String, ref: 'BusinessUnit', required: true, index: true },
 
     // Audit
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true }
+    createdBy: { type: String, ref: 'User', required: true },
+    updatedBy: { type: String, ref: 'User', required: true }
 }, {
     ...baseSchemaOptions,
     timestamps: true
@@ -283,7 +283,7 @@ const attendanceRuleSchema = new Schema<IAttendanceRule>({
 
     // Rule Conditions
     applicableTypes: [{ type: String, enum: Object.values(AttendanceType) }],
-    locationIds: [{ type: Schema.Types.ObjectId, ref: 'Location' }],
+    locationIds: [{ type: String, ref: 'Location' }],
     sessionTypes: [{ type: String, enum: Object.values(SessionType) }],
 
     // Time Rules
@@ -319,11 +319,11 @@ const attendanceRuleSchema = new Schema<IAttendanceRule>({
 
     // Business Context
     // @ts-ignore - Mongoose type issue
-    businessUnitId: { type: Schema.Types.ObjectId, ref: 'BusinessUnit', required: true, index: true },
+    businessUnitId: { type: String, ref: 'BusinessUnit', required: true, index: true },
 
     // Audit
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true }
+    createdBy: { type: String, ref: 'User', required: true },
+    updatedBy: { type: String, ref: 'User', required: true }
 }, {
     ...baseSchemaOptions,
     timestamps: true

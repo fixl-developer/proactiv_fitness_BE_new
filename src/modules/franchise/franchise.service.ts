@@ -47,8 +47,8 @@ export class FranchiseService {
             }
 
             const calculationId = uuidv4();
-            const deductions = data.deductions || { refunds: 0, discounts: 0, chargebacks: 0, other: 0 };
-            const totalDeductions = Object.values(deductions).reduce((sum, val) => sum + val, 0);
+            const deductions: Record<string, number> = data.deductions || { refunds: 0, discounts: 0, chargebacks: 0, other: 0 };
+            const totalDeductions = Object.values(deductions).reduce((sum: number, val: number) => sum + val, 0);
             const netRevenue = data.grossRevenue - totalDeductions;
 
             let royaltyAmount = 0;

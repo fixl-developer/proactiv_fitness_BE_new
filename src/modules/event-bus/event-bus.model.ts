@@ -36,7 +36,7 @@ const eventMetadataSchema = new Schema({
         index: true
     },
     userId: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'User',
         index: true
     },
@@ -54,13 +54,13 @@ const eventMetadataSchema = new Schema({
         trim: true
     },
     businessUnitId: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'BusinessUnit',
         index: true
     },
     // @ts-ignore - Mongoose type issue
     locationId: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'Location',
         index: true
     },
@@ -334,23 +334,23 @@ const eventSubscriptionSchema = new Schema<IEventSubscription>({
 
     // Business Context
     businessUnitId: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'BusinessUnit',
         index: true
     },
     locationIds: [{
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'Location'
     }],
 
     // Audit
     createdBy: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'User',
         required: [true, 'Created by is required']
     },
     updatedBy: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'User',
         required: [true, 'Updated by is required']
     }
@@ -518,12 +518,12 @@ const messageQueueSchema = new Schema<IMessageQueue>({
 
     // Audit
     createdBy: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'User',
         required: [true, 'Created by is required']
     },
     updatedBy: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'User',
         required: [true, 'Updated by is required']
     }
@@ -710,7 +710,7 @@ queueMessageSchema.virtual('isVisible').get(function () {
 });
 
 queueMessageSchema.virtual('isExpired').get(function () {
-    const queue = this.parent();
+    const queue = (this as any).parent?.();
     if (!queue || !queue.ttl) return false;
     const expiryTime = new Date(this.enqueuedAt.getTime() + (queue.ttl * 1000));
     return expiryTime < new Date();

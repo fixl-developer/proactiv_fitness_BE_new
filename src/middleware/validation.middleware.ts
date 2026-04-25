@@ -21,3 +21,6 @@ export const validate = (validations: ValidationChain[]) => {
         return ResponseUtil.validationError(res, extractedErrors);
     };
 };
+
+// Export alias for backward compatibility
+export const validationMiddleware = validate;

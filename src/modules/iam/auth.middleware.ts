@@ -78,21 +78,28 @@ export const authenticate = async (req: Request, _res: Response, next: NextFunct
 /**
  * Authorize user based on roles
  */
-export const authorize = (...roles: UserRole[]) => {
+export const authorize = (...roles: Array<UserRole | UserRole[] | string | string[]>) => {
     return (req: Request, _res: Response, next: NextFunction) => {
         if (!req.user) {
             return next(new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED));
         }
 
+        // Flatten — supports both authorize('ADMIN', 'PARENT') and authorize(['ADMIN', 'PARENT'])
+        const flatRoles: string[] = [];
+        for (const r of roles) {
+            if (Array.isArray(r)) flatRoles.push(...(r as string[]));
+            else flatRoles.push(r as string);
+        }
+
         // Normalize role comparison — handle case where DB role might differ in casing
         const userRole = (req.user.role as string)?.toUpperCase?.() || '';
-        const allowedRoles = roles.map(r => r.toUpperCase());
+        const allowedRoles = flatRoles.map(r => String(r).toUpperCase());
 
         if (!allowedRoles.includes(userRole)) {
             logger.warn('Authorization failed', {
                 userRole: req.user.role,
                 normalizedRole: userRole,
-                allowedRoles: roles,
+                allowedRoles: flatRoles,
                 userId: req.user.id,
                 path: req.originalUrl
             });

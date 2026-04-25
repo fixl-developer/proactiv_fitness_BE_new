@@ -10,15 +10,18 @@ const policyController = new PolicyController();
 const ruleTemplateController = new RuleTemplateController();
 
 // Validation rules
+// Note: ruleType, actions, effectiveFrom are optional here — controller will
+// derive sensible defaults from `category` / fall back to ALLOW / now() so the
+// admin Rules UI (which only collects name/category/conditions/priority) works.
 const createRuleValidation = [
     body('name').isString().trim().isLength({ min: 1, max: 100 }).withMessage('Rule name is required (1-100 characters)'),
-    body('description').isString().trim().isLength({ min: 1, max: 500 }).withMessage('Description is required (1-500 characters)'),
-    body('ruleType').isString().withMessage('Rule type is required'),
+    body('description').optional().isString().trim().isLength({ max: 500 }),
+    body('ruleType').optional().isString(),
     body('category').isString().withMessage('Category is required'),
     body('conditions').isArray({ min: 1 }).withMessage('At least one condition is required'),
-    body('actions').isArray({ min: 1 }).withMessage('At least one action is required'),
-    body('priority').isInt({ min: 1, max: 1000 }).withMessage('Priority must be between 1-1000'),
-    body('effectiveFrom').isISO8601().withMessage('Valid effective from date is required'),
+    body('actions').optional().isArray(),
+    body('priority').optional().isInt({ min: 1, max: 1000 }),
+    body('effectiveFrom').optional().isISO8601(),
     validate
 ];
 
@@ -40,10 +43,12 @@ const createPolicyValidation = [
     validate
 ];
 
+// Note: Admin "Test All Rules" button posts an empty body. Controller fills
+// in defaults (ruleType from query/body or undefined → "all", timestamp = now).
 const evaluateRulesValidation = [
-    body('ruleType').isString().withMessage('Rule type is required'),
-    body('context').isObject().withMessage('Context object is required'),
-    body('context.timestamp').isISO8601().withMessage('Valid timestamp is required'),
+    body('ruleType').optional().isString(),
+    body('context').optional().isObject(),
+    body('context.timestamp').optional().isISO8601(),
     validate
 ];
 

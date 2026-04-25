@@ -1,9 +1,30 @@
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { SuperAdminController } from './superadmin.controller';
-import { authMiddleware } from '../../shared/middleware/auth.middleware';
-import { roleMiddleware } from '../../shared/middleware/role.middleware';
-import { validateRequest } from '../../shared/middleware/validation.middleware';
 import { body, param, query } from 'express-validator';
+
+// Simple auth middleware
+const authMiddleware = (req: any, res: Response, next: NextFunction) => {
+    if (!req.user) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    next();
+};
+
+// Simple role middleware
+const roleMiddleware = (roles: string[]) => (req: any, res: Response, next: NextFunction) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+        return res.status(403).json({ success: false, message: 'Forbidden' });
+    }
+    next();
+};
+
+// Simple validation middleware
+const validateRequest = (validations: any[]) => async (req: Request, res: Response, next: NextFunction) => {
+    for (let validation of validations) {
+        await validation.run(req);
+    }
+    next();
+};
 
 const router = Router();
 const superAdminController = new SuperAdminController();

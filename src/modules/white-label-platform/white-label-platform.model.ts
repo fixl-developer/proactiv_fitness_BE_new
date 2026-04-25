@@ -70,3 +70,4 @@ const WhiteLabelPlatformSchema = new Schema({
 });
 
 export const WhiteLabelPlatformModel = mongoose.model('WhiteLabelPlatform', WhiteLabelPlatformSchema);
+

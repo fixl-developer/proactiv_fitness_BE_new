@@ -32,7 +32,7 @@ export class UserDashboardService {
                     totalClasses: progress?.classesAttended || 0,
                     upcomingClasses: upcomingClasses.length,
                     totalSpent: profile?.stats?.totalSpent || 0,
-                    accountBalance: wallet?.balance || 0
+                    accountBalance: wallet?.totalBalance || 0
                 },
                 progress: {
                     classesAttended: progress?.classesAttended || 0,

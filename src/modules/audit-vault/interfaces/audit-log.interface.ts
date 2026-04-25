@@ -2,39 +2,44 @@ import { Types } from 'mongoose';
 
 export interface AuditLog {
     _id?: Types.ObjectId;
-    
+
+    // Unique log identifier (UUID)
+    logId?: string;
+
     // Tenant context
     tenantId: string;
     countryId?: string;
     regionId?: string;
     businessUnitId?: string;
     locationId?: string;
-    
+
     // Core audit fields
     timestamp: Date;
+    timestampNanos?: number;
     sequenceNumber: number;
     previousHash?: string;
     currentHash: string;
-    
+
     // Actor information
     actorId: string;
-    actorType: 'user' | 'system' | 'api';
+    actorType: 'user' | 'system' | 'api' | 'admin';
     actorEmail?: string;
     actorName?: string;
-    
+
     // Action information
     actionType: string;
-    category: AuditCategory;
-    severity: AuditSeverity;
-    
+    actionCategory?: string;
+    category?: AuditCategory;
+    severity?: AuditSeverity;
+
     // Resource information
-    resourceType: string;
-    resourceId: string;
+    resourceType?: string;
+    resourceId?: string;
     resourceName?: string;
-    
+
     // Context and metadata
     context: Record<string, any>;
-    metadata: {
+    metadata?: {
         ipAddress?: string;
         userAgent?: string;
         sessionId?: string;
@@ -42,21 +47,37 @@ export interface AuditLog {
         source: string;
         version: string;
     };
-    
+
+    // Request context (top-level convenience fields)
+    ipAddress?: string;
+    userAgent?: string;
+    sessionId?: string;
+    requestId?: string;
+
+    // Impersonation context
+    impersonation?: {
+        adminId: string;
+        adminEmail: string;
+        reason: string;
+        sessionId: string;
+    };
+
     // Change tracking
     changes?: {
         before?: Record<string, any>;
         after?: Record<string, any>;
         fields: string[];
     };
-    
+
     // Compliance flags
-    retentionCategory: string;
-    legalHoldFlag: boolean;
-    anonymized: boolean;
-    
+    retentionCategory?: string;
+    legalHoldFlag?: boolean;
+    legalHolds?: string[];
+    anonymized?: boolean;
+    immutable?: boolean;
+
     createdAt: Date;
-    updatedAt: Date;
+    updatedAt?: Date;
 }
 
 export enum AuditCategory {

@@ -104,7 +104,7 @@ export class HashChainService {
         let verifiedLogs = 0;
 
         for (const log of logs) {
-            const expectedHash = this.computeLogHash(log, previousHash);
+            const expectedHash = this.computeLogHash(log as any, previousHash);
 
             if (expectedHash === log.currentHash) {
                 verifiedLogs++;

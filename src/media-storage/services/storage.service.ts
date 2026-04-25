@@ -24,7 +24,6 @@ import {
 } from '../interfaces';
 import { AppError } from '../../shared/utils/app-error.util';
 import { Logger } from '../../shared/utils/logger.util';
-import { DatabaseConfig } from '../../config/database.config';
 import { v4 as uuidv4 } from 'uuid';
 
 export class StorageService {
@@ -37,7 +36,8 @@ export class StorageService {
         private uploadService: FileUploadService,
         private storageProviderType: StorageProviderEnum
     ) {
-        const db = this.dbClient.db(DatabaseConfig.DATABASE_NAME);
+        const dbName = process.env.MONGODB_DATABASE_NAME || 'proactiv_fitness_db';
+        const db = this.dbClient.db(dbName);
         this.mediaCollection = db.collection('media_files');
     }
 

@@ -163,6 +163,15 @@ export class GamificationService {
         }
     }
 
+    // Stub: implement business logic
+    async getActiveChallenges() {
+        try {
+            return await Challenge.find({ status: 'active' });
+        } catch (error) {
+            return [];
+        }
+    }
+
     async getChallenges(childId: string, status?: string) {
         try {
             const query: any = { childId };
@@ -212,9 +221,13 @@ export class GamificationService {
         }
     }
 
-    async getLeaderboard(programId: string, centerId: string, period: string, limit: number = 10) {
+    async getLeaderboard(programIdOrLeaderboardId: string, centerId?: string, period?: string, limit: number = 10) {
         try {
-            return await Leaderboard.find({ programId, centerId, period })
+            // Stub: if called with single arg, treat as leaderboardId
+            if (centerId === undefined && period === undefined) {
+                return await Leaderboard.findById(programIdOrLeaderboardId);
+            }
+            return await Leaderboard.find({ programId: programIdOrLeaderboardId, centerId, period })
                 .sort({ points: -1 })
                 .limit(limit);
         } catch (error) {
@@ -349,8 +362,9 @@ export class GamificationService {
         }
     }
 
-    async redeemReward(rewardId: string) {
+    async redeemReward(rewardIdOrBody: string | any, _userId?: string) {
         try {
+            const rewardId = typeof rewardIdOrBody === 'string' ? rewardIdOrBody : rewardIdOrBody?.rewardId;
             const reward = await Reward.findByIdAndUpdate(
                 rewardId,
                 { isRedeemed: true, redeemedDate: new Date() },
@@ -380,6 +394,46 @@ export class GamificationService {
         } catch (error) {
             throw new Error(`Failed to get rewards: ${error.message}`);
         }
+    }
+
+    // Stub: implement business logic
+    async awardPoints(_body: any, _userId: string) {
+        return {};
+    }
+
+    // Stub: implement business logic
+    async getPointsBalance(_userId: string) {
+        return { current: 0, lifetime: 0 };
+    }
+
+    // Stub: implement business logic
+    async updateStreak(_body: any, _userId: string) {
+        return {};
+    }
+
+    // Stub: implement business logic
+    async unlockAchievement(_body: any, _userId: string) {
+        return {};
+    }
+
+    // Stub: implement business logic
+    async getAchievements(_userId: string) {
+        return [];
+    }
+
+    // Stub: implement business logic
+    async getAvailableRewards(_userId: string) {
+        return [];
+    }
+
+    // Stub: implement business logic
+    async joinChallenge(_body: any, _userId: string) {
+        return {};
+    }
+
+    // Stub: implement business logic
+    async getGamificationProfile(_userId: string) {
+        return null;
     }
 
     // Dashboard

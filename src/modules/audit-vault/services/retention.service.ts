@@ -60,9 +60,9 @@ export class RetentionService {
                 $set: {
                     ...updates,
                     updatedAt: new Date(),
-                    version: { $inc: 1 }
-                }
-            }
+                },
+                $inc: { version: 1 },
+            } as any
         );
 
         if (result.matchedCount === 0) {
@@ -247,8 +247,8 @@ export class RetentionService {
                 try {
                     await this.archiveLog(eligibility.logId);
                     processed++;
-                } catch (error) {
-                    const errorMsg = `Failed to archive log ${eligibility.logId}: ${error.message}`;
+                } catch (error: any) {
+                    const errorMsg = `Failed to archive log ${eligibility.logId}: ${error?.message || 'Unknown error'}`;
                     errors.push(errorMsg);
                     logger.error(errorMsg, { error });
                 }
@@ -409,33 +409,33 @@ export class RetentionService {
         }
 
         // Add legal hold to matching logs
-        const result = await this.auditLogsCollection.updateMany(
+        const result: any = await this.auditLogsCollection.updateMany(
             filter,
-            { $addToSet: { legalHolds: holdId } }
+            { $addToSet: { legalHolds: holdId } } as any
         );
 
         logger.info('Applied legal hold to existing logs', {
             holdId,
-            matchedLogs: result.matchedCount,
-            modifiedLogs: result.modifiedCount
+            matchedLogs: result?.matchedCount,
+            modifiedLogs: result?.modifiedCount
         });
     }
 
     private async removeLegalHoldFromLogs(holdId: string): Promise<void> {
-        const result = await this.auditLogsCollection.updateMany(
+        const result: any = await this.auditLogsCollection.updateMany(
             { legalHolds: holdId },
-            { $pull: { legalHolds: holdId } }
+            { $pull: { legalHolds: holdId } } as any
         );
 
         logger.info('Removed legal hold from logs', {
             holdId,
-            modifiedLogs: result.modifiedCount
+            modifiedLogs: result?.modifiedCount
         });
     }
 
     private async archiveLog(logId: string): Promise<void> {
         // Move log to archive collection
-        const log = await this.auditLogsCollection.findOne({ _id: logId });
+        const log = await this.auditLogsCollection.findOne({ _id: logId } as any);
         if (!log) {
             throw new Error(`Log not found: ${logId}`);
         }
@@ -447,6 +447,6 @@ export class RetentionService {
         });
 
         // Remove from active collection
-        await this.auditLogsCollection.deleteOne({ _id: logId });
+        await this.auditLogsCollection.deleteOne({ _id: logId } as any);
     }
 }

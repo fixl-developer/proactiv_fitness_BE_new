@@ -68,6 +68,29 @@ const logger = winston.createLogger({
     exitOnError: false,
 });
 
+// Export Logger class for backward compatibility
+export class Logger {
+    static getInstance() {
+        return logger;
+    }
+
+    static info(message: string, meta?: any) {
+        logger.info(message, meta);
+    }
+
+    static error(message: string, error?: any) {
+        logger.error(message, error);
+    }
+
+    static warn(message: string, meta?: any) {
+        logger.warn(message, meta);
+    }
+
+    static debug(message: string, meta?: any) {
+        logger.debug(message, meta);
+    }
+}
+
 // Stream for Morgan HTTP logger
 export const stream = {
     write: (message: string) => {

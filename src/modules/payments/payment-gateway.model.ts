@@ -8,6 +8,7 @@ export interface IPaymentGateway extends Document {
     apiKey?: string;
     secretKey?: string;
     webhookUrl?: string;
+    supportedCurrencies: string[];
     tenantId?: string;
     createdAt: Date;
     updatedAt: Date;
@@ -22,6 +23,7 @@ const paymentGatewaySchema = new Schema<IPaymentGateway>(
         apiKey: { type: String },
         secretKey: { type: String },
         webhookUrl: { type: String },
+        supportedCurrencies: { type: [String], default: [] },
         tenantId: { type: String },
     },
     { timestamps: true }

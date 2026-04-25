@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { walletService } from './wallet.service';
+import { CreditBucketType } from './wallet.interface';
 import { authenticate } from '../iam/auth.middleware';
 
 const router = Router();
@@ -109,7 +110,7 @@ router.post('/refund', authenticate, async (req: Request, res: Response) => {
             {
                 userId,
                 amount,
-                bucketType: 'CASH',
+                bucketType: CreditBucketType.CASH,
                 description: `Refund: ${reason || 'Refund request'}`
             },
             userId

@@ -21,6 +21,8 @@ import certificatesRoutes from '../modules/certificates/certificates.routes';
 import healthMetricsRoutes from '../modules/health-metrics/health-metrics.routes';
 import scheduleRoutes from '../modules/schedule/schedule.routes';
 import notificationsRoutes from '../modules/notifications/notifications.routes';
+import adminNotificationsRoutes from '../modules/notifications/admin-notifications.routes';
+import communicationsRoutes from '../modules/communications/communications.routes';
 
 // === Already mounted modules ===
 import aiChatbotRoutes from '../modules/ai-chatbot/ai-chatbot.routes';
@@ -126,6 +128,9 @@ import missingModulesRoutes from './missing-modules.routes';
 
 // === NEW: IAM dynamic RBAC (custom roles & permissions CRUD) ===
 import iamRbacRoutes from './iam-rbac.routes';
+
+// === NEW: Finance routes (admin Finance pages: revenue + ledger CRUD) ===
+import financeRoutes from './finance.routes';
 
 // === BCMS (Business Configuration Management) ===
 import { termRoutes, holidayCalendarRoutes, countryRoutes, regionRoutes, businessUnitRoutes, locationRoutes, roomRoutes } from '../modules/bcms';
@@ -256,6 +261,10 @@ router.use('/rules', rulesRoutes);
 router.use('/reports', reportingRoutes);
 router.use('/support', supportRoutes);
 router.use('/franchise', franchiseRoutes);
+// Communications module: full CRUD for templates + CRM families.
+// Mount BEFORE the legacy /crm stub so /crm/families/:id PUT/DELETE resolve to the full handler.
+router.use('/communications', communicationsRoutes);
+router.use('/crm', communicationsRoutes);
 router.use('/crm', crmRoutes);
 router.use('/notifications', notificationsRoutes);
 router.use('/notification-templates', notificationTemplateRoutes);
@@ -265,6 +274,7 @@ router.use('/family-scheduler', familySchedulerRoutes);
 router.use('/parent-engagement', parentEngagementRoutes);
 router.use('/parent-roi', parentRoiRoutes);
 router.use('/financial-ledger', financialLedgerRoutes);
+router.use('/finance', financeRoutes); // /finance/revenue/* and /finance/ledger/* (admin Finance pages)
 router.use('/integrations', integrationsRoutes);
 
 // Aliases for /user/* frontend prefix (continued — these come after their base modules are imported)
@@ -477,6 +487,12 @@ router.use('/', adminAliasRoutes);
 router.use('/admin/dashboard', adminDashboardRoutes);
 
 // =============================================
+// NEW: Admin Notifications (full CRUD - in-memory store)
+// Frontend: NotificationService → /admin/notifications
+// =============================================
+router.use('/admin/notifications', adminNotificationsRoutes);
+
+// =============================================
 // NEW: Admin Customers
 // =============================================
 router.use('/admin/customers', adminCustomersRoutes);
@@ -504,14 +520,40 @@ router.use('/', missingModulesRoutes);
 router.get('/audit/logs', async (req: Request, res: Response) => {
     try {
         const { AuditVaultModel } = require('../modules/audit-vault/audit-vault.model');
-        const { action, status, search, limit: limitStr } = req.query;
+        const { action, status, search, startDate, endDate, limit: limitStr } = req.query;
         const filter: any = {};
-        if (action) filter.action = action;
+        if (action && action !== 'All') {
+            // Frontend may send "Login"/"Create"/"Update"/"Delete"; backend stores uppercase
+            const a = String(action).toUpperCase();
+            filter.action = { $in: [a, action, String(action).toLowerCase()] };
+        }
+        if (status && status !== 'All') {
+            const s = String(status).toUpperCase();
+            filter.status = { $in: [s, status, String(status).toLowerCase()] };
+        }
         if (search) filter.$or = [
             { action: { $regex: search, $options: 'i' } },
             { entityType: { $regex: search, $options: 'i' } },
             { reason: { $regex: search, $options: 'i' } },
+            { userId: { $regex: search, $options: 'i' } },
         ];
+        // Date range filtering on createdAt
+        if (startDate || endDate) {
+            filter.createdAt = {};
+            if (startDate) {
+                const sd = new Date(String(startDate));
+                if (!isNaN(sd.getTime())) filter.createdAt.$gte = sd;
+            }
+            if (endDate) {
+                const ed = new Date(String(endDate));
+                if (!isNaN(ed.getTime())) {
+                    // Include the end day fully
+                    ed.setHours(23, 59, 59, 999);
+                    filter.createdAt.$lte = ed;
+                }
+            }
+            if (Object.keys(filter.createdAt).length === 0) delete filter.createdAt;
+        }
         const limit = parseInt(limitStr as string) || 100;
         const logs = await AuditVaultModel.find(filter).sort({ createdAt: -1 }).limit(limit).lean();
         res.json({ success: true, data: logs });

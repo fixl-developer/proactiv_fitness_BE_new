@@ -78,7 +78,7 @@ class LocalizationService {
         }
     }
 
-    async deleteTranslation(key: string) {
+    async deleteTranslation(key: string): Promise<any> {
         try {
             const result = await Translation.deleteMany({ key });
             if (result.deletedCount === 0) throw new Error('Translation not found');

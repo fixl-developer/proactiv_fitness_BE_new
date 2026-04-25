@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { WaitlistController } from './waitlist.controller';
+import { WaitlistService } from './waitlist.service';
 import { authenticate } from '../iam/auth.middleware';
 import { UserRole } from '../../shared/enums';
 import { validate } from '../../middleware/validation.middleware';
@@ -17,9 +18,7 @@ const authorize = (roles: string[]) => (req: any, res: Response, next: any) => {
 };
 
 const router = Router();
-const controller = new WaitlistController(
-    require('./waitlist.service').WaitlistService
-);
+const controller = new WaitlistController(new WaitlistService());
 
 /**
  * @route   POST /api/v1/waitlist

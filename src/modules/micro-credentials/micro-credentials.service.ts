@@ -501,6 +501,10 @@ export class MicroCredentialService extends BaseService<IMicroCredential> {
     private generateCertificateHash(certificateId: string): string {
         return `hash_${certificateId}_${Math.random().toString(36).substr(2, 16)}`;
     }
+
+    async aggregate(pipeline: any[]): Promise<any[]> {
+        return (this.model as any).aggregate(pipeline);
+    }
 }
 
 export class BadgeService extends BaseService<IBadgeSystem> {
@@ -825,5 +829,9 @@ export class BadgeService extends BaseService<IBadgeSystem> {
 
     private generateEarnedBadgeId(): string {
         return `earned_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
+
+    async aggregate(pipeline: any[]): Promise<any[]> {
+        return (this.model as any).aggregate(pipeline);
     }
 }

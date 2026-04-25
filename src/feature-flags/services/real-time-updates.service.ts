@@ -1,7 +1,7 @@
 import { Db } from 'mongodb';
 import { EventEmitter } from 'events';
 import { FlagDefinition, Environment } from '../interfaces';
-import logger from '../../../shared/utils/logger.util';
+import logger from '../../shared/utils/logger.util';
 
 export interface FlagUpdateEvent {
     type: 'flag_updated' | 'flag_created' | 'flag_deleted' | 'flag_enabled' | 'flag_disabled';

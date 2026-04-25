@@ -1,16 +1,17 @@
 import { BaseService } from '../../shared/base/base.service';
 import { AppError } from '../../shared/utils/app-error.util';
 import { HTTP_STATUS } from '../../shared/constants';
-import { User } from '../auth/user.model';
+import { User } from '../iam/user.model';
 import { SuperAdminModel } from './superadmin.model';
 import { Logger } from '../../shared/utils/logger.util';
+import { UserStatus } from '../../shared/enums';
 import mongoose from 'mongoose';
 
-export class SuperAdminService extends BaseService {
-    private logger = new Logger('SuperAdminService');
+export class SuperAdminService extends BaseService<any> {
+    private logger = Logger;
 
     constructor() {
-        super();
+        super(User as any, 'superadmin');
     }
 
     /**
@@ -25,7 +26,7 @@ export class SuperAdminService extends BaseService {
                 systemMetrics
             ] = await Promise.all([
                 User.countDocuments(),
-                User.countDocuments({ status: 'ACTIVE' }),
+                User.countDocuments({ status: UserStatus.ACTIVE }),
                 this.calculateTotalRevenue(),
                 this.getSystemMetrics()
             ]);
@@ -152,8 +153,8 @@ export class SuperAdminService extends BaseService {
             const user = new User({
                 ...userData,
                 createdBy: adminId,
-                status: 'ACTIVE'
-            });
+                status: UserStatus.ACTIVE
+            } as any);
 
             await user.save();
 
@@ -165,7 +166,7 @@ export class SuperAdminService extends BaseService {
                 riskLevel: 'low'
             });
 
-            return user.toObject({ transform: (doc, ret) => { delete ret.password; return ret; } });
+            return user.toObject({ transform: (doc: any, ret: any) => { delete ret.password; return ret; } });
         } catch (error) {
             this.logger.error('Error creating user:', error);
             throw error;
@@ -182,7 +183,7 @@ export class SuperAdminService extends BaseService {
             }
 
             Object.assign(user, updates);
-            user.updatedBy = adminId;
+            (user as any).updatedBy = adminId;
             await user.save();
 
             // Log the action
@@ -193,7 +194,7 @@ export class SuperAdminService extends BaseService {
                 riskLevel: 'low'
             });
 
-            return user.toObject({ transform: (doc, ret) => { delete ret.password; return ret; } });
+            return user.toObject({ transform: (doc: any, ret: any) => { delete ret.password; return ret; } });
         } catch (error) {
             this.logger.error('Error updating user:', error);
             throw error;
@@ -235,10 +236,10 @@ export class SuperAdminService extends BaseService {
                 throw new AppError('User not found', HTTP_STATUS.NOT_FOUND);
             }
 
-            user.status = 'SUSPENDED';
-            user.suspensionReason = reason;
-            user.suspendedBy = adminId;
-            user.suspendedAt = new Date();
+            user.status = UserStatus.SUSPENDED;
+            (user as any).suspensionReason = reason;
+            (user as any).suspendedBy = adminId;
+            (user as any).suspendedAt = new Date();
             await user.save();
 
             // Log the action
@@ -264,10 +265,10 @@ export class SuperAdminService extends BaseService {
                 throw new AppError('User not found', HTTP_STATUS.NOT_FOUND);
             }
 
-            user.status = 'ACTIVE';
-            user.suspensionReason = undefined;
-            user.suspendedBy = undefined;
-            user.suspendedAt = undefined;
+            user.status = UserStatus.ACTIVE;
+            (user as any).suspensionReason = undefined;
+            (user as any).suspendedBy = undefined;
+            (user as any).suspendedAt = undefined;
             await user.save();
 
             // Log the action
@@ -475,7 +476,7 @@ export class SuperAdminService extends BaseService {
      */
     async getDatabaseMetrics() {
         try {
-            const stats = await mongoose.connection.db.stats();
+            const stats = await (mongoose.connection.db as any).stats();
 
             return {
                 totalSize: stats.dataSize,
@@ -954,7 +955,7 @@ export class SuperAdminService extends BaseService {
         try {
             const [totalUsers, activeUsers, systemHealth, metrics] = await Promise.all([
                 User.countDocuments(),
-                User.countDocuments({ status: 'ACTIVE' }),
+                User.countDocuments({ status: UserStatus.ACTIVE }),
                 this.getSystemHealth(),
                 this.getSystemMetrics()
             ]);

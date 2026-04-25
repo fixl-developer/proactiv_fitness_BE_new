@@ -133,14 +133,13 @@ export interface IActionConfig {
         phoneNumbers?: string[];
         message?: string;
 
-        // Push notification action
+        // Push notification / Task action (shared fields)
         userIds?: string[];
         title?: string;
-        body?: string;
+        body?: any; // Also used by Webhook/API action
         data?: Record<string, any>;
 
         // Task action
-        title?: string;
         description?: string;
         assignedTo?: string;
         dueDate?: Date;
@@ -149,13 +148,11 @@ export interface IActionConfig {
         // Record actions
         collection?: string;
         recordId?: string;
-        data?: Record<string, any>;
 
         // Webhook/API actions
         url?: string;
         method?: string;
         headers?: Record<string, string>;
-        body?: any;
         timeout?: number;
 
         // Function action

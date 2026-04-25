@@ -1,6 +1,15 @@
 import { Router, Request, Response } from 'express';
 import apiService from './api-developer-platform.service';
-import { authenticate, authorize } from '@modules/iam/auth.middleware';
+import { authenticate } from '@modules/iam/auth.middleware';
+
+// Local authorize wrapper that accepts an array of role strings.
+// (auth.middleware exports a spread-style authorize; this file's call sites pass an array.)
+const authorize = (roles: string[]) => (req: any, res: any, next: any) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+        return res.status(403).json({ success: false, message: 'Forbidden' });
+    }
+    next();
+};
 
 const router = Router();
 
@@ -50,3 +59,4 @@ router.post('/keys/:keyId/revoke', authenticate, authorize(['admin']), async (re
 });
 
 export default router;
+

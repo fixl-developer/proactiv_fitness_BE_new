@@ -1,7 +1,7 @@
 import { Db } from 'mongodb';
 import { v4 as uuidv4 } from 'uuid';
 import { ProcessingJobType, ProcessingStatus } from '../interfaces';
-import logger from '../../../shared/utils/logger.util';
+import logger from '../../shared/utils/logger.util';
 
 export interface QueueJobOptions {
     jobType: ProcessingJobType | string;
