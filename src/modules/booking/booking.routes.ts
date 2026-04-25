@@ -143,15 +143,20 @@ router.post('/',
             const customer = await User.findById(customerId).select('firstName lastName name email locationId').lean().catch(() => null);
             const customerName = customer ? (customer.name || `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || customer.email || 'Customer') : 'Customer';
 
-            // Resolve locationId — prefer body, then customer's, then any active location.
+            // Resolve locationId — prefer body, then customer's, then any usable
+            // location (active first, then any non-deleted; inactive locations are
+            // acceptable here because admin is creating on the customer's behalf).
             let locationId: any = isMongoId(body.locationId) ? body.locationId : (isMongoId(customer?.locationId) ? customer.locationId : null);
             if (!locationId) {
                 const { Location } = require('../bcms/location.model');
-                const anyLoc = await Location.findOne({ isActive: true, isDeleted: { $ne: true } }).select('_id').lean();
+                const anyLoc =
+                    (await Location.findOne({ isActive: true, isDeleted: { $ne: true } }).select('_id').lean()) ||
+                    (await Location.findOne({ isDeleted: { $ne: true } }).select('_id').lean()) ||
+                    (await Location.findOne({}).select('_id').lean());
                 locationId = anyLoc?._id;
             }
             if (!locationId) {
-                return res.status(400).json({ success: false, message: 'No active location found; specify locationId explicitly' });
+                return res.status(400).json({ success: false, message: 'No location found; create one in Locations and retry, or specify locationId in payload' });
             }
 
             // Resolve program (for businessUnitId + price defaults)
@@ -162,12 +167,45 @@ router.post('/',
             const bookingId = `BK-${now.getTime().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
             const sessionDate = body.date ? new Date(body.date) : now;
 
+            // Resolve businessUnitId: prefer program's, else fallback to any location's, else any BU.
+            let businessUnitId: any = program?.businessUnitId;
+            if (!businessUnitId) {
+                const { Location } = require('../bcms/location.model');
+                const loc = await Location.findById(locationId).select('businessUnitId').lean().catch(() => null);
+                businessUnitId = loc?.businessUnitId;
+            }
+            if (!businessUnitId) {
+                const { BusinessUnit } = require('../bcms/business-unit.model');
+                const anyBu = await BusinessUnit.findOne({ isDeleted: { $ne: true } }).select('_id').lean().catch(() => null);
+                businessUnitId = anyBu?._id;
+            }
+
+            // Map UI status values to canonical enum values (lowercase).
+            const statusMap: Record<string, string> = {
+                pending: 'pending', confirmed: 'confirmed', cancelled: 'cancelled',
+                completed: 'completed', waitlisted: 'waitlisted', no_show: 'no_show',
+            };
+            const rawStatus = String(body.status || 'pending').toLowerCase();
+            const status = statusMap[rawStatus] || 'pending';
+
+            // Map UI booking-type values to canonical enum values.
+            const typeMap: Record<string, string> = {
+                trial: 'trial', drop_in: 'drop_in', term_enrollment: 'term_enrollment',
+                private_lesson: 'private_lesson', camp: 'camp', event: 'event',
+                party: 'party', assessment: 'assessment', makeup: 'makeup',
+                class: 'drop_in', // UI "CLASS" → drop_in
+            };
+            const rawType = String(body.bookingType || 'drop_in').toLowerCase();
+            const bookingType = typeMap[rawType] || 'drop_in';
+
             const doc: any = {
                 bookingId,
-                bookingType: body.bookingType || 'CLASS',
-                status: body.status ? String(body.status).toUpperCase() : 'PENDING',
+                bookingType,
+                status,
                 familyId: customerId, // admin shim: treat customer as their own family
                 bookedBy: req.user.id,
+                createdBy: req.user.id,
+                updatedBy: req.user.id,
                 participants: [{
                     childId: customerId,
                     name: customerName,
@@ -175,7 +213,7 @@ router.post('/',
                 }],
                 programId: body.programId,
                 locationId,
-                businessUnitId: program?.businessUnitId,
+                businessUnitId,
                 sessionDate,
                 payment: {
                     amount: typeof body.amount === 'number' ? body.amount : (program?.pricing?.basePrice || 0),

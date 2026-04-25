@@ -1,7 +1,36 @@
 import { Router, Request, Response } from 'express';
-import mongoose from 'mongoose';
+import mongoose, { Schema, model } from 'mongoose';
 
 const router = Router();
+
+// =============================================
+// DatabaseHealthRecord — admin-managed list of databases (multi-DB tracking).
+// The live MongoDB connection stats are still exposed at /database/info.
+// =============================================
+interface IDatabaseHealthRecord {
+    name: string;
+    host: string;
+    port: number;
+    status: 'healthy' | 'warning' | 'critical';
+    diskUsage: number;
+    connections?: number;
+    lastBackup?: Date;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+const databaseHealthRecordSchema = new Schema<IDatabaseHealthRecord>({
+    name: { type: String, required: true, trim: true },
+    host: { type: String, required: true, trim: true },
+    port: { type: Number, required: true },
+    status: { type: String, enum: ['healthy', 'warning', 'critical'], default: 'healthy' },
+    diskUsage: { type: Number, default: 0, min: 0, max: 100 },
+    connections: Number,
+    lastBackup: Date,
+}, { timestamps: true });
+
+const DatabaseHealthRecord = model<IDatabaseHealthRecord>('DatabaseHealthRecord', databaseHealthRecordSchema);
+
 
 // =============================================
 // API MANAGEMENT
@@ -92,8 +121,40 @@ router.get('/api/metrics', (_req: Request, res: Response) => {
 // DATABASE MANAGEMENT
 // =============================================
 
-// GET /admin/system/database
-router.get('/database', async (_req: Request, res: Response) => {
+/**
+ * GET /admin/system/database  → paginated CRUD list (admin-managed records).
+ * Used by the admin Database Health page. The live connection stats are
+ * exposed at /admin/system/database/info instead.
+ */
+router.get('/database', async (req: Request, res: Response) => {
+    try {
+        const page = parseInt((req.query.page as string) || '1');
+        const limit = parseInt((req.query.limit as string) || '20');
+        const filter: any = {};
+        if (req.query.status) filter.status = req.query.status;
+        if (req.query.search) {
+            const term = String(req.query.search);
+            filter.$or = [
+                { name: { $regex: term, $options: 'i' } },
+                { host: { $regex: term, $options: 'i' } },
+            ];
+        }
+        const [items, total] = await Promise.all([
+            DatabaseHealthRecord.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+            DatabaseHealthRecord.countDocuments(filter),
+        ]);
+        res.json({
+            success: true,
+            data: items,
+            pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
+        });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// GET /admin/system/database/info  → live MongoDB connection snapshot
+router.get('/database/info', async (_req: Request, res: Response) => {
     try {
         const dbState = mongoose.connection.readyState;
         const stateMap: Record<number, string> = { 0: 'disconnected', 1: 'connected', 2: 'connecting', 3: 'disconnecting' };
@@ -119,6 +180,71 @@ router.get('/database', async (_req: Request, res: Response) => {
                 indexSize: dbStats.indexSize ? Math.round(dbStats.indexSize / 1024 / 1024) : 0,
             },
         });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Reserved /database/* sub-paths handled by their own literal routes below
+const RESERVED_DB_SUBPATHS = new Set(['health', 'metrics', 'backups', 'backup', 'info']);
+
+// GET /admin/system/database/:id — single record (falls through for reserved sub-paths)
+router.get('/database/:id', async (req, res, next) => {
+    try {
+        if (RESERVED_DB_SUBPATHS.has(req.params.id)) return next();
+        const item = await DatabaseHealthRecord.findById(req.params.id).lean();
+        if (!item) return res.status(404).json({ success: false, message: 'Record not found' });
+        res.json({ success: true, data: item });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// POST /admin/system/database
+router.post('/database', async (req: Request, res: Response) => {
+    try {
+        const { name, host, port, status, diskUsage, connections, lastBackup } = req.body || {};
+        if (!name || !host || port === undefined) {
+            return res.status(400).json({ success: false, message: 'name, host, and port are required' });
+        }
+        const item = await DatabaseHealthRecord.create({
+            name: String(name).trim(),
+            host: String(host).trim(),
+            port: Number(port),
+            status: status || 'healthy',
+            diskUsage: typeof diskUsage === 'number' ? diskUsage : 0,
+            connections: connections,
+            lastBackup: lastBackup ? new Date(lastBackup) : undefined,
+        });
+        res.status(201).json({ success: true, data: item, message: 'Database record created' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// PUT /admin/system/database/:id
+router.put('/database/:id', async (req, res, next) => {
+    try {
+        if (RESERVED_DB_SUBPATHS.has(req.params.id)) return next();
+        const update: any = {};
+        ['name', 'host', 'port', 'status', 'diskUsage', 'connections', 'lastBackup'].forEach(k => {
+            if (req.body[k] !== undefined) update[k] = req.body[k];
+        });
+        const item = await DatabaseHealthRecord.findByIdAndUpdate(req.params.id, update, { new: true });
+        if (!item) return res.status(404).json({ success: false, message: 'Record not found' });
+        res.json({ success: true, data: item, message: 'Database record updated' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// DELETE /admin/system/database/:id
+router.delete('/database/:id', async (req, res, next) => {
+    try {
+        if (RESERVED_DB_SUBPATHS.has(req.params.id)) return next();
+        const result = await DatabaseHealthRecord.findByIdAndDelete(req.params.id);
+        if (!result) return res.status(404).json({ success: false, message: 'Record not found' });
+        res.json({ success: true, message: 'Database record deleted' });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }

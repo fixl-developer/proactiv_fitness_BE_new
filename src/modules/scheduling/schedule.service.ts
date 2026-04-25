@@ -134,11 +134,88 @@ export class ScheduleService extends BaseService<ISchedule> {
      */
     async generateSchedule(request: IScheduleGenerationRequest, createdBy: string): Promise<IScheduleGenerationResult> {
         try {
+            // Resolve businessUnitId from the first program (was a bug: code used
+            // programIds[0] AS the businessUnitId, which fails the ObjectId cast).
+            const { Program } = require('../programs/program.model');
+            const firstProgramId = (request.programIds || [])[0];
+            const firstProgram = firstProgramId
+                ? await Program.findById(firstProgramId).select('businessUnitId').lean().catch(() => null)
+                : null;
+            let businessUnitId: any = firstProgram?.businessUnitId;
+            if (!businessUnitId) {
+                // Fallback: derive from first location, then any active business unit.
+                const { Location } = require('../bcms/location.model');
+                const firstLocId = (request.locationIds || [])[0];
+                const loc = firstLocId
+                    ? await Location.findById(firstLocId).select('businessUnitId').lean().catch(() => null)
+                    : null;
+                businessUnitId = loc?.businessUnitId;
+            }
+            if (!businessUnitId) {
+                const { BusinessUnit } = require('../bcms/business-unit.model');
+                const anyBu = await BusinessUnit.findOne({ isDeleted: { $ne: true } }).select('_id').lean().catch(() => null);
+                businessUnitId = anyBu?._id;
+            }
+            if (!businessUnitId) {
+                throw new AppError(
+                    'Cannot resolve businessUnitId — no program/location/business-unit found',
+                    HTTP_STATUS.BAD_REQUEST
+                );
+            }
+
+            // Resolve termId. The Schedule model requires it. If the caller didn't
+            // supply one (e.g. admin "Generate Schedule" UI without a term picker),
+            // either reuse an existing term that overlaps the requested dates, or
+            // auto-create a lightweight ad-hoc Term so the schedule can be saved.
+            let termId: any = request.termId;
+            if (!termId) {
+                const { Term } = require('../bcms/term.model');
+                const existingTerm = await Term.findOne({
+                    businessUnitId,
+                    isDeleted: { $ne: true },
+                    startDate: { $lte: request.endDate },
+                    endDate: { $gte: request.startDate },
+                }).select('_id').lean().catch(() => null);
+                if (existingTerm?._id) {
+                    termId = existingTerm._id;
+                } else {
+                    // Compute weeks (Term schema requires it; pre-save middleware
+                    // runs after validation so we must set weeks ourselves).
+                    const start = new Date(request.startDate);
+                    const end = new Date(request.endDate);
+                    const days = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+                    const weeks = Math.max(1, Math.ceil(days / 7));
+
+                    const adHocTerm = await Term.create({
+                        name: `Ad-hoc Term ${new Date().toISOString().slice(0, 10)}`,
+                        code: `ADHOC${Date.now().toString(36).toUpperCase()}`,
+                        businessUnitId,
+                        startDate: start,
+                        endDate: end,
+                        weeks,
+                        isActive: true,
+                        allowEnrollment: false,
+                        createdBy,
+                        updatedBy: createdBy,
+                    }).catch((e: any) => {
+                        console.error('Auto term create failed:', e?.message, e?.errors);
+                        return null;
+                    });
+                    termId = adHocTerm?._id;
+                }
+            }
+            if (!termId) {
+                throw new AppError(
+                    'termId required and could not be auto-created (provide termId in payload)',
+                    HTTP_STATUS.BAD_REQUEST
+                );
+            }
+
             // Create new schedule
-            const schedule = new Schedule({
-                name: `Schedule for Term ${request.termId}`,
-                termId: request.termId,
-                businessUnitId: request.programIds[0], // Assuming first program's business unit
+            const scheduleDoc: any = {
+                name: `Schedule ${new Date().toISOString().slice(0, 10)}`,
+                termId,
+                businessUnitId,
                 locationIds: request.locationIds,
                 startDate: request.startDate,
                 endDate: request.endDate,
@@ -146,7 +223,8 @@ export class ScheduleService extends BaseService<ISchedule> {
                 generationSettings: request.settings,
                 createdBy,
                 updatedBy: createdBy
-            });
+            };
+            const schedule = new Schedule(scheduleDoc);
 
             await schedule.save();
 

@@ -1,73 +1,38 @@
 import { Router, Request, Response } from 'express';
 import { authenticate } from '../iam/auth.middleware';
-import { v4 as uuidv4 } from 'uuid';
+import { SupportTicket, KnowledgeBaseArticle } from './support.model';
 
 const router = Router();
 
-// In-memory storage for demo (replace with database in production).
-// NOTE: this module is a lightweight in-memory store used by the admin
-// Support pages and the user-facing /user/support routes. It intentionally
-// does NOT persist across restarts.
-const tickets: any[] = [];
-const knowledgeArticles: any[] = [];
+// =============================================
+// Static FAQ list (kept for legacy /support/faq endpoint)
+// =============================================
 const faqs = [
-    {
-        id: '1',
-        question: 'How do I book a class?',
-        answer: 'You can book a class by going to My Classes section and selecting the class you want to attend. Click the Book button and confirm your booking.',
-        category: 'Booking'
-    },
-    {
-        id: '2',
-        question: 'Can I cancel my booking?',
-        answer: 'Yes, you can cancel your booking up to 24 hours before the class starts. Go to My Classes and click Cancel.',
-        category: 'Booking'
-    },
-    {
-        id: '3',
-        question: 'How do I track my progress?',
-        answer: 'Visit the Progress section in your dashboard to see your fitness metrics, achievements, and performance trends.',
-        category: 'Progress'
-    },
-    {
-        id: '4',
-        question: 'What payment methods do you accept?',
-        answer: 'We accept credit cards, debit cards, bank transfers, and digital wallets. You can manage your payment methods in Settings.',
-        category: 'Payment'
-    },
-    {
-        id: '5',
-        question: 'How do I get a refund?',
-        answer: 'Refunds are processed within 5-7 business days. Contact our support team with your booking details for assistance.',
-        category: 'Payment'
-    }
+    { id: '1', question: 'How do I book a class?', answer: 'You can book a class by going to My Classes section and selecting the class you want to attend. Click the Book button and confirm your booking.', category: 'Booking' },
+    { id: '2', question: 'Can I cancel my booking?', answer: 'Yes, you can cancel your booking up to 24 hours before the class starts. Go to My Classes and click Cancel.', category: 'Booking' },
+    { id: '3', question: 'How do I track my progress?', answer: 'Visit the Progress section in your dashboard to see your fitness metrics, achievements, and performance trends.', category: 'Progress' },
+    { id: '4', question: 'What payment methods do you accept?', answer: 'We accept credit cards, debit cards, bank transfers, and digital wallets. You can manage your payment methods in Settings.', category: 'Payment' },
+    { id: '5', question: 'How do I get a refund?', answer: 'Refunds are processed within 5-7 business days. Contact our support team with your booking details for assistance.', category: 'Payment' },
 ];
 
-// Helper: detect admin role (case-insensitive). Admins see all tickets/articles;
-// regular users only see their own tickets.
-const isAdmin = (req: Request): boolean => {
-    const role = (req.user?.role as string | undefined) || '';
-    return role.toUpperCase() === 'ADMIN';
+// Helpers
+const isAdmin = (req: Request) => {
+    const role = String(req.user?.role || '').toUpperCase();
+    return ['ADMIN', 'REGIONAL_ADMIN', 'FRANCHISE_OWNER', 'LOCATION_MANAGER', 'SUPPORT_STAFF'].includes(role);
 };
 
-// Pagination helper that mirrors the response shape consumed by the
-// admin frontend (`response.data`, `response.pagination.totalPages`).
-const paginate = <T>(items: T[], page: number, limit: number) => {
-    const total = items.length;
-    const totalPages = Math.max(1, Math.ceil(total / limit));
-    const start = (page - 1) * limit;
-    const data = items.slice(start, start + limit);
-    return { data, pagination: { page, limit, total, totalPages } };
-};
+function buildPagination(page: number, limit: number, total: number) {
+    return { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) };
+}
 
-// =============================================================================
-// SUPPORT TICKETS
-// =============================================================================
+// =============================================
+// SUPPORT TICKETS — Mongoose-backed CRUD
+// =============================================
 
 /**
- * @route   GET /support/tickets
- * @desc    Get support tickets (admin sees all, users see their own)
- * @access  Private
+ * GET /support/tickets
+ * Admins see all tickets. Other authenticated users see only their own.
+ * Query params: page, limit, search, status, priority, category
  */
 router.get('/tickets', authenticate, async (req: Request, res: Response) => {
     try {
@@ -77,116 +42,52 @@ router.get('/tickets', authenticate, async (req: Request, res: Response) => {
             return;
         }
 
-        const page = parseInt((req.query.page as string) || '1', 10);
-        const limit = parseInt((req.query.limit as string) || '10', 10);
-        const search = ((req.query.search as string) || '').toLowerCase().trim();
+        const page = parseInt((req.query.page as string) || '1');
+        const limit = parseInt((req.query.limit as string) || '20');
+        const filter: any = {};
 
-        let scope = isAdmin(req) ? tickets : tickets.filter(t => t.userId === userId);
-
-        if (search) {
-            scope = scope.filter(t => {
-                const subject = (t.subject || t.title || '').toLowerCase();
-                const desc = (t.description || '').toLowerCase();
-                return subject.includes(search) || desc.includes(search);
-            });
+        if (!isAdmin(req)) {
+            filter['customer.userId'] = userId;
+        }
+        if (req.query.status) filter.status = req.query.status;
+        if (req.query.priority) filter.priority = req.query.priority;
+        if (req.query.category) filter.category = req.query.category;
+        if (req.query.search) {
+            const term = String(req.query.search);
+            filter.$or = [
+                { subject: { $regex: term, $options: 'i' } },
+                { description: { $regex: term, $options: 'i' } },
+                { ticketId: { $regex: term, $options: 'i' } },
+                { 'customer.name': { $regex: term, $options: 'i' } },
+                { 'customer.email': { $regex: term, $options: 'i' } },
+            ];
         }
 
-        // Newest first
-        const sorted = [...scope].sort((a, b) => {
-            const ad = new Date(a.createdAt || 0).getTime();
-            const bd = new Date(b.createdAt || 0).getTime();
-            return bd - ad;
-        });
+        const [items, total] = await Promise.all([
+            SupportTicket.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+            SupportTicket.countDocuments(filter),
+        ]);
 
-        const { data, pagination } = paginate(sorted, page, limit);
-        res.json({ success: true, data, pagination });
+        res.json({ success: true, data: items, pagination: buildPagination(page, limit, total) });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }
 });
 
 /**
- * @route   POST /support/tickets
- * @desc    Create a support ticket
- * @access  Private
+ * GET /support/tickets/:id
  */
-router.post('/tickets', authenticate, async (req: Request, res: Response) => {
+router.get('/tickets/:id', authenticate, async (req: Request, res: Response) => {
     try {
         const userId = req.user?.id;
-        const {
-            subject,
-            title,
-            description,
-            priority,
-            status,
-            assignedTo,
-            category,
-        } = req.body || {};
+        if (!userId) { res.status(401).json({ success: false, message: 'Unauthorized' }); return; }
 
-        if (!userId) {
-            res.status(401).json({ success: false, message: 'Unauthorized' });
+        const ticket = await SupportTicket.findById(req.params.id).lean();
+        if (!ticket) { res.status(404).json({ success: false, message: 'Ticket not found' }); return; }
+        if (!isAdmin(req) && ticket.customer?.userId !== userId) {
+            res.status(403).json({ success: false, message: 'Access denied' });
             return;
         }
-
-        const finalSubject = subject || title;
-        if (!finalSubject || !description) {
-            res.status(400).json({
-                success: false,
-                message: 'Title/subject and description are required'
-            });
-            return;
-        }
-
-        const ticket = {
-            id: uuidv4(),
-            userId,
-            title: finalSubject,
-            subject: finalSubject,
-            description,
-            priority: priority || 'medium',
-            status: status || 'open',
-            assignedTo: assignedTo || undefined,
-            category: category || 'General',
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            replies: 0,
-        };
-
-        tickets.push(ticket);
-        res.status(201).json({
-            success: true,
-            data: ticket,
-            message: 'Ticket created successfully'
-        });
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
-
-/**
- * @route   GET /support/tickets/:ticketId
- * @desc    Get ticket details
- * @access  Private
- */
-router.get('/tickets/:ticketId', authenticate, async (req: Request, res: Response) => {
-    try {
-        const userId = req.user?.id;
-        const { ticketId } = req.params;
-
-        if (!userId) {
-            res.status(401).json({ success: false, message: 'Unauthorized' });
-            return;
-        }
-
-        const ticket = isAdmin(req)
-            ? tickets.find(t => t.id === ticketId)
-            : tickets.find(t => t.id === ticketId && t.userId === userId);
-
-        if (!ticket) {
-            res.status(404).json({ success: false, message: 'Ticket not found' });
-            return;
-        }
-
         res.json({ success: true, data: ticket });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
@@ -194,142 +95,179 @@ router.get('/tickets/:ticketId', authenticate, async (req: Request, res: Respons
 });
 
 /**
- * @route   PUT /support/tickets/:ticketId
- * @desc    Update ticket (status, priority, assignedTo, etc.)
- * @access  Private
+ * POST /support/tickets
+ * Body: { subject, description, priority?, category?, customer? }
+ * Customer info defaults to the authenticated user.
  */
-router.put('/tickets/:ticketId', authenticate, async (req: Request, res: Response) => {
+router.post('/tickets', authenticate, async (req: Request, res: Response) => {
     try {
         const userId = req.user?.id;
-        const { ticketId } = req.params;
-        const { status, priority, assignedTo, title, subject, description, category } = req.body || {};
+        if (!userId) { res.status(401).json({ success: false, message: 'Unauthorized' }); return; }
 
-        if (!userId) {
-            res.status(401).json({ success: false, message: 'Unauthorized' });
+        const body = req.body || {};
+        if (!body.subject || !body.description) {
+            res.status(400).json({ success: false, message: 'Subject and description are required' });
             return;
         }
 
-        const ticket = isAdmin(req)
-            ? tickets.find(t => t.id === ticketId)
-            : tickets.find(t => t.id === ticketId && t.userId === userId);
+        const customer = body.customer || {
+            name: req.user?.email?.split('@')[0] || 'User',
+            email: req.user?.email || '',
+            userId,
+        };
 
-        if (!ticket) {
-            res.status(404).json({ success: false, message: 'Ticket not found' });
-            return;
-        }
-
-        if (status !== undefined) ticket.status = status;
-        if (priority !== undefined) ticket.priority = priority;
-        if (assignedTo !== undefined) ticket.assignedTo = assignedTo;
-        if (category !== undefined) ticket.category = category;
-        if (description !== undefined) ticket.description = description;
-        const newSubject = subject || title;
-        if (newSubject !== undefined) {
-            ticket.subject = newSubject;
-            ticket.title = newSubject;
-        }
-        ticket.updatedAt = new Date();
-
-        res.json({ success: true, data: ticket, message: 'Ticket updated successfully' });
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
-
-/**
- * @route   DELETE /support/tickets/:ticketId
- * @desc    Delete a ticket (admin can delete any; users only their own)
- * @access  Private
- */
-router.delete('/tickets/:ticketId', authenticate, async (req: Request, res: Response) => {
-    try {
-        const userId = req.user?.id;
-        const { ticketId } = req.params;
-
-        if (!userId) {
-            res.status(401).json({ success: false, message: 'Unauthorized' });
-            return;
-        }
-
-        const idx = isAdmin(req)
-            ? tickets.findIndex(t => t.id === ticketId)
-            : tickets.findIndex(t => t.id === ticketId && t.userId === userId);
-
-        if (idx === -1) {
-            res.status(404).json({ success: false, message: 'Ticket not found' });
-            return;
-        }
-
-        const [removed] = tickets.splice(idx, 1);
-        res.json({ success: true, data: removed, message: 'Ticket deleted successfully' });
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
-
-// =============================================================================
-// KNOWLEDGE BASE ARTICLES
-// =============================================================================
-
-/**
- * @route   GET /support/knowledge
- * @desc    List knowledge base articles (paginated, searchable)
- * @access  Private
- */
-router.get('/knowledge', authenticate, async (req: Request, res: Response) => {
-    try {
-        const page = parseInt((req.query.page as string) || '1', 10);
-        const limit = parseInt((req.query.limit as string) || '10', 10);
-        const search = ((req.query.search as string) || '').toLowerCase().trim();
-        const category = (req.query.category as string) || undefined;
-
-        let scope = [...knowledgeArticles];
-
-        if (category) {
-            scope = scope.filter(a => a.category === category);
-        }
-
-        if (search) {
-            scope = scope.filter(a => {
-                const title = (a.title || '').toLowerCase();
-                const content = (a.content || '').toLowerCase();
-                const tags = (a.tags || []).join(' ').toLowerCase();
-                return title.includes(search) || content.includes(search) || tags.includes(search);
-            });
-        }
-
-        // Newest first
-        scope.sort((a, b) => {
-            const ad = new Date(a.createdAt || 0).getTime();
-            const bd = new Date(b.createdAt || 0).getTime();
-            return bd - ad;
+        const ticket = await SupportTicket.create({
+            ticketId: `TKT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+            subject: body.subject,
+            description: body.description,
+            customer,
+            priority: body.priority || 'medium',
+            status: body.status || 'open',
+            category: body.category || 'general',
+            tags: Array.isArray(body.tags) ? body.tags : [],
+            escalated: false,
+            attachments: [],
+            comments: [],
+            createdBy: userId,
+            updatedBy: userId,
         });
 
-        const { data, pagination } = paginate(scope, page, limit);
-        res.json({ success: true, data, pagination });
+        res.status(201).json({ success: true, data: ticket, message: 'Ticket created successfully' });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }
 });
 
 /**
- * @route   GET /support/knowledge/:articleId
- * @desc    Get a single knowledge base article
- * @access  Private
+ * PUT /support/tickets/:id
+ * Update fields: status, priority, category, assignedTo, resolution, etc.
  */
-router.get('/knowledge/:articleId', authenticate, async (req: Request, res: Response) => {
+router.put('/tickets/:id', authenticate, async (req: Request, res: Response) => {
     try {
-        const { articleId } = req.params;
-        const article = knowledgeArticles.find(a => a.id === articleId);
+        const userId = req.user?.id;
+        if (!userId) { res.status(401).json({ success: false, message: 'Unauthorized' }); return; }
 
-        if (!article) {
-            res.status(404).json({ success: false, message: 'Article not found' });
+        const existing = await SupportTicket.findById(req.params.id);
+        if (!existing) { res.status(404).json({ success: false, message: 'Ticket not found' }); return; }
+        if (!isAdmin(req) && existing.customer?.userId !== userId) {
+            res.status(403).json({ success: false, message: 'Access denied' });
             return;
         }
 
-        // Increment view counter
-        article.views = (article.views || 0) + 1;
+        const allowed = ['subject', 'description', 'priority', 'status', 'category', 'tags', 'assignedTo', 'resolution', 'escalated', 'escalatedTo', 'escalationReason'];
+        const update: any = { updatedBy: userId };
+        for (const key of allowed) {
+            if (req.body[key] !== undefined) update[key] = req.body[key];
+        }
+        if (update.status === 'resolved' && !existing.resolvedAt) update.resolvedAt = new Date();
+        if (update.status === 'closed' && !existing.closedAt) update.closedAt = new Date();
+        if (update.escalated === true && !existing.escalatedAt) update.escalatedAt = new Date();
 
+        const updated = await SupportTicket.findByIdAndUpdate(req.params.id, update, { new: true });
+        res.json({ success: true, data: updated, message: 'Ticket updated successfully' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+/**
+ * DELETE /support/tickets/:id (admin only)
+ */
+router.delete('/tickets/:id', authenticate, async (req: Request, res: Response) => {
+    try {
+        if (!isAdmin(req)) {
+            res.status(403).json({ success: false, message: 'Admin role required to delete tickets' });
+            return;
+        }
+        const result = await SupportTicket.findByIdAndDelete(req.params.id);
+        if (!result) { res.status(404).json({ success: false, message: 'Ticket not found' }); return; }
+        res.json({ success: true, message: 'Ticket deleted successfully' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+/**
+ * GET /support/statistics — admin overview
+ */
+router.get('/statistics', authenticate, async (_req: Request, res: Response) => {
+    try {
+        const [total, open, inProgress, resolved, closed, critical, high] = await Promise.all([
+            SupportTicket.countDocuments({}),
+            SupportTicket.countDocuments({ status: 'open' }),
+            SupportTicket.countDocuments({ status: 'in-progress' }),
+            SupportTicket.countDocuments({ status: 'resolved' }),
+            SupportTicket.countDocuments({ status: 'closed' }),
+            SupportTicket.countDocuments({ priority: 'critical' }),
+            SupportTicket.countDocuments({ priority: 'high' }),
+        ]);
+        res.json({
+            success: true,
+            data: { total, open, inProgress, resolved, closed, critical, high },
+        });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// =============================================
+// KNOWLEDGE BASE ARTICLES — Mongoose-backed CRUD
+// =============================================
+
+/**
+ * GET /support/knowledge
+ * Public-readable list (only published articles for non-admins).
+ * Query: page, limit, search, category, status, tag, featured
+ */
+router.get('/knowledge', async (req: Request, res: Response) => {
+    try {
+        const page = parseInt((req.query.page as string) || '1');
+        const limit = parseInt((req.query.limit as string) || '20');
+        const filter: any = {};
+
+        const role = String(req.user?.role || '').toUpperCase();
+        const isAdminCaller = ['ADMIN', 'REGIONAL_ADMIN', 'SUPPORT_STAFF'].includes(role);
+        if (!isAdminCaller && !req.query.status) {
+            filter.status = 'published';
+        } else if (req.query.status) {
+            filter.status = req.query.status;
+        }
+
+        if (req.query.category) filter.category = req.query.category;
+        if (req.query.tag) filter.tags = req.query.tag;
+        if (req.query.featured === 'true') filter.featured = true;
+        if (req.query.search) {
+            const term = String(req.query.search);
+            filter.$or = [
+                { title: { $regex: term, $options: 'i' } },
+                { content: { $regex: term, $options: 'i' } },
+                { articleId: { $regex: term, $options: 'i' } },
+            ];
+        }
+
+        const [items, total] = await Promise.all([
+            KnowledgeBaseArticle.find(filter).sort({ featured: -1, createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+            KnowledgeBaseArticle.countDocuments(filter),
+        ]);
+
+        res.json({ success: true, data: items, pagination: buildPagination(page, limit, total) });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+/**
+ * GET /support/knowledge/:id
+ * Increments the `views` counter on each fetch.
+ */
+router.get('/knowledge/:id', async (req: Request, res: Response) => {
+    try {
+        const article = await KnowledgeBaseArticle.findByIdAndUpdate(
+            req.params.id,
+            { $inc: { views: 1 } },
+            { new: true }
+        ).lean();
+        if (!article) { res.status(404).json({ success: false, message: 'Article not found' }); return; }
         res.json({ success: true, data: article });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
@@ -337,98 +275,71 @@ router.get('/knowledge/:articleId', authenticate, async (req: Request, res: Resp
 });
 
 /**
- * @route   POST /support/knowledge
- * @desc    Create a knowledge base article
- * @access  Private (admin)
+ * POST /support/knowledge (admin only)
  */
 router.post('/knowledge', authenticate, async (req: Request, res: Response) => {
     try {
-        const userId = req.user?.id;
-        const { title, category, content, tags, isPublished, status } = req.body || {};
-
-        if (!userId) {
-            res.status(401).json({ success: false, message: 'Unauthorized' });
+        if (!isAdmin(req)) {
+            res.status(403).json({ success: false, message: 'Admin role required to create articles' });
+            return;
+        }
+        const userId = req.user!.id;
+        const body = req.body || {};
+        if (!body.title || !body.content || !body.category) {
+            res.status(400).json({ success: false, message: 'title, content, and category are required' });
             return;
         }
 
-        if (!title || !content || !category) {
-            res.status(400).json({
-                success: false,
-                message: 'Title, content and category are required'
-            });
-            return;
-        }
-
-        const normalizedTags = Array.isArray(tags)
-            ? tags.filter(Boolean)
-            : typeof tags === 'string'
-                ? tags.split(',').map((t: string) => t.trim()).filter(Boolean)
-                : [];
-
-        const published = typeof isPublished === 'boolean'
-            ? isPublished
-            : (status ? status === 'published' : true);
-
-        const article = {
-            id: uuidv4(),
-            title,
-            category,
-            content,
-            tags: normalizedTags,
-            isPublished: published,
-            status: published ? 'published' : 'draft',
+        const article = await KnowledgeBaseArticle.create({
+            articleId: `KB-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+            title: body.title,
+            content: body.content,
+            category: body.category,
+            tags: Array.isArray(body.tags) ? body.tags : (typeof body.tags === 'string' ? body.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : []),
+            status: body.status || 'draft',
+            author: body.author || req.user?.email?.split('@')[0] || 'admin',
+            featured: !!body.featured,
             views: 0,
+            helpful: 0,
+            notHelpful: 0,
+            version: 1,
+            relatedArticles: [],
+            attachments: [],
             createdBy: userId,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        };
-
-        knowledgeArticles.push(article);
-        res.status(201).json({
-            success: true,
-            data: article,
-            message: 'Article created successfully'
+            updatedBy: userId,
         });
+
+        res.status(201).json({ success: true, data: article, message: 'Article created successfully' });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }
 });
 
 /**
- * @route   PUT /support/knowledge/:articleId
- * @desc    Update a knowledge base article
- * @access  Private (admin)
+ * PUT /support/knowledge/:id (admin only)
  */
-router.put('/knowledge/:articleId', authenticate, async (req: Request, res: Response) => {
+router.put('/knowledge/:id', authenticate, async (req: Request, res: Response) => {
     try {
-        const { articleId } = req.params;
-        const { title, category, content, tags, isPublished, status } = req.body || {};
-
-        const article = knowledgeArticles.find(a => a.id === articleId);
-        if (!article) {
-            res.status(404).json({ success: false, message: 'Article not found' });
+        if (!isAdmin(req)) {
+            res.status(403).json({ success: false, message: 'Admin role required to update articles' });
             return;
         }
-
-        if (title !== undefined) article.title = title;
-        if (category !== undefined) article.category = category;
-        if (content !== undefined) article.content = content;
-        if (tags !== undefined) {
-            article.tags = Array.isArray(tags)
-                ? tags.filter(Boolean)
-                : typeof tags === 'string'
-                    ? tags.split(',').map((t: string) => t.trim()).filter(Boolean)
-                    : article.tags;
+        const userId = req.user!.id;
+        const allowed = ['title', 'content', 'category', 'tags', 'status', 'featured', 'author', 'relatedArticles'];
+        const update: any = { updatedBy: userId, $inc: { version: 1 } };
+        for (const key of allowed) {
+            if (req.body[key] !== undefined) {
+                if (key === 'tags' && typeof req.body.tags === 'string') {
+                    update.tags = req.body.tags.split(',').map((t: string) => t.trim()).filter(Boolean);
+                } else {
+                    update[key] = req.body[key];
+                }
+            }
         }
-        if (typeof isPublished === 'boolean') {
-            article.isPublished = isPublished;
-            article.status = isPublished ? 'published' : 'draft';
-        } else if (status !== undefined) {
-            article.status = status;
-            article.isPublished = status === 'published';
-        }
-        article.updatedAt = new Date();
+        if (update.status === 'published') update.lastReviewed = new Date();
 
+        const article = await KnowledgeBaseArticle.findByIdAndUpdate(req.params.id, update, { new: true });
+        if (!article) { res.status(404).json({ success: false, message: 'Article not found' }); return; }
         res.json({ success: true, data: article, message: 'Article updated successfully' });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
@@ -436,70 +347,62 @@ router.put('/knowledge/:articleId', authenticate, async (req: Request, res: Resp
 });
 
 /**
- * @route   DELETE /support/knowledge/:articleId
- * @desc    Delete a knowledge base article
- * @access  Private (admin)
+ * DELETE /support/knowledge/:id (admin only)
  */
-router.delete('/knowledge/:articleId', authenticate, async (req: Request, res: Response) => {
+router.delete('/knowledge/:id', authenticate, async (req: Request, res: Response) => {
     try {
-        const { articleId } = req.params;
-        const idx = knowledgeArticles.findIndex(a => a.id === articleId);
-
-        if (idx === -1) {
-            res.status(404).json({ success: false, message: 'Article not found' });
+        if (!isAdmin(req)) {
+            res.status(403).json({ success: false, message: 'Admin role required to delete articles' });
             return;
         }
-
-        const [removed] = knowledgeArticles.splice(idx, 1);
-        res.json({ success: true, data: removed, message: 'Article deleted successfully' });
+        const result = await KnowledgeBaseArticle.findByIdAndDelete(req.params.id);
+        if (!result) { res.status(404).json({ success: false, message: 'Article not found' }); return; }
+        res.json({ success: true, message: 'Article deleted successfully' });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }
 });
 
-// =============================================================================
-// FAQ + CONTACT (legacy public endpoints, retained)
-// =============================================================================
-
-/**
- * @route   GET /support/faq
- * @desc    Get FAQs
- * @access  Public
- */
+// =============================================
+// LEGACY: /support/faq (static FAQ list)
+// =============================================
 router.get('/faq', async (req: Request, res: Response) => {
     try {
         const { category } = req.query;
-        let filteredFaqs = faqs;
-
-        if (category) {
-            filteredFaqs = faqs.filter(f => f.category === category);
-        }
-
-        res.json({ success: true, data: filteredFaqs });
+        const filtered = category ? faqs.filter(f => f.category === category) : faqs;
+        res.json({ success: true, data: filtered });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }
 });
 
 /**
- * @route   POST /support/contact
- * @desc    Send contact message
- * @access  Public
+ * POST /support/contact (public)
+ * Send a contact-us message. Saves as a SupportTicket so admins see it.
  */
 router.post('/contact', async (req: Request, res: Response) => {
     try {
-        const { name, email, subject, message } = req.body;
-
+        const { name, email, subject, message, phone } = req.body || {};
         if (!name || !email || !subject || !message) {
-            res.status(400).json({ success: false, message: 'All fields are required' });
+            res.status(400).json({ success: false, message: 'name, email, subject, and message are required' });
             return;
         }
-
-        // In production, send email or save to database
-        res.json({
-            success: true,
-            message: 'Your message has been sent successfully. We will get back to you soon.'
+        await SupportTicket.create({
+            ticketId: `CONTACT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+            subject,
+            description: message,
+            customer: { name, email, phone },
+            priority: 'medium',
+            status: 'open',
+            category: 'contact-form',
+            tags: ['contact-form'],
+            escalated: false,
+            attachments: [],
+            comments: [],
+            createdBy: 'public',
+            updatedBy: 'public',
         });
+        res.json({ success: true, message: 'Your message has been sent successfully. We will get back to you soon.' });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }
