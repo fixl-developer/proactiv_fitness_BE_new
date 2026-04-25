@@ -18,7 +18,15 @@ import {
 import { AppError } from '../../shared/utils/app-error.util';
 import { Logger } from '../../shared/utils/logger.util';
 import { FlagCacheUtil } from '../utils/flag-cache.util';
-import murmurhash3 from 'murmurhash3js';
+
+// Optional import for murmurhash3js
+let murmurhash3: any;
+try {
+    murmurhash3 = require('murmurhash3js');
+} catch (error) {
+    Logger.warn('murmurhash3js not available, using fallback hash function');
+    murmurhash3 = null;
+}
 
 export class EvaluationEngine {
     private logger = Logger.getInstance();
@@ -237,7 +245,13 @@ export class EvaluationEngine {
     private evaluatePercentageRollout(percentage: number, userId: string, flagKey: string): boolean {
         if (!userId) return false;
 
-        const hash = murmurhash3.x86.hash32(`${flagKey}:${userId}`);
+        let hash: number;
+        if (murmurhash3) {
+            hash = murmurhash3.x86.hash32(`${flagKey}:${userId}`);
+        } else {
+            // Fallback hash function
+            hash = this.simpleHash(`${flagKey}:${userId}`);
+        }
         const bucket = Math.abs(hash) % 100;
         return bucket < percentage;
     }
@@ -314,7 +328,13 @@ export class EvaluationEngine {
             return test.winningVariant;
         }
 
-        const hash = murmurhash3.x86.hash32(`${flagKey}:${test.testId}:${userId}`);
+        let hash: number;
+        if (murmurhash3) {
+            hash = murmurhash3.x86.hash32(`${flagKey}:${test.testId}:${userId}`);
+        } else {
+            // Fallback hash function
+            hash = this.simpleHash(`${flagKey}:${test.testId}:${userId}`);
+        }
         const bucket = Math.abs(hash) % 100;
 
         let cumulative = 0;
@@ -412,5 +432,18 @@ export class EvaluationEngine {
      */
     invalidateCache(flagKey: string): void {
         this.cache.invalidate(flagKey);
+    }
+
+    /**
+     * Simple hash function fallback when murmurhash3 is not available
+     */
+    private simpleHash(str: string): number {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32bit integer
+        }
+        return hash;
     }
 }

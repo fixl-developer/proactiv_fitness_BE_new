@@ -1,7 +1,15 @@
-import sharp from 'sharp';
 import { Db } from 'mongodb';
 import { StorageProvider } from '../providers/storage-provider.interface';
 import logger from '../../shared/utils/logger.util';
+
+// Optional import for sharp
+let sharp: any;
+try {
+    sharp = require('sharp');
+} catch (error) {
+    logger.warn('Sharp library not available, thumbnail generation will be disabled');
+    sharp = null;
+}
 
 export interface ThumbnailConfig {
     width: number;
@@ -51,6 +59,11 @@ export class ThumbnailService {
         tenantId: string,
         variants?: string[]
     ): Promise<ThumbnailResult[]> {
+        if (!sharp) {
+            logger.warn('Sharp library not available, skipping thumbnail generation');
+            return [];
+        }
+
         const variantsToGenerate = variants || Array.from(this.variants.keys());
         const results: ThumbnailResult[] = [];
 
@@ -180,7 +193,8 @@ export class ThumbnailService {
                 return null;
             }
 
-            return await this.storageProvider.downloadFile(thumbnail.storagePath);
+            const downloadResult = await this.storageProvider.downloadFile(thumbnail.storagePath);
+            return downloadResult.buffer;
         } catch (error) {
             logger.error('Failed to download thumbnail:', error);
             return null;

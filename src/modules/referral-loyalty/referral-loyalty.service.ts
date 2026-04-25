@@ -16,7 +16,7 @@ export class ReferralLoyaltyService {
                 totalReferrals: 0,
                 totalRewardsEarned: 0,
                 isActive: true
-            };
+            } as any;
 
             await ReferralLoyaltyModel.create(referralLink);
             return referralLink;
@@ -110,7 +110,7 @@ export class ReferralLoyaltyService {
                     redeemedPoints: 0,
                     createdAt: new Date(),
                     updatedAt: new Date()
-                };
+                } as any;
                 await ReferralLoyaltyModel.create(newPoints);
                 points = newPoints as any;
             }
@@ -215,7 +215,7 @@ export class ReferralLoyaltyService {
 
             return {
                 parentId,
-                currentTier: tier,
+                currentTier: tier as any,
                 currentPoints: points.totalPoints,
                 nextTierPoints,
                 pointsToNextTier: Math.max(0, nextTierPoints - points.totalPoints)

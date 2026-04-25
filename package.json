@@ -5,7 +5,7 @@
     "main": "dist/server.js",
     "scripts": {
         "dev": "nodemon --exec ts-node -r tsconfig-paths/register src/server.ts",
-        "build": "tsc --skipLibCheck --noEmit false || true && tsc-alias",
+        "build": "node build.js",
         "start": "node dist/server.js",
         "test": "jest --coverage",
         "test:watch": "jest --watch",

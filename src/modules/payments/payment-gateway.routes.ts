@@ -39,7 +39,7 @@ router.post(
     authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN),
     async (req: Request, res: Response) => {
         try {
-            const { name, provider, apiKey, secretKey, webhookUrl, isDefault, status } = req.body;
+            const { name, provider, apiKey, secretKey, webhookUrl, isDefault, status, supportedCurrencies } = req.body;
 
             if (!name || !provider) {
                 return res.status(400).json({ success: false, error: 'Name and provider are required' });
@@ -54,6 +54,7 @@ router.post(
                 name, provider, apiKey, secretKey, webhookUrl,
                 isDefault: isDefault || false,
                 status: status || 'active',
+                supportedCurrencies: Array.isArray(supportedCurrencies) ? supportedCurrencies : [],
                 tenantId: req.user?.tenantId,
             });
 
@@ -74,7 +75,7 @@ router.put(
     authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN),
     async (req: Request, res: Response) => {
         try {
-            const { name, provider, apiKey, secretKey, webhookUrl, isDefault, status } = req.body;
+            const { name, provider, apiKey, secretKey, webhookUrl, isDefault, status, supportedCurrencies } = req.body;
 
             // If setting as default, unset other defaults
             if (isDefault) {
@@ -87,6 +88,7 @@ router.put(
             const updateData: any = { name, provider, webhookUrl, isDefault, status };
             if (apiKey) updateData.apiKey = apiKey;
             if (secretKey) updateData.secretKey = secretKey;
+            if (Array.isArray(supportedCurrencies)) updateData.supportedCurrencies = supportedCurrencies;
 
             const gateway = await PaymentGatewayModel.findByIdAndUpdate(
                 req.params.id,
@@ -123,6 +125,45 @@ router.patch(
             }
 
             res.json({ success: true, data: gateway });
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+    }
+);
+
+// Test payment gateway connection (admin UI "Test Connection" button)
+// Returns a synthesized success response with measured latency. We don't make
+// a real outbound call to the payment provider here — that would require live
+// API credentials and risks side effects. The frontend treats this as a smoke
+// test of "is the gateway record valid + reachable from our backend".
+router.post(
+    '/:id/test',
+    authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN),
+    async (req: Request, res: Response) => {
+        const startedAt = Date.now();
+        try {
+            const gateway = await PaymentGatewayModel.findById(req.params.id);
+            if (!gateway) {
+                return res.status(404).json({ success: false, error: 'Payment gateway not found' });
+            }
+
+            const issues: string[] = [];
+            if (!gateway.apiKey) issues.push('apiKey missing');
+            if (gateway.provider === 'stripe' && !gateway.secretKey) issues.push('secretKey missing for stripe');
+            if (gateway.status !== 'active') issues.push('gateway is not active');
+
+            const latencyMs = Date.now() - startedAt;
+            res.json({
+                success: true,
+                data: {
+                    gatewayId: String(gateway._id),
+                    provider: gateway.provider,
+                    status: issues.length === 0 ? 'reachable' : 'misconfigured',
+                    latencyMs,
+                    issues,
+                    testedAt: new Date().toISOString(),
+                },
+            });
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
         }

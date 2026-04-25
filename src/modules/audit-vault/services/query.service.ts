@@ -251,7 +251,7 @@ export class AuditQueryService {
 
         const [data, total] = await Promise.all([
             collection
-                .find(filter, { score: { $meta: 'textScore' } })
+                .find(filter, { projection: { score: { $meta: 'textScore' } } } as any)
                 .sort({ score: { $meta: 'textScore' } })
                 .skip(skip)
                 .limit(pageSize)

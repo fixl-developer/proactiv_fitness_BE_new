@@ -23,12 +23,12 @@ router.use(authenticate);
 
 // Validation rules
 const generateScheduleValidation = [
-    body('termId').isMongoId().withMessage('Valid term ID is required'),
+    body('termId').optional({ nullable: true }).isMongoId().withMessage('Valid term ID is required'),
     body('programIds').isArray({ min: 1 }).withMessage('At least one program ID is required'),
     body('locationIds').isArray({ min: 1 }).withMessage('At least one location ID is required'),
     body('startDate').isISO8601().withMessage('Valid start date is required'),
     body('endDate').isISO8601().withMessage('Valid end date is required'),
-    body('settings').isObject().withMessage('Settings object is required'),
+    body('settings').optional().isObject().withMessage('Settings must be an object'),
     validate
 ];
 

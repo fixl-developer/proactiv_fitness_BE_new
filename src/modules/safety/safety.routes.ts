@@ -5,8 +5,10 @@ import { authMiddleware } from '../iam/auth.middleware';
 const router = Router();
 const safetyController = new SafetyController();
 
-// Apply authentication middleware to all routes
-router.use(authMiddleware);
+// Apply authentication middleware ONLY to /safety/* paths.
+// (This router is mounted at '/' in routes/index.ts, so a bare router.use(authMiddleware)
+//  would intercept every /api/v1/* request and break unrelated routes with 401s.)
+router.use('/safety', authMiddleware);
 
 // Guardian management routes
 router.post('/safety/guardians', safetyController.createAuthorizedGuardian);

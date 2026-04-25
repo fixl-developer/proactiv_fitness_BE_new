@@ -43,13 +43,16 @@
         "tags": [
           "System"
         ],
-        "summary": "API Info & Version",
+        "summary": "[NOT-IMPLEMENTED] API Info & Version",
         "operationId": "apiInfo",
         "responses": {
           "200": {
             "description": "API info"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/observability/health": {
@@ -716,6 +719,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "required": [],
                 "properties": {
                   "firstName": {
                     "type": "string",
@@ -726,16 +730,34 @@
                     "example": "Doe"
                   },
                   "phone": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "+91-9876543210"
                   },
                   "dateOfBirth": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date",
+                    "example": "1990-01-15"
+                  },
+                  "gender": {
+                    "type": "string",
+                    "enum": [
+                      "MALE",
+                      "FEMALE",
+                      "OTHER"
+                    ],
+                    "example": "MALE"
+                  },
+                  "language": {
+                    "type": "string",
+                    "example": "EN"
                   },
                   "avatar": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "https://cdn.example.com/avatar.png"
                   },
                   "bio": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Fitness enthusiast"
                   }
                 }
               }
@@ -833,29 +855,44 @@
                 "properties": {
                   "email": {
                     "type": "string",
+                    "format": "email",
                     "example": "newuser@example.com"
                   },
                   "password": {
                     "type": "string",
-                    "example": "Test@123456"
+                    "minLength": 8,
+                    "example": "Test@12345"
                   },
                   "firstName": {
                     "type": "string",
-                    "example": "New"
+                    "example": "Jane"
                   },
                   "lastName": {
                     "type": "string",
-                    "example": "User"
+                    "example": "Doe"
                   },
                   "role": {
                     "type": "string",
-                    "example": "USER"
+                    "enum": [
+                      "ADMIN",
+                      "REGIONAL_ADMIN",
+                      "FRANCHISE_OWNER",
+                      "LOCATION_MANAGER",
+                      "COACH",
+                      "STAFF",
+                      "SUPPORT_STAFF",
+                      "PARENT",
+                      "STUDENT"
+                    ],
+                    "example": "SUPPORT_STAFF"
                   },
                   "phone": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "+91-9876543210"
                   },
                   "locationId": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "507f1f77bcf86cd799439011"
                   }
                 }
               }
@@ -927,21 +964,37 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "required": [],
                 "properties": {
                   "firstName": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "John"
                   },
                   "lastName": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Doe"
                   },
                   "phone": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "+91-9876543210"
                   },
-                  "role": {
-                    "type": "string"
+                  "dateOfBirth": {
+                    "type": "string",
+                    "format": "date",
+                    "example": "1990-01-15"
                   },
-                  "status": {
-                    "type": "string"
+                  "gender": {
+                    "type": "string",
+                    "enum": [
+                      "MALE",
+                      "FEMALE",
+                      "OTHER"
+                    ],
+                    "example": "MALE"
+                  },
+                  "language": {
+                    "type": "string",
+                    "example": "EN"
                   }
                 }
               }
@@ -1019,12 +1072,10 @@
                     "enum": [
                       "ACTIVE",
                       "INACTIVE",
-                      "SUSPENDED"
+                      "SUSPENDED",
+                      "PENDING"
                     ],
                     "example": "ACTIVE"
-                  },
-                  "reason": {
-                    "type": "string"
                   }
                 }
               }
@@ -2826,7 +2877,103 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "required": [
+                  "name",
+                  "code",
+                  "businessUnitId",
+                  "countryId",
+                  "address",
+                  "contactInfo",
+                  "capacity",
+                  "operatingHours"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "Proactiv Bandra"
+                  },
+                  "code": {
+                    "type": "string",
+                    "example": "PV-BND"
+                  },
+                  "businessUnitId": {
+                    "type": "string",
+                    "example": "507f1f77bcf86cd799439011"
+                  },
+                  "countryId": {
+                    "type": "string",
+                    "example": "507f1f77bcf86cd799439012"
+                  },
+                  "regionId": {
+                    "type": "string",
+                    "example": "507f1f77bcf86cd799439013"
+                  },
+                  "address": {
+                    "type": "object",
+                    "properties": {
+                      "street": {
+                        "type": "string",
+                        "example": "Linking Rd"
+                      },
+                      "city": {
+                        "type": "string",
+                        "example": "Mumbai"
+                      },
+                      "state": {
+                        "type": "string",
+                        "example": "Maharashtra"
+                      },
+                      "zipCode": {
+                        "type": "string",
+                        "example": "400050"
+                      },
+                      "country": {
+                        "type": "string",
+                        "example": "India"
+                      }
+                    }
+                  },
+                  "contactInfo": {
+                    "type": "object",
+                    "properties": {
+                      "phone": {
+                        "type": "string",
+                        "example": "+91-9876543210"
+                      },
+                      "email": {
+                        "type": "string",
+                        "example": "bandra@proactiv.com"
+                      }
+                    }
+                  },
+                  "capacity": {
+                    "type": "integer",
+                    "example": 80
+                  },
+                  "operatingHours": {
+                    "type": "object",
+                    "example": {
+                      "mon": {
+                        "isOpen": true,
+                        "openTime": "06:00",
+                        "closeTime": "22:00"
+                      }
+                    }
+                  },
+                  "facilities": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "amenities": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
               }
             }
           }
@@ -3136,27 +3283,57 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "required": [
+                  "firstName",
+                  "lastName",
+                  "email",
+                  "role",
+                  "password",
+                  "businessUnitId"
+                ],
                 "properties": {
                   "firstName": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Amit"
                   },
                   "lastName": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Sharma"
                   },
                   "email": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "email",
+                    "example": "amit@proactiv.com"
                   },
                   "phone": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "+91-9876543210"
                   },
                   "role": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                      "COACH",
+                      "STAFF",
+                      "SUPPORT_STAFF"
+                    ],
+                    "example": "COACH"
                   },
                   "password": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 8,
+                    "example": "Coach@12345"
                   },
                   "status": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                      "ACTIVE",
+                      "INACTIVE"
+                    ],
+                    "example": "ACTIVE"
+                  },
+                  "businessUnitId": {
+                    "type": "string",
+                    "example": "507f1f77bcf86cd799439011"
                   }
                 }
               }
@@ -3291,7 +3468,7 @@
         "tags": [
           "Automation"
         ],
-        "summary": "Get Workflow",
+        "summary": "[NOT-IMPLEMENTED] Get Workflow",
         "operationId": "getWorkflow",
         "security": [
           {
@@ -3312,13 +3489,16 @@
           "200": {
             "description": "Workflow data"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       },
       "put": {
         "tags": [
           "Automation"
         ],
-        "summary": "Update Workflow",
+        "summary": "[NOT-IMPLEMENTED] Update Workflow",
         "operationId": "updateWorkflow",
         "security": [
           {
@@ -3349,13 +3529,16 @@
           "200": {
             "description": "Workflow updated"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       },
       "delete": {
         "tags": [
           "Automation"
         ],
-        "summary": "Delete Workflow",
+        "summary": "[NOT-IMPLEMENTED] Delete Workflow",
         "operationId": "deleteWorkflow",
         "security": [
           {
@@ -3376,7 +3559,10 @@
           "200": {
             "description": "Workflow deleted"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/automation/workflows/{workflowId}/execute": {
@@ -3384,7 +3570,7 @@
         "tags": [
           "Automation"
         ],
-        "summary": "Execute Workflow",
+        "summary": "[NOT-IMPLEMENTED] Execute Workflow",
         "operationId": "executeWorkflow",
         "security": [
           {
@@ -3405,7 +3591,10 @@
           "200": {
             "description": "Workflow executed"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/automation/workflows/{workflowId}/executions": {
@@ -3413,7 +3602,7 @@
         "tags": [
           "Automation"
         ],
-        "summary": "Get Workflow Executions",
+        "summary": "[NOT-IMPLEMENTED] Get Workflow Executions",
         "operationId": "getWorkflowExecutions",
         "security": [
           {
@@ -3434,7 +3623,10 @@
           "200": {
             "description": "Executions list"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/automation/workflows/{workflowId}/status": {
@@ -3442,7 +3634,7 @@
         "tags": [
           "Automation"
         ],
-        "summary": "Update Workflow Status",
+        "summary": "[NOT-IMPLEMENTED] Update Workflow Status",
         "operationId": "updateWorkflowStatus",
         "security": [
           {
@@ -3478,7 +3670,10 @@
           "200": {
             "description": "Status updated"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/automation/workflows/{workflowId}/simulate": {
@@ -3486,7 +3681,7 @@
         "tags": [
           "Automation"
         ],
-        "summary": "Simulate Workflow",
+        "summary": "[NOT-IMPLEMENTED] Simulate Workflow",
         "operationId": "simulateWorkflow",
         "security": [
           {
@@ -3507,7 +3702,10 @@
           "200": {
             "description": "Simulation result"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/automation/workflows/statistics/overview": {
@@ -3515,7 +3713,7 @@
         "tags": [
           "Automation"
         ],
-        "summary": "Workflow Statistics",
+        "summary": "[NOT-IMPLEMENTED] Workflow Statistics",
         "operationId": "workflowStatistics",
         "security": [
           {
@@ -3526,7 +3724,10 @@
           "200": {
             "description": "Statistics overview"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/automation/rules": {
@@ -3534,7 +3735,7 @@
         "tags": [
           "Automation"
         ],
-        "summary": "List Automation Rules",
+        "summary": "[NOT-IMPLEMENTED] List Automation Rules",
         "operationId": "listAutomationRules",
         "security": [
           {
@@ -3545,13 +3746,16 @@
           "200": {
             "description": "Rules list"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       },
       "post": {
         "tags": [
           "Automation"
         ],
-        "summary": "Create Automation Rule",
+        "summary": "[NOT-IMPLEMENTED] Create Automation Rule",
         "operationId": "createAutomationRule",
         "security": [
           {
@@ -3572,7 +3776,10 @@
           "201": {
             "description": "Rule created"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/automation/templates": {
@@ -3580,7 +3787,7 @@
         "tags": [
           "Automation"
         ],
-        "summary": "List Automation Templates",
+        "summary": "[NOT-IMPLEMENTED] List Automation Templates",
         "operationId": "listAutomationTemplates",
         "security": [
           {
@@ -3591,13 +3798,16 @@
           "200": {
             "description": "Templates list"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       },
       "post": {
         "tags": [
           "Automation"
         ],
-        "summary": "Create Automation Template",
+        "summary": "[NOT-IMPLEMENTED] Create Automation Template",
         "operationId": "createAutomationTemplate",
         "security": [
           {
@@ -3618,7 +3828,10 @@
           "201": {
             "description": "Template created"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/bookings/search": {
@@ -4177,7 +4390,7 @@
         "tags": [
           "Attendance"
         ],
-        "summary": "Record Attendance",
+        "summary": "[NOT-IMPLEMENTED] Record Attendance",
         "operationId": "recordAttendance",
         "requestBody": {
           "required": true,
@@ -4221,7 +4434,10 @@
           "200": {
             "description": "Attendance recorded"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/attendance/check-in": {
@@ -4293,7 +4509,7 @@
         "tags": [
           "Attendance"
         ],
-        "summary": "Get Attendance Records",
+        "summary": "[NOT-IMPLEMENTED] Get Attendance Records",
         "operationId": "getAttendanceRecords",
         "security": [
           {
@@ -4327,7 +4543,10 @@
           "200": {
             "description": "Attendance records"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/attendance/statistics": {
@@ -4354,7 +4573,7 @@
         "tags": [
           "Attendance"
         ],
-        "summary": "Generate QR Code",
+        "summary": "[NOT-IMPLEMENTED] Generate QR Code",
         "operationId": "generateQR",
         "security": [
           {
@@ -4375,7 +4594,10 @@
           "200": {
             "description": "QR code generated"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/payments/process": {
@@ -4598,7 +4820,7 @@
         "tags": [
           "Payment Gateways"
         ],
-        "summary": "Create Stripe Intent",
+        "summary": "[NOT-IMPLEMENTED] Create Stripe Intent",
         "operationId": "createStripeIntent",
         "security": [
           {
@@ -4636,7 +4858,10 @@
           "200": {
             "description": "Payment intent created"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/payment-gateways/stripe/confirm": {
@@ -4644,7 +4869,7 @@
         "tags": [
           "Payment Gateways"
         ],
-        "summary": "Confirm Stripe Payment",
+        "summary": "[NOT-IMPLEMENTED] Confirm Stripe Payment",
         "operationId": "confirmStripePayment",
         "security": [
           {
@@ -4676,7 +4901,10 @@
           "200": {
             "description": "Payment confirmed"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/payment-gateways/paypay/create-code": {
@@ -4684,7 +4912,7 @@
         "tags": [
           "Payment Gateways"
         ],
-        "summary": "Create PayPay Code",
+        "summary": "[NOT-IMPLEMENTED] Create PayPay Code",
         "operationId": "createPayPayCode",
         "security": [
           {
@@ -4720,7 +4948,10 @@
           "200": {
             "description": "PayPay code created"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/billing/{billingId}": {
@@ -6091,7 +6322,7 @@
         "tags": [
           "SOP Documents"
         ],
-        "summary": "Update SOP",
+        "summary": "[NOT-IMPLEMENTED] Update SOP",
         "operationId": "updateSOP",
         "security": [
           {
@@ -6122,13 +6353,16 @@
           "200": {
             "description": "SOP updated"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       },
       "delete": {
         "tags": [
           "SOP Documents"
         ],
-        "summary": "Delete SOP",
+        "summary": "[NOT-IMPLEMENTED] Delete SOP",
         "operationId": "deleteSOP",
         "security": [
           {
@@ -6149,35 +6383,10 @@
           "200": {
             "description": "SOP deleted"
           }
-        }
-      }
-    },
-    "/api/v1/search/search": {
-      "get": {
-        "tags": [
-          "Advanced Search"
-        ],
-        "summary": "Basic Search",
-        "operationId": "basicSearch",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "q",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Search results"
-          }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/search/advanced": {
@@ -6357,6 +6566,29 @@
         "responses": {
           "200": {
             "description": "Recommendations generated"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [],
+                "properties": {
+                  "basedOnPrograms": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "example": [
+                      "programId1",
+                      "programId2"
+                    ]
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -9631,148 +9863,6 @@
         }
       }
     },
-    "/api/v1/micro-credentials/badges": {
-      "get": {
-        "tags": [
-          "Micro-Credentials"
-        ],
-        "summary": "List Badges",
-        "operationId": "listBadges",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Badges"
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "Micro-Credentials"
-        ],
-        "summary": "Create Badge",
-        "operationId": "createBadge",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Badge created"
-          }
-        }
-      }
-    },
-    "/api/v1/micro-credentials/badges/statistics": {
-      "get": {
-        "tags": [
-          "Micro-Credentials"
-        ],
-        "summary": "Badge Statistics",
-        "operationId": "badgeStatistics",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Statistics"
-          }
-        }
-      }
-    },
-    "/api/v1/micro-credentials/badges/award": {
-      "post": {
-        "tags": [
-          "Micro-Credentials"
-        ],
-        "summary": "Award Badge",
-        "operationId": "awardBadge",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Badge awarded"
-          }
-        }
-      }
-    },
-    "/api/v1/micro-credentials/badges/earned": {
-      "get": {
-        "tags": [
-          "Micro-Credentials"
-        ],
-        "summary": "Get Earned Badges",
-        "operationId": "getEarnedBadges",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Earned badges"
-          }
-        }
-      }
-    },
-    "/api/v1/micro-credentials/badges/collection/{recipientId}": {
-      "get": {
-        "tags": [
-          "Micro-Credentials"
-        ],
-        "summary": "Get Badge Collection",
-        "operationId": "getBadgeCollection",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "recipientId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Collection"
-          }
-        }
-      }
-    },
     "/api/v1/data/exports": {
       "get": {
         "tags": [
@@ -12382,174 +12472,6 @@
         }
       }
     },
-    "/api/v1/reports/reports": {
-      "get": {
-        "tags": [
-          "Reports"
-        ],
-        "summary": "Get All Reports",
-        "operationId": "getAllReports",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Reports"
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "Reports"
-        ],
-        "summary": "Create Report",
-        "operationId": "createReport",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Created"
-          }
-        }
-      }
-    },
-    "/api/v1/reports/reports/{reportId}": {
-      "get": {
-        "tags": [
-          "Reports"
-        ],
-        "summary": "Get Report",
-        "operationId": "getReportById",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "reportId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Report"
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "Reports"
-        ],
-        "summary": "Update Report",
-        "operationId": "updateReport",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "reportId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Updated"
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "Reports"
-        ],
-        "summary": "Delete Report",
-        "operationId": "deleteReport",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "reportId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Deleted"
-          }
-        }
-      }
-    },
-    "/api/v1/reports/reports/execute": {
-      "post": {
-        "tags": [
-          "Reports"
-        ],
-        "summary": "Execute Report",
-        "operationId": "executeReport",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Report executed"
-          }
-        }
-      }
-    },
     "/api/v1/reports/dashboards": {
       "get": {
         "tags": [
@@ -12721,7 +12643,7 @@
         "tags": [
           "Support"
         ],
-        "summary": "Update Ticket",
+        "summary": "[NOT-IMPLEMENTED] Update Ticket",
         "operationId": "updateTicket",
         "security": [
           {
@@ -12752,7 +12674,10 @@
           "200": {
             "description": "Updated"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/support/tickets/{id}/comments": {
@@ -12760,7 +12685,7 @@
         "tags": [
           "Support"
         ],
-        "summary": "Add Comment",
+        "summary": "[NOT-IMPLEMENTED] Add Comment",
         "operationId": "addTicketComment",
         "security": [
           {
@@ -12796,7 +12721,10 @@
           "200": {
             "description": "Comment added"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/notifications/send": {
@@ -12804,7 +12732,7 @@
         "tags": [
           "Notifications"
         ],
-        "summary": "Send Notification",
+        "summary": "[NOT-IMPLEMENTED] Send Notification",
         "operationId": "sendNotification",
         "security": [
           {
@@ -12848,7 +12776,10 @@
           "200": {
             "description": "Sent"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/notifications/send-bulk": {
@@ -12856,7 +12787,7 @@
         "tags": [
           "Notifications"
         ],
-        "summary": "Send Bulk Notifications",
+        "summary": "[NOT-IMPLEMENTED] Send Bulk Notifications",
         "operationId": "sendBulkNotifications",
         "security": [
           {
@@ -12877,7 +12808,10 @@
           "200": {
             "description": "Sent"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/notifications/me": {
@@ -12904,7 +12838,7 @@
         "tags": [
           "Notifications"
         ],
-        "summary": "Unread Count",
+        "summary": "[NOT-IMPLEMENTED] Unread Count",
         "operationId": "getUnreadCount",
         "security": [
           {
@@ -12915,7 +12849,10 @@
           "200": {
             "description": "Count"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/notifications/read-all": {
@@ -13091,99 +13028,6 @@
         "responses": {
           "200": {
             "description": "Family"
-          }
-        }
-      }
-    },
-    "/api/v1/franchise/{id}": {
-      "get": {
-        "tags": [
-          "Franchise"
-        ],
-        "summary": "Get Franchise",
-        "operationId": "getFranchise",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Franchise"
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "Franchise"
-        ],
-        "summary": "Update Franchise",
-        "operationId": "updateFranchise",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Updated"
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "Franchise"
-        ],
-        "summary": "Delete Franchise",
-        "operationId": "deleteFranchise",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Deleted"
           }
         }
       }
@@ -13546,7 +13390,7 @@
         "tags": [
           "Wallet"
         ],
-        "summary": "Create Wallet",
+        "summary": "[NOT-IMPLEMENTED] Create Wallet",
         "operationId": "createWallet",
         "security": [
           {
@@ -13572,7 +13416,10 @@
           "201": {
             "description": "Created"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/wallet/credit": {
@@ -13580,7 +13427,7 @@
         "tags": [
           "Wallet"
         ],
-        "summary": "Add Credit",
+        "summary": "[NOT-IMPLEMENTED] Add Credit",
         "operationId": "walletCredit",
         "security": [
           {
@@ -13615,7 +13462,10 @@
           "200": {
             "description": "Credit added"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/wallet/debit": {
@@ -13623,7 +13473,7 @@
         "tags": [
           "Wallet"
         ],
-        "summary": "Debit from Wallet",
+        "summary": "[NOT-IMPLEMENTED] Debit from Wallet",
         "operationId": "walletDebit",
         "security": [
           {
@@ -13655,36 +13505,10 @@
           "200": {
             "description": "Debited"
           }
-        }
-      }
-    },
-    "/api/v1/wallet/{userId}/balance": {
-      "get": {
-        "tags": [
-          "Wallet"
-        ],
-        "summary": "Get Balance",
-        "operationId": "getWalletBalance",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "userId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Balance"
-          }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/ai/chat": {
@@ -14204,7 +14028,36 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "required": [],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "India"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "example": "INR"
+                  },
+                  "timezone": {
+                    "type": "string",
+                    "example": "Asia/Kolkata"
+                  },
+                  "languages": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "example": [
+                      "EN",
+                      "HI"
+                    ]
+                  },
+                  "isActive": {
+                    "type": "boolean",
+                    "example": true
+                  }
+                }
               }
             }
           }
@@ -14270,7 +14123,26 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "required": [],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "North India"
+                  },
+                  "code": {
+                    "type": "string",
+                    "example": "NORTH-IN"
+                  },
+                  "description": {
+                    "type": "string",
+                    "example": "Northern regional cluster"
+                  },
+                  "isActive": {
+                    "type": "boolean",
+                    "example": true
+                  }
+                }
               }
             }
           }
@@ -14336,7 +14208,51 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "required": [],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "Proactiv Mumbai HQ"
+                  },
+                  "code": {
+                    "type": "string",
+                    "example": "PV-MUM"
+                  },
+                  "description": {
+                    "type": "string",
+                    "example": "Mumbai head office BU"
+                  },
+                  "isActive": {
+                    "type": "boolean",
+                    "example": true
+                  },
+                  "settings": {
+                    "type": "object",
+                    "properties": {
+                      "defaultCapacity": {
+                        "type": "integer",
+                        "example": 50
+                      },
+                      "defaultDuration": {
+                        "type": "integer",
+                        "example": 60
+                      },
+                      "allowOnlineBooking": {
+                        "type": "boolean",
+                        "example": true
+                      },
+                      "requireApproval": {
+                        "type": "boolean",
+                        "example": false
+                      },
+                      "cancellationHours": {
+                        "type": "integer",
+                        "example": 24
+                      }
+                    }
+                  }
+                }
               }
             }
           }
@@ -14429,7 +14345,102 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "required": [],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "Proactiv Andheri West"
+                  },
+                  "code": {
+                    "type": "string",
+                    "example": "PV-ADW"
+                  },
+                  "address": {
+                    "type": "object",
+                    "properties": {
+                      "street": {
+                        "type": "string",
+                        "example": "12 SV Road"
+                      },
+                      "city": {
+                        "type": "string",
+                        "example": "Mumbai"
+                      },
+                      "state": {
+                        "type": "string",
+                        "example": "Maharashtra"
+                      },
+                      "zipCode": {
+                        "type": "string",
+                        "example": "400058"
+                      },
+                      "country": {
+                        "type": "string",
+                        "example": "India"
+                      }
+                    }
+                  },
+                  "contactInfo": {
+                    "type": "object",
+                    "properties": {
+                      "phone": {
+                        "type": "string",
+                        "example": "+91-2226709900"
+                      },
+                      "email": {
+                        "type": "string",
+                        "example": "andheri@proactiv.com"
+                      }
+                    }
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "ACTIVE",
+                      "INACTIVE",
+                      "UNDER_MAINTENANCE",
+                      "CLOSED"
+                    ],
+                    "example": "ACTIVE"
+                  },
+                  "capacity": {
+                    "type": "integer",
+                    "example": 100
+                  },
+                  "operatingHours": {
+                    "type": "object"
+                  },
+                  "facilities": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "example": [
+                      "pool",
+                      "gym"
+                    ]
+                  },
+                  "amenities": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "example": [
+                      "parking",
+                      "locker"
+                    ]
+                  },
+                  "images": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "coverImage": {
+                    "type": "string"
+                  }
+                }
               }
             }
           }
@@ -14522,7 +14533,52 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "required": [],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "Training Room A"
+                  },
+                  "code": {
+                    "type": "string",
+                    "example": "RM-A1"
+                  },
+                  "type": {
+                    "type": "string",
+                    "example": "TRAINING_ROOM"
+                  },
+                  "capacity": {
+                    "type": "integer",
+                    "example": 25
+                  },
+                  "area": {
+                    "type": "number",
+                    "example": 80
+                  },
+                  "floor": {
+                    "type": "integer",
+                    "example": 1
+                  },
+                  "description": {
+                    "type": "string",
+                    "example": "Main indoor training hall"
+                  },
+                  "equipment": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "example": [
+                      "mats",
+                      "ropes"
+                    ]
+                  },
+                  "isActive": {
+                    "type": "boolean",
+                    "example": true
+                  }
+                }
               }
             }
           }
@@ -14588,7 +14644,49 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "required": [],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "Summer 2026"
+                  },
+                  "startDate": {
+                    "type": "string",
+                    "format": "date",
+                    "example": "2026-05-01"
+                  },
+                  "endDate": {
+                    "type": "string",
+                    "format": "date",
+                    "example": "2026-07-31"
+                  },
+                  "registrationStartDate": {
+                    "type": "string",
+                    "format": "date",
+                    "example": "2026-04-01"
+                  },
+                  "registrationEndDate": {
+                    "type": "string",
+                    "format": "date",
+                    "example": "2026-04-25"
+                  },
+                  "isActive": {
+                    "type": "boolean",
+                    "example": true
+                  },
+                  "allowEnrollment": {
+                    "type": "boolean",
+                    "example": true
+                  },
+                  "excludedDates": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "date"
+                    }
+                  }
+                }
               }
             }
           }
@@ -14654,7 +14752,43 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "required": [],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "India National Holidays 2026"
+                  },
+                  "holidays": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "example": "Diwali"
+                        },
+                        "date": {
+                          "type": "string",
+                          "format": "date",
+                          "example": "2026-11-07"
+                        },
+                        "isRecurring": {
+                          "type": "boolean",
+                          "example": true
+                        },
+                        "affectsScheduling": {
+                          "type": "boolean",
+                          "example": true
+                        }
+                      }
+                    }
+                  },
+                  "isActive": {
+                    "type": "boolean",
+                    "example": true
+                  }
+                }
               }
             }
           }
@@ -14786,35 +14920,6 @@
         }
       }
     },
-    "/api/v1/staff/{id}/schedule": {
-      "get": {
-        "tags": [
-          "Staff"
-        ],
-        "summary": "Staff Schedule",
-        "operationId": "getStaffSchedule",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Schedule"
-          }
-        }
-      }
-    },
     "/api/v1/staff/{id}/performance": {
       "get": {
         "tags": [
@@ -14868,7 +14973,7 @@
         "tags": [
           "Media Storage"
         ],
-        "summary": "Upload File",
+        "summary": "[NOT-IMPLEMENTED] Upload File",
         "operationId": "uploadFile",
         "security": [
           {
@@ -14895,7 +15000,10 @@
           "200": {
             "description": "Uploaded"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/media-storage/upload-multiple": {
@@ -14903,7 +15011,7 @@
         "tags": [
           "Media Storage"
         ],
-        "summary": "Upload Multiple Files",
+        "summary": "[NOT-IMPLEMENTED] Upload Multiple Files",
         "operationId": "uploadMultiple",
         "security": [
           {
@@ -14933,7 +15041,10 @@
           "200": {
             "description": "Uploaded"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/media-storage/{fileId}/signed-url": {
@@ -14941,7 +15052,7 @@
         "tags": [
           "Media Storage"
         ],
-        "summary": "Get Signed URL",
+        "summary": "[NOT-IMPLEMENTED] Get Signed URL",
         "operationId": "getSignedUrl",
         "security": [
           {
@@ -14962,7 +15073,10 @@
           "200": {
             "description": "Signed URL"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/media-storage/{fileId}/metadata": {
@@ -14970,7 +15084,7 @@
         "tags": [
           "Media Storage"
         ],
-        "summary": "Get File Metadata",
+        "summary": "[NOT-IMPLEMENTED] Get File Metadata",
         "operationId": "getFileMetadata",
         "security": [
           {
@@ -14991,13 +15105,16 @@
           "200": {
             "description": "Metadata"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       },
       "put": {
         "tags": [
           "Media Storage"
         ],
-        "summary": "Update File Metadata",
+        "summary": "[NOT-IMPLEMENTED] Update File Metadata",
         "operationId": "updateFileMetadata",
         "security": [
           {
@@ -15028,7 +15145,10 @@
           "200": {
             "description": "Updated"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/media-storage/search": {
@@ -15036,7 +15156,7 @@
         "tags": [
           "Media Storage"
         ],
-        "summary": "Search Files",
+        "summary": "[NOT-IMPLEMENTED] Search Files",
         "operationId": "searchFiles",
         "security": [
           {
@@ -15056,7 +15176,10 @@
           "200": {
             "description": "Results"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/media-storage/{fileId}": {
@@ -15064,7 +15187,7 @@
         "tags": [
           "Media Storage"
         ],
-        "summary": "Delete File",
+        "summary": "[NOT-IMPLEMENTED] Delete File",
         "operationId": "deleteFile",
         "security": [
           {
@@ -15085,7 +15208,10 @@
           "200": {
             "description": "Deleted"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/media-storage/{fileId}/restore": {
@@ -15093,7 +15219,7 @@
         "tags": [
           "Media Storage"
         ],
-        "summary": "Restore File",
+        "summary": "[NOT-IMPLEMENTED] Restore File",
         "operationId": "restoreFile",
         "security": [
           {
@@ -15114,7 +15240,10 @@
           "200": {
             "description": "Restored"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/media-storage/collections": {
@@ -15122,7 +15251,7 @@
         "tags": [
           "Media Storage"
         ],
-        "summary": "Create Collection",
+        "summary": "[NOT-IMPLEMENTED] Create Collection",
         "operationId": "createCollection",
         "security": [
           {
@@ -15151,7 +15280,10 @@
           "201": {
             "description": "Created"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/media-storage/collections/{collectionId}": {
@@ -15159,7 +15291,7 @@
         "tags": [
           "Media Storage"
         ],
-        "summary": "Get Collection",
+        "summary": "[NOT-IMPLEMENTED] Get Collection",
         "operationId": "getCollection",
         "security": [
           {
@@ -15180,13 +15312,16 @@
           "200": {
             "description": "Collection"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       },
       "put": {
         "tags": [
           "Media Storage"
         ],
-        "summary": "Update Collection",
+        "summary": "[NOT-IMPLEMENTED] Update Collection",
         "operationId": "updateCollection",
         "security": [
           {
@@ -15217,13 +15352,16 @@
           "200": {
             "description": "Updated"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       },
       "delete": {
         "tags": [
           "Media Storage"
         ],
-        "summary": "Delete Collection",
+        "summary": "[NOT-IMPLEMENTED] Delete Collection",
         "operationId": "deleteCollection",
         "security": [
           {
@@ -15244,7 +15382,10 @@
           "200": {
             "description": "Deleted"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/media-storage/statistics": {
@@ -15252,7 +15393,7 @@
         "tags": [
           "Media Storage"
         ],
-        "summary": "Storage Statistics",
+        "summary": "[NOT-IMPLEMENTED] Storage Statistics",
         "operationId": "storageStatistics",
         "security": [
           {
@@ -15263,7 +15404,10 @@
           "200": {
             "description": "Statistics"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/media-storage/health": {
@@ -15271,7 +15415,7 @@
         "tags": [
           "Media Storage"
         ],
-        "summary": "Storage Health",
+        "summary": "[NOT-IMPLEMENTED] Storage Health",
         "operationId": "storageHealth",
         "security": [
           {
@@ -15282,7 +15426,10 @@
           "200": {
             "description": "Health"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/analytics/dashboard": {
@@ -15356,7 +15503,7 @@
         "tags": [
           "Dashboard Analytics"
         ],
-        "summary": "Enrollment Analytics",
+        "summary": "[NOT-IMPLEMENTED] Enrollment Analytics",
         "operationId": "enrollmentAnalytics",
         "security": [
           {
@@ -15367,7 +15514,10 @@
           "200": {
             "description": "Enrollment data"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/analytics/attendance": {
@@ -15375,7 +15525,7 @@
         "tags": [
           "Dashboard Analytics"
         ],
-        "summary": "Attendance Analytics",
+        "summary": "[NOT-IMPLEMENTED] Attendance Analytics",
         "operationId": "attendanceAnalytics",
         "security": [
           {
@@ -15386,7 +15536,10 @@
           "200": {
             "description": "Attendance data"
           }
-        }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     },
     "/api/v1/audit/logs": {
@@ -15900,22 +16053,20 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "properties": {
-                  "amount": {
-                    "type": "number"
-                  },
-                  "bucketType": {
-                    "type": "string"
-                  },
-                  "reason": {
-                    "type": "string"
-                  }
-                },
                 "required": [
                   "amount",
-                  "bucketType",
                   "reason"
-                ]
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "example": 500
+                  },
+                  "reason": {
+                    "type": "string",
+                    "example": "Cancelled class"
+                  }
+                }
               }
             }
           }
@@ -15996,6 +16147,475 @@
             "description": "Message sent successfully"
           }
         }
+      }
+    },
+    "/api/v1/reports/execute": {
+      "post": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Execute Report",
+        "operationId": "executeReport",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Report executed"
+          }
+        }
+      }
+    },
+    "/api/v1/reports/{reportId}": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Get Report",
+        "operationId": "getReportById",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reportId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Report"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Update Report",
+        "operationId": "updateReport",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reportId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Delete Report",
+        "operationId": "deleteReport",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reportId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/api/v1/reports": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Get All Reports",
+        "operationId": "getAllReports",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reports"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Create Report",
+        "operationId": "createReport",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/search": {
+      "get": {
+        "tags": [
+          "Advanced Search"
+        ],
+        "summary": "Basic Search",
+        "operationId": "basicSearch",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Search results"
+          }
+        }
+      }
+    },
+    "/api/v1/badges/collection/{recipientId}": {
+      "get": {
+        "tags": [
+          "Micro-Credentials"
+        ],
+        "summary": "Get Badge Collection",
+        "operationId": "getBadgeCollection",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "recipientId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Collection"
+          }
+        }
+      }
+    },
+    "/api/v1/badges/statistics": {
+      "get": {
+        "tags": [
+          "Micro-Credentials"
+        ],
+        "summary": "Badge Statistics",
+        "operationId": "badgeStatistics",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Statistics"
+          }
+        }
+      }
+    },
+    "/api/v1/badges/earned": {
+      "get": {
+        "tags": [
+          "Micro-Credentials"
+        ],
+        "summary": "Get Earned Badges",
+        "operationId": "getEarnedBadges",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Earned badges"
+          }
+        }
+      }
+    },
+    "/api/v1/badges/award": {
+      "post": {
+        "tags": [
+          "Micro-Credentials"
+        ],
+        "summary": "Award Badge",
+        "operationId": "awardBadge",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Badge awarded"
+          }
+        }
+      }
+    },
+    "/api/v1/badges": {
+      "get": {
+        "tags": [
+          "Micro-Credentials"
+        ],
+        "summary": "List Badges",
+        "operationId": "listBadges",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Badges"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Micro-Credentials"
+        ],
+        "summary": "Create Badge",
+        "operationId": "createBadge",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Badge created"
+          }
+        }
+      }
+    },
+    "/api/v1/staff/{staffId}/schedule": {
+      "get": {
+        "tags": [
+          "Staff"
+        ],
+        "summary": "[NOT-IMPLEMENTED] Staff Schedule",
+        "operationId": "getStaffSchedule",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "staffId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule"
+          }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
+      }
+    },
+    "/api/v1/franchise/{franchiseId}": {
+      "get": {
+        "tags": [
+          "Franchise"
+        ],
+        "summary": "[NOT-IMPLEMENTED] Get Franchise",
+        "operationId": "getFranchise",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "franchiseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Franchise"
+          }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
+      },
+      "put": {
+        "tags": [
+          "Franchise"
+        ],
+        "summary": "Update Franchise",
+        "operationId": "updateFranchise",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "franchiseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Franchise"
+        ],
+        "summary": "[NOT-IMPLEMENTED] Delete Franchise",
+        "operationId": "deleteFranchise",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "franchiseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted"
+          }
+        },
+        "description": "This endpoint is documented but NOT YET IMPLEMENTED in the backend. Calls will return 404. See API_DOCUMENTATION.md \"Not implemented\" section.",
+        "x-status": "not-implemented",
+        "deprecated": true
       }
     }
   },

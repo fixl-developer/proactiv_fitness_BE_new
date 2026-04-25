@@ -71,17 +71,21 @@ export class StaffController extends BaseController {
             locationId,
             skills,
             availabilityStatus,
-            searchText
-        } = req.query;
+            searchText,
+            search,
+            role
+        } = req.query as any;
 
         const filter = {
-            staffType,
+            // Accept "role" alias (frontend sends role) for staffType
+            staffType: staffType || role,
             status,
             businessUnitId,
             locationId,
             skills: skills ? (Array.isArray(skills) ? skills : [skills]) : undefined,
             availabilityStatus,
-            searchText
+            // Accept "search" alias (frontend sends search) for searchText
+            searchText: searchText || search
         };
 
         const staffMembers = await this.staffService.getStaffMembers(

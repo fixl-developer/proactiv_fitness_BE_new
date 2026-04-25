@@ -38,16 +38,90 @@ export class RuleController {
 
     /**
      * Create rule
+     *
+     * Admin Rules UI sends a simplified payload:
+     *   { name, category, conditions:[{field,operator,value}], priority, status, description }
+     * The Rule schema requires: ruleType, actions, effectiveFrom, condition.dataType.
+     * We backfill safe defaults here so the UI flow works without overhauling the schema.
      */
     createRule = asyncHandler(async (req: Request, res: Response) => {
+        const body = this.normalizeRulePayload(req.body);
         const rule = await this.ruleService.create({
-            ...req.body,
+            ...body,
             createdBy: req.user.id,
             updatedBy: req.user.id
         });
 
         ResponseUtil.success(res, rule, 'Rule created successfully', HTTP_STATUS.CREATED);
     });
+
+    /**
+     * Map UI category (enrollment, scheduling, age, etc.) → backend RuleType enum.
+     * Falls back to BOOKING if unknown.
+     */
+    private mapCategoryToRuleType(category: string, explicit?: string): string {
+        if (explicit) return explicit;
+        const map: Record<string, string> = {
+            enrollment: 'booking',
+            scheduling: 'booking',
+            pricing: 'pricing',
+            capacity: 'capacity',
+            age: 'booking',
+            prerequisite: 'booking',
+            booking: 'booking',
+            cancellation: 'cancellation',
+            sla: 'sla',
+            promotion: 'promotion',
+            makeup: 'makeup',
+            waitlist: 'waitlist',
+            attendance: 'attendance',
+            refund: 'refund'
+        };
+        return map[(category || '').toLowerCase()] || 'booking';
+    }
+
+    /**
+     * Fill defaults for the simplified UI rule payload.
+     */
+    private normalizeRulePayload(body: any): any {
+        const conditions = Array.isArray(body.conditions) && body.conditions.length > 0
+            ? body.conditions.map((c: any) => ({
+                field: c.field,
+                operator: c.operator,
+                value: c.value,
+                dataType: c.dataType || (typeof c.value === 'number' ? 'number' : 'string')
+            }))
+            : [{ field: 'placeholder', operator: 'equals', value: 'true', dataType: 'string' }];
+
+        const actions = Array.isArray(body.actions) && body.actions.length > 0
+            ? body.actions
+            : [{
+                type: 'allow',
+                parameters: {},
+                message: 'Default allow action',
+                priority: 1
+            }];
+
+        return {
+            name: body.name,
+            description: body.description || body.name || 'Rule',
+            ruleType: this.mapCategoryToRuleType(body.category, body.ruleType),
+            category: body.category,
+            conditions,
+            conditionLogic: body.conditionLogic || 'AND',
+            actions,
+            priority: typeof body.priority === 'number' ? body.priority : 1,
+            stopOnMatch: body.stopOnMatch ?? false,
+            effectiveFrom: body.effectiveFrom ? new Date(body.effectiveFrom) : new Date(),
+            effectiveTo: body.effectiveTo ? new Date(body.effectiveTo) : undefined,
+            applicableDays: body.applicableDays || [],
+            applicableTimeSlots: body.applicableTimeSlots || [],
+            status: body.status || 'active',
+            businessUnitId: body.businessUnitId,
+            locationIds: body.locationIds || [],
+            programIds: body.programIds || []
+        };
+    }
 
     /**
      * Update rule
@@ -85,13 +159,45 @@ export class RuleController {
 
     /**
      * Evaluate rules
+     *
+     * Admin "Test All Rules" sends an empty body. Treat missing ruleType as
+     * "evaluate every active rule" and synthesise a minimal context.
      */
     evaluateRules = asyncHandler(async (req: Request, res: Response) => {
-        const { ruleType, context } = req.body;
+        const ruleType: string | undefined = req.body?.ruleType;
+        const context = {
+            ...(req.body?.context || {}),
+            timestamp: req.body?.context?.timestamp ? new Date(req.body.context.timestamp) : new Date(),
+            userId: req.body?.context?.userId || req.user?.id
+        };
 
-        const results = await this.ruleService.evaluateRules(ruleType, context);
+        let results: any[] = [];
+        if (ruleType) {
+            results = await this.ruleService.evaluateRules(ruleType, context as any);
+        } else {
+            // No ruleType provided → evaluate every distinct ruleType that has active rules.
+            // Service evaluates rules per-type, so loop through distinct types.
+            const types = await this.ruleService.findAll({ status: 'active' } as any);
+            const distinctTypes = Array.from(new Set((types || []).map((r: any) => r.ruleType)));
+            for (const t of distinctTypes) {
+                try {
+                    const partial = await this.ruleService.evaluateRules(t as string, context as any);
+                    results.push(...partial);
+                } catch {
+                    // Continue evaluating other types even if one fails
+                }
+            }
+        }
 
-        ResponseUtil.success(res, results, 'Rules evaluated successfully');
+        // Normalise shape so frontend can read {ruleId, ruleName, passed, message}
+        const normalised = (results || []).map((r: any) => ({
+            ruleId: r.ruleId,
+            ruleName: r.ruleName,
+            passed: r.matched ?? r.passed ?? false,
+            message: r.message || (r.matched ? 'Rule conditions matched' : 'Rule conditions did not match')
+        }));
+
+        ResponseUtil.success(res, normalised, 'Rules evaluated successfully');
     });
 
     /**

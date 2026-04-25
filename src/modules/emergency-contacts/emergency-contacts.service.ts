@@ -1,9 +1,3 @@
-import { Injectable } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { BaseService } from '../../shared/services/base.service';
-import { AppError } from '../../shared/utils/app-error';
-import { HTTP_STATUS } from '../../shared/constants/http-status';
 import { EmergencyContact } from './emergency-contacts.model';
 import {
     IEmergencyContact,
@@ -12,18 +6,20 @@ import {
     EmergencyContactStatus
 } from './emergency-contacts.interface';
 
-@Injectable()
-export class EmergencyContactsService extends BaseService<IEmergencyContact> {
-    constructor(
-        @InjectModel(EmergencyContact.name) private emergencyContactModel: Model<IEmergencyContact>
-    ) {
-        super(emergencyContactModel);
+export class EmergencyContactsService {
+    private emergencyContactModel: any;
+
+    constructor(model?: any) {
+        this.emergencyContactModel = model || EmergencyContact;
     }
 
     /**
      * Create emergency contact
      */
-    async createEmergencyContact(contactRequest: ICreateEmergencyContactRequest, createdBy: string): Promise<IEmergencyContact> {
+    async createEmergencyContact(
+        contactRequest: ICreateEmergencyContactRequest,
+        createdBy: string
+    ): Promise<IEmergencyContact> {
         try {
             const contact = new this.emergencyContactModel({
                 ...contactRequest,
@@ -36,10 +32,7 @@ export class EmergencyContactsService extends BaseService<IEmergencyContact> {
             await contact.save();
             return contact;
         } catch (error: any) {
-            throw new AppError(
-                error.message || 'Failed to create emergency contact',
-                HTTP_STATUS.INTERNAL_SERVER_ERROR
-            );
+            throw new Error(error.message || 'Failed to create emergency contact');
         }
     }
 
@@ -64,10 +57,7 @@ export class EmergencyContactsService extends BaseService<IEmergencyContact> {
                 .sort({ createdAt: -1 })
                 .exec();
         } catch (error: any) {
-            throw new AppError(
-                error.message || 'Failed to fetch emergency contacts',
-                HTTP_STATUS.INTERNAL_SERVER_ERROR
-            );
+            throw new Error(error.message || 'Failed to fetch emergency contacts');
         }
     }
 
@@ -78,7 +68,7 @@ export class EmergencyContactsService extends BaseService<IEmergencyContact> {
         try {
             const contact = await this.emergencyContactModel.findById(contactId);
             if (!contact) {
-                throw new AppError('Emergency contact not found', HTTP_STATUS.NOT_FOUND);
+                throw new Error('Emergency contact not found');
             }
 
             contact.status = EmergencyContactStatus.VERIFIED;
@@ -89,10 +79,7 @@ export class EmergencyContactsService extends BaseService<IEmergencyContact> {
             await contact.save();
             return contact;
         } catch (error: any) {
-            throw new AppError(
-                error.message || 'Failed to verify contact',
-                HTTP_STATUS.INTERNAL_SERVER_ERROR
-            );
+            throw new Error(error.message || 'Failed to verify contact');
         }
     }
 
@@ -112,15 +99,26 @@ export class EmergencyContactsService extends BaseService<IEmergencyContact> {
             );
 
             if (!contact) {
-                throw new AppError('Emergency contact not found', HTTP_STATUS.NOT_FOUND);
+                throw new Error('Emergency contact not found');
             }
 
             return contact;
         } catch (error: any) {
-            throw new AppError(
-                error.message || 'Failed to update emergency contact',
-                HTTP_STATUS.INTERNAL_SERVER_ERROR
-            );
+            throw new Error(error.message || 'Failed to update emergency contact');
+        }
+    }
+
+    /**
+     * Delete emergency contact
+     */
+    async delete(contactId: string): Promise<void> {
+        try {
+            const result = await this.emergencyContactModel.findByIdAndDelete(contactId);
+            if (!result) {
+                throw new Error('Emergency contact not found');
+            }
+        } catch (error: any) {
+            throw new Error(error.message || 'Failed to delete emergency contact');
         }
     }
 
@@ -134,17 +132,14 @@ export class EmergencyContactsService extends BaseService<IEmergencyContact> {
                 .sort({ isAuthorizedPickup: -1, createdAt: -1 })
                 .exec();
         } catch (error: any) {
-            throw new AppError(
-                error.message || 'Failed to fetch student emergency contacts',
-                HTTP_STATUS.INTERNAL_SERVER_ERROR
-            );
+            throw new Error(error.message || 'Failed to fetch student emergency contacts');
         }
     }
 
     /**
      * Get business unit ID for student
      */
-    private async getBusinessUnitId(studentId: string): Promise<string> {
+    private async getBusinessUnitId(_studentId: string): Promise<string> {
         // Implementation would fetch student's business unit
         return 'default-location-id';
     }

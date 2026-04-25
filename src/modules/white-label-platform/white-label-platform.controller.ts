@@ -1,9 +1,18 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { WhiteLabelPlatformService } from './white-label-platform.service';
-import { authenticate, authorize } from '@modules/iam/auth.middleware';
+import { authenticate } from '@modules/iam/auth.middleware';
+import { UserRole } from '@shared/enums';
 
 const router = Router();
 const service = new WhiteLabelPlatformService();
+
+// Simple authorize middleware
+const authorize = (roles: string[]) => (req: any, res: Response, next: NextFunction) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+        return res.status(403).json({ success: false, message: 'Forbidden' });
+    }
+    next();
+};
 
 // Onboard new tenant
 router.post('/tenants/onboard', authenticate, authorize(['ADMIN']), async (req: Request, res: Response) => {

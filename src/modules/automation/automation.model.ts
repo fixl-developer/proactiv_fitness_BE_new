@@ -182,6 +182,7 @@ const workflowSchema = new Schema<IWorkflow>({
         lastFailureAt: Date
     },
 
+    // @ts-ignore - Mongoose type issue
     businessUnitId: { type: Schema.Types.ObjectId, ref: 'BusinessUnit', index: true },
     locationIds: [{ type: Schema.Types.ObjectId, ref: 'Location' }],
     tags: [String],
@@ -244,6 +245,7 @@ const automationRuleSchema = new Schema<IAutomationRule>({
     executionMode: { type: String, enum: Object.values(ExecutionMode), default: ExecutionMode.ASYNCHRONOUS },
     timeout: { type: Number, default: 300, min: 1 },
 
+    // @ts-ignore - Mongoose type issue
     businessUnitId: { type: Schema.Types.ObjectId, ref: 'BusinessUnit', index: true },
     locationIds: [{ type: Schema.Types.ObjectId, ref: 'Location' }],
 
@@ -303,8 +305,9 @@ workflowTemplateSchema.index({ usageCount: -1 });
 
 // Pre-save middleware
 workflowSchema.pre('save', function (next) {
-    if (this.isNew && !this.workflowId) {
-        this.workflowId = `wf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const doc = this as any;
+    if (doc.isNew && !doc.workflowId) {
+        doc.workflowId = `wf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
     next();
 });
@@ -317,8 +320,9 @@ workflowExecutionSchema.pre('save', function (next) {
 });
 
 automationRuleSchema.pre('save', function (next) {
-    if (this.isNew && !this.ruleId) {
-        this.ruleId = `rule_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const doc = this as any;
+    if (doc.isNew && !doc.ruleId) {
+        doc.ruleId = `rule_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
     next();
 });

@@ -173,7 +173,7 @@ const communicationLogSchema = new Schema({
 const familyMemberSchema = new Schema({
     // @ts-ignore - Mongoose type issue
     userId: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'User',
         required: [true, 'User ID is required']
     },
@@ -241,13 +241,13 @@ const childProfileSchema = new Schema<IChildProfile>({
     // Family Connection
     // @ts-ignore - Mongoose type issue
     familyId: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'FamilyProfile',
         required: [true, 'Family ID is required'],
         index: true
     },
     parentIds: [{
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'User',
         required: [true, 'At least one parent ID is required']
     }],
@@ -282,13 +282,13 @@ const childProfileSchema = new Schema<IChildProfile>({
 
     // Program Information
     currentPrograms: [{
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'Program'
     }],
     programHistory: [{
         // @ts-ignore - Mongoose type issue
         programId: {
-            type: Schema.Types.ObjectId,
+            type: String,
             ref: 'Program',
             required: [true, 'Program ID is required']
         },
@@ -329,7 +329,7 @@ const childProfileSchema = new Schema<IChildProfile>({
         },
         // @ts-ignore - Mongoose type issue
         programId: {
-            type: Schema.Types.ObjectId,
+            type: String,
             ref: 'Program'
         }
     }],
@@ -347,7 +347,7 @@ const childProfileSchema = new Schema<IChildProfile>({
             required: [true, 'Note category is required']
         },
         createdBy: {
-            type: Schema.Types.ObjectId,
+            type: String,
             ref: 'User',
             required: [true, 'Created by is required']
         },
@@ -399,7 +399,7 @@ const childProfileSchema = new Schema<IChildProfile>({
             required: [true, 'Consent date is required']
         },
         consentBy: {
-            type: Schema.Types.ObjectId,
+            type: String,
             ref: 'User',
             required: [true, 'Consent by is required']
         }
@@ -414,12 +414,12 @@ const childProfileSchema = new Schema<IChildProfile>({
 
     // Audit
     createdBy: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'User',
         required: [true, 'Created by is required']
     },
     updatedBy: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'User',
         required: [true, 'Updated by is required']
     }
@@ -450,7 +450,7 @@ const familyProfileSchema = new Schema<IFamilyProfile>({
     // Members
     members: [familyMemberSchema],
     children: [{
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'ChildProfile'
     }],
 
@@ -499,13 +499,13 @@ const familyProfileSchema = new Schema<IFamilyProfile>({
     // Business Information
     // @ts-ignore - Mongoose type issue
     businessUnitId: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'BusinessUnit',
         required: [true, 'Business unit ID is required'],
         index: true
     },
     locationIds: [{
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'Location',
         required: [true, 'At least one location ID is required']
     }],
@@ -531,7 +531,7 @@ const familyProfileSchema = new Schema<IFamilyProfile>({
     // Billing Information
     billingAddress: addressSchema,
     paymentMethods: [{
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'PaymentMethod'
     }],
     billingPreferences: {
@@ -596,7 +596,7 @@ const familyProfileSchema = new Schema<IFamilyProfile>({
             default: false
         },
         createdBy: {
-            type: Schema.Types.ObjectId,
+            type: String,
             ref: 'User',
             required: [true, 'Created by is required']
         },
@@ -611,7 +611,7 @@ const familyProfileSchema = new Schema<IFamilyProfile>({
 
     // Referral Information
     referredBy: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'FamilyProfile'
     },
     referralCode: {
@@ -623,7 +623,7 @@ const familyProfileSchema = new Schema<IFamilyProfile>({
     referrals: [{
         // @ts-ignore - Mongoose type issue
         referredFamilyId: {
-            type: Schema.Types.ObjectId,
+            type: String,
             ref: 'FamilyProfile',
             required: [true, 'Referred family ID is required']
         },
@@ -651,12 +651,12 @@ const familyProfileSchema = new Schema<IFamilyProfile>({
 
     // Audit
     createdBy: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'User',
         required: [true, 'Created by is required']
     },
     updatedBy: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'User',
         required: [true, 'Updated by is required']
     }
@@ -727,11 +727,11 @@ const inquirySchema = new Schema<IInquiry>({
 
     // Interest Information
     interestedPrograms: [{
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'Program'
     }],
     preferredLocations: [{
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'Location'
     }],
     preferredDays: [String],
@@ -740,13 +740,13 @@ const inquirySchema = new Schema<IInquiry>({
     // Business Information
     // @ts-ignore - Mongoose type issue
     businessUnitId: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'BusinessUnit',
         required: [true, 'Business unit ID is required'],
         index: true
     },
     assignedTo: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'User',
         index: true
     },
@@ -761,7 +761,7 @@ const inquirySchema = new Schema<IInquiry>({
     // Conversion Information
     // @ts-ignore - Mongoose type issue
     convertedToFamilyId: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'FamilyProfile'
     },
     conversionDate: {
@@ -792,12 +792,12 @@ const inquirySchema = new Schema<IInquiry>({
 
     // Audit
     createdBy: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'User',
         required: [true, 'Created by is required']
     },
     updatedBy: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'User',
         required: [true, 'Updated by is required']
     }
@@ -875,7 +875,7 @@ const leadManagementSchema = new Schema<ILeadManagement>({
 
     // Assignment
     assignedTo: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'User',
         index: true
     },
@@ -908,7 +908,7 @@ const leadManagementSchema = new Schema<ILeadManagement>({
             required: [true, 'Next action is required']
         },
         staffMember: {
-            type: Schema.Types.ObjectId,
+            type: String,
             ref: 'User',
             required: [true, 'Staff member is required']
         }
@@ -917,7 +917,7 @@ const leadManagementSchema = new Schema<ILeadManagement>({
     // Conversion
     // @ts-ignore - Mongoose type issue
     convertedToInquiryId: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'Inquiry'
     },
     conversionDate: {
@@ -927,12 +927,12 @@ const leadManagementSchema = new Schema<ILeadManagement>({
 
     // Audit
     createdBy: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'User',
         required: [true, 'Created by is required']
     },
     updatedBy: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'User',
         required: [true, 'Updated by is required']
     }

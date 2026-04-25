@@ -28,7 +28,7 @@ export class EventBusController {
         const { page, limit, skip } = PaginationUtil.getPaginationParams(req.query);
         const filters = this.buildEventFilters(req.query);
 
-        const { data, total } = await this.eventBusService.findAll(filters, {
+        const result: any = await (this.eventBusService as any).findAll(filters, {
             page,
             limit,
             skip,
@@ -113,14 +113,14 @@ export class EventSubscriptionController {
         const filters = this.buildSubscriptionFilters(req.query);
 
         // Using EventSubscription model directly for subscriptions
-        const subscriptions = await this.eventBusService.findAll(filters, {
+        const subscriptions: any = await (this.eventBusService as any).findAll(filters, {
             page,
             limit,
             skip,
             sort: { createdAt: -1 }
         });
 
-        ResponseUtil.success(res, subscriptions.data, 'Subscriptions retrieved successfully', HTTP_STATUS.OK, meta);
+        ResponseUtil.success(res, subscriptions?.data ?? subscriptions, 'Subscriptions retrieved successfully', HTTP_STATUS.OK);
     });
 
     /**
@@ -186,7 +186,7 @@ export class MessageQueueController {
         const { page, limit, skip } = PaginationUtil.getPaginationParams(req.query);
         const filters = { isActive: true };
 
-        const { data, total } = await this.messageQueueService.findAll(filters, {
+        const result: any = await (this.messageQueueService as any).findAll(filters, {
             page,
             limit,
             skip,

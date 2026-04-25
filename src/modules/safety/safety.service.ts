@@ -542,6 +542,14 @@ export class SafetyService extends BaseService<IAuthorizedGuardian> {
     private generateRestrictionId(): string {
         return `restrict_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
+
+    async findOneAndUpdate(filter: any, update: any, options?: any): Promise<any> {
+        return (this.model as any).findOneAndUpdate(filter, update, options);
+    }
+
+    async find(filter: any = {}): Promise<any[]> {
+        return (this.model as any).find(filter);
+    }
 }
 
 export class EmergencyService extends BaseService<IEmergencyIncident> {
@@ -1243,5 +1251,13 @@ export class EmergencyBroadcastService extends BaseService<IEmergencyBroadcast> 
 
     private generateBroadcastId(): string {
         return `broadcast_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
+
+    async findOneAndUpdate(filter: any, update: any, options?: any): Promise<any> {
+        return (this.model as any).findOneAndUpdate(filter, update, options);
+    }
+
+    async find(filter: any = {}): Promise<any[]> {
+        return (this.model as any).find(filter);
     }
 }

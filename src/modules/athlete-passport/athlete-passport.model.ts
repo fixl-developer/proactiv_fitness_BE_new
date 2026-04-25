@@ -176,12 +176,12 @@ const athletePassportSchema = new Schema<IAthletePassport>({
     },
 
     // Business Context
-    businessUnitId: { type: Schema.Types.ObjectId, ref: 'BusinessUnit', required: true, index: true },
-    locationIds: [{ type: Schema.Types.ObjectId, ref: 'Location' }],
+    businessUnitId: { type: String, ref: 'BusinessUnit', required: true, index: true },
+    locationIds: [{ type: String, ref: 'Location' }],
 
     // Audit
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true }
+    createdBy: { type: String, ref: 'User', required: true },
+    updatedBy: { type: String, ref: 'User', required: true }
 }, {
     ...baseSchemaOptions,
     timestamps: true
@@ -233,11 +233,11 @@ const skillTaxonomySchema = new Schema<ISkillTaxonomy>({
     version: { type: String, required: true, default: '1.0' },
 
     // Business Context
-    businessUnitId: { type: Schema.Types.ObjectId, ref: 'BusinessUnit', required: true, index: true },
+    businessUnitId: { type: String, ref: 'BusinessUnit', required: true, index: true },
 
     // Audit
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true }
+    createdBy: { type: String, ref: 'User', required: true },
+    updatedBy: { type: String, ref: 'User', required: true }
 }, {
     ...baseSchemaOptions,
     timestamps: true
@@ -276,11 +276,11 @@ const performanceBenchmarkSchema = new Schema<IPerformanceBenchmark>({
     isActive: { type: Boolean, default: true, index: true },
 
     // Business Context
-    businessUnitId: { type: Schema.Types.ObjectId, ref: 'BusinessUnit', required: true, index: true },
+    businessUnitId: { type: String, ref: 'BusinessUnit', required: true, index: true },
 
     // Audit
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true }
+    createdBy: { type: String, ref: 'User', required: true },
+    updatedBy: { type: String, ref: 'User', required: true }
 }, {
     ...baseSchemaOptions,
     timestamps: true

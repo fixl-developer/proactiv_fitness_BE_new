@@ -59,6 +59,51 @@ export class PaymentService extends BaseService<IPaymentMethod> {
             );
         }
     }
+
+    /**
+     * Get transaction by ID
+     */
+    async getTransaction(transactionId: string): Promise<ITransaction | null> {
+        try {
+            // Implementation would fetch from database
+            return null;
+        } catch (error: any) {
+            throw new AppError(
+                error.message || 'Failed to get transaction',
+                HTTP_STATUS.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    /**
+     * Get user transactions with pagination
+     */
+    async getUserTransactions(userId: string, limit: number = 10, offset: number = 0): Promise<ITransaction[]> {
+        try {
+            // Implementation would fetch from database
+            return [];
+        } catch (error: any) {
+            throw new AppError(
+                error.message || 'Failed to get user transactions',
+                HTTP_STATUS.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    /**
+     * Handle payment gateway webhook
+     */
+    async handleWebhook(gateway: string, event: any): Promise<void> {
+        try {
+            // Implementation would process webhook events
+            console.log(`Processing webhook from ${gateway}:`, event.type);
+        } catch (error: any) {
+            throw new AppError(
+                error.message || 'Failed to handle webhook',
+                HTTP_STATUS.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
 }
 
 export const paymentService = new PaymentService();

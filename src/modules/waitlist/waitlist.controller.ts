@@ -1,105 +1,176 @@
-import {
-    Controller,
-    Get,
-    Post,
-    Put,
-    Delete,
-    Body,
-    Param,
-    Query,
-    UseGuards,
-    Request
-} from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
-import { RolesGuard } from '../../shared/guards/roles.guard';
-import { Roles } from '../../shared/decorators/roles.decorator';
-import { UserRole } from '../../shared/enums';
+import { Request } from 'express';
 import { WaitlistService } from './waitlist.service';
 import {
     ICreateWaitlistEntryRequest,
-    IUpdateWaitlistEntryRequest,
-    IWaitlistFilters
+    IWaitlistFilters,
+    WaitlistPriority,
 } from './waitlist.interface';
 
-@ApiTags('Waitlist')
-@Controller('waitlist')
-@UseGuards(JwtAuthGuard, RolesGuard)
+/**
+ * WaitlistController
+ *
+ * Plain Express-style controller. Each handler returns a response payload
+ * object; the route layer is responsible for sending it via `res.json(...)`.
+ * This matches the shape the existing `waitlist.routes.ts` expects.
+ */
 export class WaitlistController {
-    constructor(private readonly waitlistService: WaitlistService) { }
+    private waitlistService: WaitlistService;
 
-    @Post()
-    @Roles(UserRole.LOCATION_MANAGER, UserRole.SUPER_ADMIN, UserRole.STAFF)
-    @ApiOperation({ summary: 'Add student to waitlist' })
-    @ApiResponse({ status: 201, description: 'Student added to waitlist successfully' })
+    constructor(waitlistService?: WaitlistService) {
+        // Allow injection for testing; default to a fresh instance.
+        this.waitlistService = waitlistService ?? new WaitlistService();
+    }
+
+    /**
+     * Add student to waitlist
+     */
     async createWaitlistEntry(
-        @Body() createRequest: ICreateWaitlistEntryRequest,
-        @Request() req: any
-    ) {
-        const entry = await this.waitlistService.createWaitlistEntry(createRequest, req.user.id);
+        body: ICreateWaitlistEntryRequest,
+        req: Request
+    ): Promise<{ success: boolean; message: string; data: any }> {
+        const userId = req.user?.id || 'system';
+        const entry = await this.waitlistService.createWaitlistEntry(body, userId);
         return {
             success: true,
             message: 'Student added to waitlist successfully',
-            data: entry
+            data: entry,
         };
     }
-    @Get('location/:locationId')
-    @Roles(UserRole.LOCATION_MANAGER, UserRole.SUPER_ADMIN, UserRole.STAFF)
-    @ApiOperation({ summary: 'Get waitlist entries for location' })
-    @ApiResponse({ status: 200, description: 'Waitlist entries retrieved successfully' })
+
+    /**
+     * Get waitlist entries for location
+     */
     async getLocationWaitlist(
-        @Param('locationId') locationId: string,
-        @Query() filters: IWaitlistFilters
-    ) {
+        locationId: string,
+        filters: IWaitlistFilters | any
+    ): Promise<{ success: boolean; message: string; data: any }> {
         const entries = await this.waitlistService.getLocationWaitlist(locationId, filters);
         return {
             success: true,
             message: 'Waitlist entries retrieved successfully',
-            data: entries
+            data: entries,
         };
     }
 
-    @Put(':id/offer')
-    @Roles(UserRole.LOCATION_MANAGER, UserRole.SUPER_ADMIN)
-    @ApiOperation({ summary: 'Offer spot to waitlisted student' })
-    @ApiResponse({ status: 200, description: 'Spot offered successfully' })
+    /**
+     * Get waitlist entries for a specific class
+     */
+    async getClassWaitlist(
+        classId: string,
+        filters: any
+    ): Promise<{ success: boolean; message: string; data: any }> {
+        const entries = await this.waitlistService.getClassWaitlist(classId, filters);
+        return {
+            success: true,
+            message: 'Class waitlist retrieved successfully',
+            data: entries,
+        };
+    }
+
+    /**
+     * Get waitlist entries for a student
+     */
+    async getStudentWaitlist(
+        studentId: string
+    ): Promise<{ success: boolean; message: string; data: any }> {
+        const entries = await this.waitlistService.getStudentWaitlist(studentId);
+        return {
+            success: true,
+            message: 'Student waitlist entries retrieved successfully',
+            data: entries,
+        };
+    }
+
+    /**
+     * Get single waitlist entry details
+     */
+    async getWaitlistEntry(
+        entryId: string
+    ): Promise<{ success: boolean; message: string; data: any }> {
+        const entry = await this.waitlistService.getWaitlistEntry(entryId);
+        return {
+            success: true,
+            message: 'Waitlist entry retrieved successfully',
+            data: entry,
+        };
+    }
+
+    /**
+     * Update waitlist entry priority
+     */
+    async updatePriority(
+        entryId: string,
+        priority: WaitlistPriority
+    ): Promise<{ success: boolean; message: string; data: any }> {
+        // updatedBy will default to 'system' when no authenticated context is
+        // passed through — routes can enrich this later if needed.
+        const entry = await this.waitlistService.updatePriority(entryId, priority, 'system');
+        return {
+            success: true,
+            message: 'Waitlist priority updated successfully',
+            data: entry,
+        };
+    }
+
+    /**
+     * Offer spot to waitlisted student
+     */
     async offerSpot(
-        @Param('id') entryId: string,
-        @Request() req: any
-    ) {
-        const entry = await this.waitlistService.offerSpot(entryId, req.user.id);
+        entryId: string,
+        req: Request
+    ): Promise<{ success: boolean; message: string; data: any }> {
+        const userId = req.user?.id || 'system';
+        const entry = await this.waitlistService.offerSpot(entryId, userId);
         return {
             success: true,
             message: 'Spot offered successfully',
-            data: entry
+            data: entry,
         };
     }
 
-    @Put(':id/accept')
-    @Roles(UserRole.PARENT, UserRole.LOCATION_MANAGER, UserRole.SUPER_ADMIN)
-    @ApiOperation({ summary: 'Accept waitlist offer' })
-    @ApiResponse({ status: 200, description: 'Offer accepted successfully' })
-    async acceptOffer(@Param('id') entryId: string) {
+    /**
+     * Accept waitlist offer
+     */
+    async acceptOffer(
+        entryId: string
+    ): Promise<{ success: boolean; message: string; data: any }> {
         const entry = await this.waitlistService.acceptOffer(entryId);
         return {
             success: true,
             message: 'Offer accepted successfully',
-            data: entry
+            data: entry,
         };
     }
 
-    @Delete(':id')
-    @Roles(UserRole.LOCATION_MANAGER, UserRole.SUPER_ADMIN, UserRole.PARENT)
-    @ApiOperation({ summary: 'Remove from waitlist' })
-    @ApiResponse({ status: 200, description: 'Removed from waitlist successfully' })
-    async removeFromWaitlist(
-        @Param('id') entryId: string,
-        @Request() req: any
-    ) {
-        await this.waitlistService.removeFromWaitlist(entryId, req.user.id);
+    /**
+     * Reject waitlist offer
+     */
+    async rejectOffer(
+        entryId: string,
+        body: { reason?: string }
+    ): Promise<{ success: boolean; message: string; data: any }> {
+        const entry = await this.waitlistService.rejectOffer(entryId, body?.reason);
         return {
             success: true,
-            message: 'Removed from waitlist successfully'
+            message: 'Offer rejected successfully',
+            data: entry,
+        };
+    }
+
+    /**
+     * Remove from waitlist
+     */
+    async removeFromWaitlist(
+        entryId: string,
+        req: Request
+    ): Promise<{ success: boolean; message: string }> {
+        const userId = req.user?.id || 'system';
+        await this.waitlistService.removeFromWaitlist(entryId, userId);
+        return {
+            success: true,
+            message: 'Removed from waitlist successfully',
         };
     }
 }
+
+export default WaitlistController;

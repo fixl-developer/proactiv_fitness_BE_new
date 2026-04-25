@@ -408,7 +408,7 @@ export class AuditVaultService {
 
         for (const index of indexes) {
             try {
-                await auditLogsCollection.createIndex(index);
+                await auditLogsCollection.createIndex(index as any);
             } catch (error) {
                 logger.warn('Failed to create index:', { index, error });
             }

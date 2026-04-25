@@ -1,57 +1,39 @@
 import { Router, Request, Response } from 'express'
 import { authenticate, authorize } from '../iam/auth.middleware'
+import { NotificationModel } from './notifications.model'
 
 const router = Router()
 
-// In-memory storage for admin notifications (in production, use database)
-const adminNotificationsStore: any[] = []
+const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'REGIONAL_ADMIN']
 
 /**
  * @route   GET /api/v1/admin/notifications
- * @desc    Get all notifications (admin)
+ * @desc    Paginated list. Mongoose-backed (NotificationModel) so data persists.
  * @access  Private/Admin
  */
-router.get('/', authenticate, authorize(['ADMIN', 'SUPER_ADMIN']), async (req: Request, res: Response) => {
+router.get('/', authenticate, authorize(adminRoles), async (req: Request, res: Response) => {
     try {
-        const { page = 1, limit = 10, search = '', type = '', status = '' } = req.query
-
-        let filtered = [...adminNotificationsStore]
-
-        // Apply filters
-        if (search) {
-            filtered = filtered.filter(
-                (n) =>
-                    n.title.toLowerCase().includes(search.toString().toLowerCase()) ||
-                    n.message.toLowerCase().includes(search.toString().toLowerCase())
-            )
+        const page = parseInt((req.query.page as string) || '1')
+        const limit = parseInt((req.query.limit as string) || '10')
+        const filter: any = {}
+        if (req.query.type) filter.type = req.query.type
+        if (req.query.status) filter.status = req.query.status
+        if (req.query.category) filter.category = req.query.category
+        if (req.query.search) {
+            const term = String(req.query.search)
+            filter.$or = [
+                { title: { $regex: term, $options: 'i' } },
+                { message: { $regex: term, $options: 'i' } },
+            ]
         }
-
-        if (type) {
-            filtered = filtered.filter((n) => n.type === type)
-        }
-
-        if (status) {
-            filtered = filtered.filter((n) => n.status === status)
-        }
-
-        // Pagination
-        const pageNum = parseInt(page.toString()) || 1
-        const limitNum = parseInt(limit.toString()) || 10
-        const startIndex = (pageNum - 1) * limitNum
-        const endIndex = startIndex + limitNum
-
-        const paginatedData = filtered.slice(startIndex, endIndex)
-        const totalPages = Math.ceil(filtered.length / limitNum)
-
+        const [items, total] = await Promise.all([
+            NotificationModel.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+            NotificationModel.countDocuments(filter),
+        ])
         res.json({
             success: true,
-            data: paginatedData,
-            pagination: {
-                page: pageNum,
-                limit: limitNum,
-                total: filtered.length,
-                totalPages,
-            },
+            data: items,
+            pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
         })
     } catch (error: any) {
         console.error('Error fetching notifications:', error)
@@ -61,63 +43,42 @@ router.get('/', authenticate, authorize(['ADMIN', 'SUPER_ADMIN']), async (req: R
 
 /**
  * @route   GET /api/v1/admin/notifications/:id
- * @desc    Get notification by ID
- * @access  Private/Admin
  */
-router.get('/:id', authenticate, authorize(['ADMIN', 'SUPER_ADMIN']), async (req: Request, res: Response) => {
+router.get('/:id', authenticate, authorize(adminRoles), async (req: Request, res: Response) => {
     try {
-        const { id } = req.params
-        const notification = adminNotificationsStore.find((n) => n.id === id)
-
-        if (!notification) {
-            return res.status(404).json({ success: false, error: 'Notification not found' })
-        }
-
-        res.json({ success: true, data: notification })
+        const item = await NotificationModel.findById(req.params.id).lean()
+        if (!item) return res.status(404).json({ success: false, error: 'Notification not found' })
+        res.json({ success: true, data: item })
     } catch (error: any) {
-        console.error('Error fetching notification:', error)
         res.status(500).json({ success: false, error: error.message })
     }
 })
 
 /**
  * @route   POST /api/v1/admin/notifications
- * @desc    Create new notification
- * @access  Private/Admin
+ * Create a new notification record. Required: userId, type, category, title, message.
  */
-router.post('/', authenticate, authorize(['ADMIN', 'SUPER_ADMIN']), async (req: Request, res: Response) => {
+router.post('/', authenticate, authorize(adminRoles), async (req: Request, res: Response) => {
     try {
-        const { userId, type, category, title, message, status, scheduledTime } = req.body
-
-        // Validation
+        const { userId, type, category, title, message, status, scheduledTime, recipient } = req.body
         if (!userId || !type || !category || !title || !message) {
             return res.status(400).json({
                 success: false,
                 error: 'Missing required fields: userId, type, category, title, message',
             })
         }
-
-        const newNotification = {
-            id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        const item = await NotificationModel.create({
             userId,
+            tenantId: req.user?.tenantId || 'default',
             type,
             category,
             title,
             message,
+            recipient: recipient || userId, // backend schema requires recipient
             status: status || 'draft',
-            scheduledTime: scheduledTime || null,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            createdBy: req.user?.id,
-        }
-
-        adminNotificationsStore.push(newNotification)
-
-        res.status(201).json({
-            success: true,
-            data: newNotification,
-            message: 'Notification created successfully',
+            metadata: scheduledTime ? { scheduledTime } : undefined,
         })
+        res.status(201).json({ success: true, data: item, message: 'Notification created successfully' })
     } catch (error: any) {
         console.error('Error creating notification:', error)
         res.status(500).json({ success: false, error: error.message })
@@ -126,131 +87,65 @@ router.post('/', authenticate, authorize(['ADMIN', 'SUPER_ADMIN']), async (req: 
 
 /**
  * @route   PUT /api/v1/admin/notifications/:id
- * @desc    Update notification
- * @access  Private/Admin
  */
-router.put('/:id', authenticate, authorize(['ADMIN', 'SUPER_ADMIN']), async (req: Request, res: Response) => {
+router.put('/:id', authenticate, authorize(adminRoles), async (req: Request, res: Response) => {
     try {
-        const { id } = req.params
-        const { userId, type, category, title, message, status, scheduledTime } = req.body
+        const allowed = ['userId', 'type', 'category', 'title', 'message', 'status', 'recipient']
+        const update: any = {}
+        for (const k of allowed) if (req.body[k] !== undefined) update[k] = req.body[k]
+        if (req.body.scheduledTime !== undefined) update.metadata = { scheduledTime: req.body.scheduledTime }
 
-        const notification = adminNotificationsStore.find((n) => n.id === id)
-
-        if (!notification) {
-            return res.status(404).json({ success: false, error: 'Notification not found' })
-        }
-
-        // Update fields
-        if (userId) notification.userId = userId
-        if (type) notification.type = type
-        if (category) notification.category = category
-        if (title) notification.title = title
-        if (message) notification.message = message
-        if (status) notification.status = status
-        if (scheduledTime !== undefined) notification.scheduledTime = scheduledTime
-
-        notification.updatedAt = new Date()
-        notification.updatedBy = req.user?.id
-
-        res.json({
-            success: true,
-            data: notification,
-            message: 'Notification updated successfully',
-        })
+        const item = await NotificationModel.findByIdAndUpdate(req.params.id, update, { new: true })
+        if (!item) return res.status(404).json({ success: false, error: 'Notification not found' })
+        res.json({ success: true, data: item, message: 'Notification updated successfully' })
     } catch (error: any) {
-        console.error('Error updating notification:', error)
         res.status(500).json({ success: false, error: error.message })
     }
 })
 
 /**
  * @route   DELETE /api/v1/admin/notifications/:id
- * @desc    Delete notification
- * @access  Private/Admin
  */
-router.delete('/:id', authenticate, authorize(['ADMIN', 'SUPER_ADMIN']), async (req: Request, res: Response) => {
+router.delete('/:id', authenticate, authorize(adminRoles), async (req: Request, res: Response) => {
     try {
-        const { id } = req.params
-        const index = adminNotificationsStore.findIndex((n) => n.id === id)
-
-        if (index === -1) {
-            return res.status(404).json({ success: false, error: 'Notification not found' })
-        }
-
-        adminNotificationsStore.splice(index, 1)
-
-        res.json({
-            success: true,
-            message: 'Notification deleted successfully',
-        })
+        const result = await NotificationModel.findByIdAndDelete(req.params.id)
+        if (!result) return res.status(404).json({ success: false, error: 'Notification not found' })
+        res.json({ success: true, message: 'Notification deleted successfully' })
     } catch (error: any) {
-        console.error('Error deleting notification:', error)
         res.status(500).json({ success: false, error: error.message })
     }
 })
 
 /**
  * @route   POST /api/v1/admin/notifications/:id/send
- * @desc    Send notification
- * @access  Private/Admin
+ * Mark notification as sent (in production this would also dispatch via email/SMS provider).
  */
-router.post('/:id/send', authenticate, authorize(['ADMIN', 'SUPER_ADMIN']), async (req: Request, res: Response) => {
+router.post('/:id/send', authenticate, authorize(adminRoles), async (req: Request, res: Response) => {
     try {
-        const { id } = req.params
-        const notification = adminNotificationsStore.find((n) => n.id === id)
-
-        if (!notification) {
-            return res.status(404).json({ success: false, error: 'Notification not found' })
-        }
-
-        // Update status to sent
-        notification.status = 'sent'
-        notification.sentAt = new Date()
-        notification.updatedAt = new Date()
-
-        res.json({
-            success: true,
-            data: notification,
-            message: 'Notification sent successfully',
-        })
+        const item = await NotificationModel.findByIdAndUpdate(
+            req.params.id,
+            { status: 'sent', sentAt: new Date() } as any,
+            { new: true }
+        )
+        if (!item) return res.status(404).json({ success: false, error: 'Notification not found' })
+        res.json({ success: true, data: item, message: 'Notification sent successfully' })
     } catch (error: any) {
-        console.error('Error sending notification:', error)
         res.status(500).json({ success: false, error: error.message })
     }
 })
 
 /**
  * @route   POST /api/v1/admin/notifications/bulk/send
- * @desc    Send bulk notifications
- * @access  Private/Admin
  */
-router.post('/bulk/send', authenticate, authorize(['ADMIN', 'SUPER_ADMIN']), async (req: Request, res: Response) => {
+router.post('/bulk/send', authenticate, authorize(adminRoles), async (req: Request, res: Response) => {
     try {
-        const { notificationIds } = req.body
+        const ids: string[] = Array.isArray(req.body?.notificationIds) ? req.body.notificationIds : []
+        if (!ids.length) return res.status(400).json({ success: false, error: 'notificationIds array is required' })
 
-        if (!Array.isArray(notificationIds) || notificationIds.length === 0) {
-            return res.status(400).json({ success: false, error: 'notificationIds array is required' })
-        }
-
-        const sentNotifications = []
-
-        for (const id of notificationIds) {
-            const notification = adminNotificationsStore.find((n) => n.id === id)
-            if (notification) {
-                notification.status = 'sent'
-                notification.sentAt = new Date()
-                notification.updatedAt = new Date()
-                sentNotifications.push(notification)
-            }
-        }
-
-        res.json({
-            success: true,
-            data: sentNotifications,
-            message: `${sentNotifications.length} notification(s) sent successfully`,
-        })
+        await NotificationModel.updateMany({ _id: { $in: ids } }, { status: 'sent', sentAt: new Date() } as any)
+        const sent = await NotificationModel.find({ _id: { $in: ids } }).lean()
+        res.json({ success: true, data: sent, message: `${sent.length} notification(s) sent successfully` })
     } catch (error: any) {
-        console.error('Error sending bulk notifications:', error)
         res.status(500).json({ success: false, error: error.message })
     }
 })

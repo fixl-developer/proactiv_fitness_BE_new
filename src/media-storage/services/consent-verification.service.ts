@@ -1,7 +1,7 @@
 import { Db } from 'mongodb';
 import { ConsentRecord, ConsentType } from '../interfaces';
-import { AuditVaultService } from '../../audit-vault';
-import logger from '../../../shared/utils/logger.util';
+import { AuditVaultService } from '../../modules/audit-vault';
+import logger from '../../shared/utils/logger.util';
 
 export interface ConsentVerificationResult {
     hasConsent: boolean;
@@ -255,12 +255,17 @@ export class ConsentVerificationService {
                 const record: ConsentRecord = {
                     userId: log.actorId,
                     consentType: this.mapConsentType(log.context?.consentType),
+                    status: log.context?.newState ? 'approved' : 'denied',
                     granted: log.context?.newState || false,
                     grantedAt: log.timestamp,
                     expiresAt: log.context?.expiryDate,
                     guardianId: log.context?.guardianId,
-                    purpose: log.context?.purpose || 'General data processing'
-                };
+                    createdAt: log.timestamp,
+                    updatedAt: log.timestamp,
+                    metadata: {
+                        purpose: log.context?.purpose || 'General data processing'
+                    }
+                } as ConsentRecord;
 
                 consentRecords.push(record);
             }

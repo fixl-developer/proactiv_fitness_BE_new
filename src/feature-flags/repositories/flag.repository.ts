@@ -7,7 +7,6 @@
 
 import { Collection, MongoClient, ObjectId } from 'mongodb';
 import { FlagDefinition, FlagQueryFilters, HierarchyLevel, Environment } from '../interfaces';
-import { DatabaseConfig } from '../../config/database.config';
 import { AppError } from '../../shared/utils/app-error.util';
 import { Logger } from '../../shared/utils/logger.util';
 
@@ -16,7 +15,8 @@ export class FlagRepository {
     private logger = Logger.getInstance();
 
     constructor(private dbClient: MongoClient) {
-        const db = this.dbClient.db(DatabaseConfig.DATABASE_NAME);
+        const dbName = process.env.MONGODB_DATABASE_NAME || 'proactiv_fitness_db';
+        const db = this.dbClient.db(dbName);
         this.collection = db.collection('feature_flags');
     }
 

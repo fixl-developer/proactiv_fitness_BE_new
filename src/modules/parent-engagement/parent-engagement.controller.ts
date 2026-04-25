@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { ParentEngagementService } from './parent-engagement.service';
 import { authenticate as authMiddleware, authorize } from '@modules/iam/auth.middleware';
-const roleMiddleware = (...roles: string[]) => authorize(...roles as any);
+const roleMiddleware = (roles: string[] | string) => authorize(...(Array.isArray(roles) ? roles : [roles]) as any);
 
 const router = Router();
 const service = new ParentEngagementService();

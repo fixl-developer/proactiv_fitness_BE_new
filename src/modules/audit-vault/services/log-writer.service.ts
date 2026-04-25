@@ -374,14 +374,14 @@ export class LogWriterService {
 
     private async writeLogToDatabase(log: AuditLog): Promise<void> {
         const collection = this.db.collection('audit_logs');
-        await collection.insertOne(log);
+        await collection.insertOne(log as any);
     }
 
     private async writeBatchToDatabase(logs: AuditLog[]): Promise<void> {
         if (logs.length === 0) return;
 
         const collection = this.db.collection('audit_logs');
-        await collection.insertMany(logs);
+        await collection.insertMany(logs as any);
     }
 
     private async flushBuffer(): Promise<void> {

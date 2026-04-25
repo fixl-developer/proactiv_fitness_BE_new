@@ -30,6 +30,10 @@ export interface IPaginationQuery {
     limit?: number;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
+    sort?: any;
+    populate?: any;
+    select?: string | string[];
+    [key: string]: any;
 }
 
 export interface IPaginationResult<T> {

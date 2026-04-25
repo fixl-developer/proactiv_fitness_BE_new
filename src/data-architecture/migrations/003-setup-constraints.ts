@@ -91,3 +91,7 @@ export const migration003: Migration = {
         console.log('✅ Migration 003: Constraints removed successfully');
     },
 };
+
+
+// Export alias for backward compatibility
+export const setupConstraintsMigration = migration003;

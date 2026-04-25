@@ -312,7 +312,7 @@ export const validateLocationScope = () => {
                 }
 
                 // Dynamically import Location model to avoid circular dependency
-                const { default: locationService } = await import('../bcms/location.service');
+                const locationService = (require('../bcms/location.service') as any).default;
                 const location = await locationService.getLocationById(targetLocationId);
 
                 if (!location) {
