@@ -14,7 +14,22 @@ import {
 const router = Router();
 const programController = new ProgramController();
 
-// Apply authentication to all routes
+// =============================================
+// PUBLIC LISTING (no auth) — returns only active + public programs
+// so anonymous visitors on the marketing site can see what admin has published.
+// Mounted BEFORE the authenticate middleware so it's reachable without a token.
+// =============================================
+router.get('/public', (req: any, res: any, next: any) => {
+    // Force the public filters and delegate to the standard controller.
+    req.query = { ...(req.query || {}), isActive: 'true', isPublic: 'true' };
+    return programController.getPrograms(req, res, next);
+});
+
+router.get('/public/:id', (req: any, res: any, next: any) => {
+    return programController.getProgramById(req, res, next);
+});
+
+// Apply authentication to all routes below
 router.use(authenticate);
 
 // Public routes (authenticated users)

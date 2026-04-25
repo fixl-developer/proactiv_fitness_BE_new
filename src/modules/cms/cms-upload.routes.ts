@@ -117,16 +117,19 @@ function uploadToCloudinary(
 // =============================================
 const router = Router();
 
-// Middleware: check if Cloudinary is configured
-const checkCloudinaryConfig = (_req: Request, _res: Response, next: Function) => {
-    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
-        throw new AppError(
-            'Cloudinary is not configured. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET environment variables.',
-            HTTP_STATUS.SERVICE_UNAVAILABLE
-        );
-    }
-    next();
-};
+// Returns true if Cloudinary env vars are configured
+const isCloudinaryConfigured = (): boolean =>
+    !!(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
+
+// Fallback: encode the file as a base64 data URL so uploads still work when
+// Cloudinary isn't configured (e.g. on a free Render dyno without env vars).
+// Capped at MAX_DATA_URL_BYTES because data URLs in MongoDB inflate ~33% and
+// hero-slide collections shouldn't carry multi-MB blobs.
+const MAX_DATA_URL_BYTES = 2 * 1024 * 1024; // 2MB raw -> ~2.7MB base64
+function fileToDataUrl(file: Express.Multer.File): string {
+    const base64 = file.buffer.toString('base64');
+    return `data:${file.mimetype};base64,${base64}`;
+}
 
 const adminRoles = [UserRole.ADMIN, UserRole.REGIONAL_ADMIN, UserRole.LOCATION_MANAGER];
 
@@ -137,30 +140,47 @@ router.post(
     '/upload-image',
     authenticate,
     authorize(...adminRoles),
-    checkCloudinaryConfig,
     upload.single('image'),
     asyncHandler(async (req: Request, res: Response) => {
         if (!req.file) {
             throw new AppError('No image file provided. Send as form-data with key "image".', HTTP_STATUS.BAD_REQUEST);
         }
 
-        // Folder defaults to "cms" but can be customized per content type
-        const folder = `proactiv/${(req.body.folder as string) || 'cms'}`;
+        // Cloudinary path
+        if (isCloudinaryConfigured()) {
+            const folder = `proactiv/${(req.body.folder as string) || 'cms'}`;
+            const result = await uploadToCloudinary(req.file.buffer, { folder, resourceType: 'image' });
+            ResponseUtil.success(res, {
+                url: result.secure_url,
+                publicId: result.public_id,
+                width: result.width,
+                height: result.height,
+                format: result.format,
+                size: result.bytes,
+                originalName: req.file.originalname,
+                storage: 'cloudinary',
+            }, 'Image uploaded successfully');
+            return;
+        }
 
-        const result = await uploadToCloudinary(req.file.buffer, {
-            folder,
-            resourceType: 'image',
-        });
-
+        // Fallback: inline base64 data URL
+        if (req.file.size > MAX_DATA_URL_BYTES) {
+            throw new AppError(
+                `Image too large for inline storage (${(req.file.size / 1024 / 1024).toFixed(1)}MB). ` +
+                `Limit is ${MAX_DATA_URL_BYTES / 1024 / 1024}MB when Cloudinary isn't configured. ` +
+                `Either compress the image or configure Cloudinary (CLOUDINARY_CLOUD_NAME, API_KEY, API_SECRET).`,
+                HTTP_STATUS.BAD_REQUEST
+            );
+        }
+        const url = fileToDataUrl(req.file);
         ResponseUtil.success(res, {
-            url: result.secure_url,
-            publicId: result.public_id,
-            width: result.width,
-            height: result.height,
-            format: result.format,
-            size: result.bytes,
+            url,
+            publicId: null,
+            size: req.file.size,
+            format: req.file.mimetype.replace('image/', ''),
             originalName: req.file.originalname,
-        }, 'Image uploaded successfully');
+            storage: 'inline-base64',
+        }, 'Image uploaded successfully (inline base64 — configure Cloudinary for production)');
     })
 );
 
@@ -171,7 +191,6 @@ router.post(
     '/upload-images',
     authenticate,
     authorize(...adminRoles),
-    checkCloudinaryConfig,
     upload.array('images', 10),
     asyncHandler(async (req: Request, res: Response) => {
         const files = req.files as Express.Multer.File[];
@@ -179,28 +198,45 @@ router.post(
             throw new AppError('No image files provided. Send as form-data with key "images".', HTTP_STATUS.BAD_REQUEST);
         }
 
-        const folder = `proactiv/${(req.body.folder as string) || 'cms'}`;
+        if (isCloudinaryConfigured()) {
+            const folder = `proactiv/${(req.body.folder as string) || 'cms'}`;
+            const results = await Promise.all(
+                files.map(async (file) => {
+                    const result = await uploadToCloudinary(file.buffer, { folder, resourceType: 'image' });
+                    return {
+                        url: result.secure_url,
+                        publicId: result.public_id,
+                        width: result.width,
+                        height: result.height,
+                        format: result.format,
+                        size: result.bytes,
+                        originalName: file.originalname,
+                        storage: 'cloudinary',
+                    };
+                })
+            );
+            ResponseUtil.success(res, results, `${results.length} images uploaded successfully`);
+            return;
+        }
 
-        // Upload all files in parallel
-        const results = await Promise.all(
-            files.map(async (file) => {
-                const result = await uploadToCloudinary(file.buffer, {
-                    folder,
-                    resourceType: 'image',
-                });
-                return {
-                    url: result.secure_url,
-                    publicId: result.public_id,
-                    width: result.width,
-                    height: result.height,
-                    format: result.format,
-                    size: result.bytes,
-                    originalName: file.originalname,
-                };
-            })
-        );
-
-        ResponseUtil.success(res, results, `${results.length} images uploaded successfully`);
+        // Fallback: inline base64 for each
+        const tooBig = files.find(f => f.size > MAX_DATA_URL_BYTES);
+        if (tooBig) {
+            throw new AppError(
+                `One or more images exceed the ${MAX_DATA_URL_BYTES / 1024 / 1024}MB inline limit. ` +
+                `Configure Cloudinary or compress the images.`,
+                HTTP_STATUS.BAD_REQUEST
+            );
+        }
+        const results = files.map((file) => ({
+            url: fileToDataUrl(file),
+            publicId: null,
+            size: file.size,
+            format: file.mimetype.replace('image/', ''),
+            originalName: file.originalname,
+            storage: 'inline-base64',
+        }));
+        ResponseUtil.success(res, results, `${results.length} images uploaded (inline base64)`);
     })
 );
 
@@ -211,12 +247,19 @@ router.delete(
     '/delete-image',
     authenticate,
     authorize(...adminRoles),
-    checkCloudinaryConfig,
     asyncHandler(async (req: Request, res: Response) => {
         const { publicId } = req.body;
 
         if (!publicId) {
-            throw new AppError('publicId is required in request body', HTTP_STATUS.BAD_REQUEST);
+            // Inline base64 images have no publicId — nothing to delete on the storage side.
+            ResponseUtil.success(res, { publicId: null, result: 'noop' }, 'Inline image — nothing to delete');
+            return;
+        }
+
+        if (!isCloudinaryConfigured()) {
+            // Cloudinary off but a publicId was sent — treat as orphan, no-op.
+            ResponseUtil.success(res, { publicId, result: 'noop' }, 'Cloudinary not configured — nothing to delete');
+            return;
         }
 
         // Destroy image from Cloudinary + invalidate CDN cache
