@@ -4,14 +4,98 @@ import { UserRole } from '../shared/enums';
 
 const router = Router();
 
-// Apply authentication to all parent dashboard routes
-router.use(authenticate);
-router.use(authorize(UserRole.PARENT, UserRole.ADMIN));
-
 // Helper to get parent user ID from request
 const getParentId = (req: Request): string => {
     return (req as any).user?.id || (req as any).user?._id || '';
 };
+
+// =============================================
+// SHARED HANDLER: list bookable items (Sessions + admin Programs)
+// Exported so it can be mounted at both /parent/browse-classes (PARENT/ADMIN auth)
+// and /bookings/browse (any authed user) without duplicating the merge/format logic.
+// =============================================
+export const browseClassesHandler = async (req: Request, res: Response) => {
+    try {
+        const { Session } = require('../modules/scheduling/schedule.model');
+        const { Program } = require('../modules/programs/program.model');
+        const { location, program, level, date } = req.query;
+
+        // ---- Sessions (admin schedules) ----
+        const sessionFilter: any = { status: { $in: ['scheduled', 'active', 'ACTIVE'] } };
+        if (location) sessionFilter.location = { $regex: new RegExp(location as string, 'i') };
+        if (program) sessionFilter.className = { $regex: new RegExp(program as string, 'i') };
+        if (level) sessionFilter.level = { $regex: new RegExp(level as string, 'i') };
+        if (date) {
+            const d = new Date(date as string);
+            sessionFilter.date = { $gte: d, $lt: new Date(d.getTime() + 24 * 60 * 60 * 1000) };
+        }
+
+        const sessions = await Session.find(sessionFilter).sort({ date: 1 }).limit(50).lean().catch(() => []);
+
+        // ---- Admin Programs (catalog entries) ----
+        const programFilter: any = { isActive: true, isPublic: true, isDeleted: { $ne: true } };
+        if (program) programFilter.name = { $regex: new RegExp(program as string, 'i') };
+        if (level) programFilter.skillLevels = { $in: [String(level).toLowerCase()] };
+
+        const programs = await Program.find(programFilter)
+            .select('name description shortDescription category programType skillLevels ageGroups pricingModel locationIds')
+            .sort({ name: 1 })
+            .limit(50)
+            .lean()
+            .catch(() => []);
+
+        // Normalize both into a single shape the frontend already understands.
+        const sessionItems = sessions.map((s: any) => ({
+            id: s._id,
+            source: 'session' as const,
+            program: s.className || s.programName || 'Class',
+            coach: s.coach || s.instructor || '',
+            level: s.level || 'All Levels',
+            location: s.location || '',
+            date: s.date || '',
+            time: s.startTime || '',
+            duration: s.duration || '1 hour',
+            availableSpots: s.maxCapacity ? Math.max(0, s.maxCapacity - (s.enrolledCount || 0)) : 10,
+            price: s.price || 0,
+            description: s.description || '',
+        }));
+
+        const programItems = programs.map((p: any) => {
+            const ag = (Array.isArray(p.ageGroups) && p.ageGroups[0]) || {};
+            const ageDesc = ag.description ||
+                (ag.minAge !== undefined && ag.maxAge !== undefined
+                    ? `Ages ${ag.minAge}-${ag.maxAge}${ag.ageType ? ' ' + ag.ageType : ''}`
+                    : '');
+            return {
+                id: p._id,
+                source: 'program' as const,
+                program: p.name || 'Program',
+                coach: '',
+                level: (Array.isArray(p.skillLevels) && p.skillLevels[0]) || 'All Levels',
+                location: ageDesc, // surface age group in the location slot for now
+                date: '',           // schedule TBA
+                time: 'Flexible',
+                duration: '',
+                availableSpots: 10,
+                price: p.pricingModel?.basePrice ?? 0,
+                description: p.shortDescription || p.description || '',
+                category: p.category || p.programType || '',
+            };
+        });
+
+        res.json({
+            success: true,
+            data: [...sessionItems, ...programItems],
+        });
+    } catch (error: any) {
+        console.error('Browse classes error:', error);
+        res.json({ success: true, data: [] });
+    }
+};
+
+// Apply authentication to all parent dashboard routes
+router.use(authenticate);
+router.use(authorize(UserRole.PARENT, UserRole.ADMIN));
 
 // =============================================
 // PARENT DASHBOARD
@@ -802,45 +886,14 @@ router.get('/bookings/:bookingId', async (req: Request, res: Response) => {
 });
 
 // =============================================
-// BROWSE CLASSES
+// BROWSE CLASSES (parent route — same handler exposed at /bookings/browse for users)
+// Returns both real bookable Sessions (admin schedules) AND admin-created Programs
+// (catalog entries with isPublic+isActive). Each item carries a `source` field so
+// the UI can route the booking flow appropriately:
+//   - source: 'session'  -> book via /parent/book-class/<sessionId> (or /bookings/class)
+//   - source: 'program'  -> book via /bookings/class with classId=<programId>
 // =============================================
-router.get('/browse-classes', async (req: Request, res: Response) => {
-    try {
-        const { Session } = require('../modules/scheduling/schedule.model');
-        const { location, program, level, date } = req.query;
-
-        const filter: any = { status: { $in: ['scheduled', 'active', 'ACTIVE'] } };
-        if (location) filter.location = { $regex: new RegExp(location as string, 'i') };
-        if (program) filter.className = { $regex: new RegExp(program as string, 'i') };
-        if (level) filter.level = { $regex: new RegExp(level as string, 'i') };
-        if (date) {
-            const d = new Date(date as string);
-            filter.date = { $gte: d, $lt: new Date(d.getTime() + 24 * 60 * 60 * 1000) };
-        }
-
-        const sessions = await Session.find(filter).sort({ date: 1 }).limit(30).lean();
-
-        res.json({
-            success: true,
-            data: sessions.map((s: any) => ({
-                id: s._id,
-                program: s.className || s.programName || 'Class',
-                coach: s.coach || s.instructor || '',
-                level: s.level || 'All Levels',
-                location: s.location || '',
-                date: s.date || '',
-                time: s.startTime || '',
-                duration: s.duration || '1 hour',
-                availableSpots: s.maxCapacity ? Math.max(0, s.maxCapacity - (s.enrolledCount || 0)) : 10,
-                price: s.price || 0,
-                description: s.description || '',
-            }))
-        });
-    } catch (error: any) {
-        console.error('Browse classes error:', error);
-        res.json({ success: true, data: [] });
-    }
-});
+router.get('/browse-classes', browseClassesHandler);
 
 // =============================================
 // BOOK A CLASS

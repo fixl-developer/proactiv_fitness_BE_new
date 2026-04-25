@@ -3,9 +3,19 @@ import { BookingController } from './booking.controller';
 import { authenticate } from '../iam/auth.middleware';
 import { validate } from '../../middleware/validation.middleware';
 import { body, param } from 'express-validator';
+import { browseClassesHandler } from '../../routes/parent-dashboard.routes';
 
 const router = Router();
 const bookingController = new BookingController();
+
+/**
+ * @route   GET /api/v1/bookings/browse
+ * @desc    Browse all bookable items (Sessions + admin Programs).
+ *          Accessible to any authenticated user — both PARENT and USER roles.
+ *          Uses the same handler as /parent/browse-classes so data stays in sync.
+ * @access  Private (any authed role)
+ */
+router.get('/browse', authenticate, browseClassesHandler);
 
 /**
  * @route   POST /api/v1/bookings/search
