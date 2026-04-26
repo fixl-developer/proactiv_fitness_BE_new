@@ -108,6 +108,9 @@ import locationManagerRoutes from './location-manager.routes';
 // === Parent Dashboard ===
 import parentDashboardRoutes from './parent-dashboard.routes';
 
+// === Coach Dashboard ===
+import coachRoutes from './coach.routes';
+
 // === NEW: Admin Alias Routes (maps /admin/* paths to actual modules) ===
 import adminAliasRoutes from './admin-routes';
 
@@ -617,6 +620,9 @@ router.use('/admin/location', locationManagerRoutes);
 
 // Parent Dashboard (full CRUD routes)
 router.use('/parent', parentDashboardRoutes);
+
+// Coach Dashboard (full CRUD routes — backed by Session/AttendanceRecord/CoachFeedback/Staff/User)
+router.use('/coach', coachRoutes);
 
 // Payments stats endpoint - real data from Bookings
 router.get('/payments/stats', async (_req: Request, res: Response) => {

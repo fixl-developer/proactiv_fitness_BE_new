@@ -673,8 +673,13 @@ sessionSchema.pre('save', function (next) {
         return next(new Error('Start time must be before end time'));
     }
 
-    // Validate coach requirements
-    if (session.coachRequirements.minCoaches > session.coachRequirements.maxCoaches) {
+    // Validate coach requirements (only if explicitly set — Session schema
+    // doesn't declare this field, so it may legitimately be undefined for
+    // ad-hoc sessions created without coach-requirement constraints).
+    if (session.coachRequirements
+        && typeof session.coachRequirements.minCoaches === 'number'
+        && typeof session.coachRequirements.maxCoaches === 'number'
+        && session.coachRequirements.minCoaches > session.coachRequirements.maxCoaches) {
         return next(new Error('Minimum coaches cannot be greater than maximum coaches'));
     }
 
