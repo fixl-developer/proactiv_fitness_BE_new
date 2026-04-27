@@ -598,7 +598,6 @@ router.put('/availability', async (req: Request, res: Response) => {
 // =============================================
 // 6. FEEDBACK — coach gives feedback to students
 // =============================================
-const { Schema, model } = require('mongoose');
 const feedbackSchema = new Schema({
     studentId: { type: String, required: true, index: true },
     studentName: { type: String, default: '' },
