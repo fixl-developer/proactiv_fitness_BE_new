@@ -541,15 +541,45 @@ export class ScheduleService extends BaseService<ISchedule> {
 
         // Get program details and roster template
         const program = await this.getProgram(programId);
-        const template = await this.getRosterTemplate(programId);
+        let template = await this.getRosterTemplate(programId);
 
-        if (!program || !template) {
+        if (!program) {
             return { sessions, conflicts, successful, failed };
+        }
+
+        // Fallback: if no roster template exists, synthesise a minimal one
+        // from the program's sessionDuration / sessionsPerWeek so admin's
+        // "Generate Schedule" actually creates Sessions even when nobody has
+        // set up a recurring template yet. Default slot: weekdays 10am for
+        // sessionsPerWeek (or 1) days starting Monday.
+        if (!template) {
+            const minutes = (program as any).sessionDuration || 60;
+            const perWeek = Math.max(1, Math.min(7, (program as any).sessionsPerWeek || 1));
+            const startTime = '10:00';
+            const endHr = 10 + Math.floor(minutes / 60);
+            const endMin = minutes % 60;
+            const endTime = `${String(endHr).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
+            const days = [1, 3, 5, 2, 4, 6, 0].slice(0, perWeek); // Mon, Wed, Fri, Tue, Thu, Sat, Sun
+            template = {
+                timeSlots: days.map((dow) => ({
+                    dayOfWeek: dow,
+                    startTime,
+                    endTime,
+                    duration: minutes,
+                })),
+                coachAssignments: [],
+                rooms: [],
+            } as any;
         }
 
         // Generate sessions based on template
         const currentDate = new Date(request.startDate);
         const endDate = new Date(request.endDate);
+
+        // Resolve a locationId from the request once (first locationId in request)
+        const resolvedLocationId = (request.locationIds && request.locationIds[0]) || undefined;
+        // termId comes through request — pass to session so termId is correct
+        const resolvedTermId = (request as any).termId;
 
         while (currentDate <= endDate) {
             for (const timeSlot of template.timeSlots) {
@@ -561,6 +591,8 @@ export class ScheduleService extends BaseService<ISchedule> {
                             date: new Date(currentDate),
                             timeSlot,
                             template,
+                            locationId: resolvedLocationId,
+                            termId: resolvedTermId,
                             createdBy
                         });
 
@@ -589,24 +621,57 @@ export class ScheduleService extends BaseService<ISchedule> {
         date: Date;
         timeSlot: ITimeSlot;
         template: IRosterTemplate;
+        locationId?: string;
+        termId?: string;
+        coachId?: string;
         createdBy: string;
     }): Promise<ISession> {
         const sessionId = `${params.programId}-${params.date.toISOString().split('T')[0]}-${params.timeSlot.startTime}`;
 
+        // Resolve duration: timeSlot first (set by admin shim's fallback template),
+        // then template.sessionDuration, then default 60.
+        const duration = (params.timeSlot as any).duration
+            || (params.template as any).sessionDuration
+            || 60;
+
+        // Resolve locationId: explicit param wins, then template default, then any active.
+        let locationId: any = params.locationId
+            || (params.template as any).defaultLocationId
+            || ((params.template as any).rooms?.[0]?.locationId);
+        if (!locationId) {
+            const { Location } = require('../bcms/location.model');
+            const loc = await Location.findOne({ isDeleted: { $ne: true } }).select('_id').lean().catch(() => null);
+            locationId = loc?._id;
+        }
+
+        // Resolve coach: explicit param wins, then template assignment, then any
+        // user with COACH role. Session schema requires at least one coachAssignment.
+        let coachId: any = params.coachId
+            || ((params.template as any).coachAssignments?.[0]?.coachId);
+        if (!coachId) {
+            const { User } = require('../iam/user.model');
+            const aCoach = await User.findOne({ role: 'COACH', status: 'ACTIVE', isDeleted: { $ne: true } }).select('_id').lean().catch(() => null);
+            coachId = aCoach?._id;
+        }
+        const coachAssignments = coachId
+            ? [{ coachId, role: 'primary' }]
+            : [];
+
         const session = new Session({
             sessionId,
             programId: params.programId,
-            termId: params.scheduleId, // This should be actual term ID
+            termId: params.termId || params.scheduleId,
             scheduleId: params.scheduleId,
             date: params.date,
             timeSlot: params.timeSlot,
-            duration: params.template.sessionDuration,
-            locationId: params.template.programId, // This should be actual location ID
-            resourceRequirements: params.template.defaultResourceRequirements,
-            coachAssignments: [], // Would be assigned by coach assignment logic
+            duration,
+            locationId,
+            resourceRequirements: (params.template as any).defaultResourceRequirements || [],
+            coachAssignments,
             enrolledParticipants: [],
-            maxCapacity: 10, // Would come from program
+            maxCapacity: (params.template as any).maxCapacity || 10,
             waitlistParticipants: [],
+            status: 'scheduled',
             createdBy: params.createdBy,
             updatedBy: params.createdBy
         });

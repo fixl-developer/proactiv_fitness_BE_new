@@ -140,9 +140,13 @@ router.get('/dashboard', async (req: Request, res: Response) => {
                     { role: 'STUDENT', createdBy: parentId }
                 ]
             }).lean(),
-            // Total bookings
+            // Total bookings — match any of the parent-id fields the booking
+            // service may have used (bookedBy/familyId from the simplified
+            // /bookings/* flow, userId/parentId from older flows).
             Booking.find({
                 $or: [
+                    { bookedBy: parentId },
+                    { familyId: parentId },
                     { userId: parentId },
                     { parentId: parentId },
                     { 'customer.email': (req as any).user?.email }
@@ -153,6 +157,8 @@ router.get('/dashboard', async (req: Request, res: Response) => {
                 {
                     $match: {
                         $or: [
+                            { bookedBy: parentId },
+                            { familyId: parentId },
                             { userId: parentId },
                             { parentId: parentId }
                         ],
@@ -167,18 +173,23 @@ router.get('/dashboard', async (req: Request, res: Response) => {
                     }
                 }
             ]),
-            // Upcoming bookings
+            // Upcoming bookings — sessionDate is the canonical field set by the
+            // simplified booking service.
             Booking.find({
                 $or: [
+                    { bookedBy: parentId },
+                    { familyId: parentId },
                     { userId: parentId },
                     { parentId: parentId }
                 ],
                 status: { $in: ['confirmed', 'pending', 'CONFIRMED', 'PENDING'] },
-                'session.date': { $gte: now }
-            }).sort({ 'session.date': 1 }).limit(5).lean(),
+                $and: [{ $or: [{ sessionDate: { $gte: now } }, { 'session.date': { $gte: now } }] }],
+            }).sort({ sessionDate: 1 }).limit(5).lean(),
             // Recent payments
             Booking.find({
                 $or: [
+                    { bookedBy: parentId },
+                    { familyId: parentId },
                     { userId: parentId },
                     { parentId: parentId }
                 ],
@@ -297,26 +308,40 @@ router.get('/dashboard', async (req: Request, res: Response) => {
                     status: c.status || 'ACTIVE',
                     progress: c.progress || Math.floor(Math.random() * 30 + 60),
                 })),
-                upcomingClasses: upcoming.map((b: any) => ({
-                    id: b._id,
-                    child: b.childName || b.customer?.name || 'Student',
-                    program: b.programName || b.session?.className || 'Class',
-                    coach: b.coachName || b.session?.coach || '',
-                    date: b.session?.date || b.date || '',
-                    time: b.session?.startTime || b.time || '',
-                    location: b.session?.location || b.location || '',
-                    status: (b.status || 'pending').toLowerCase(),
-                    duration: b.session?.duration || '1 hour',
-                })),
-                recentPayments: recentPay.map((b: any) => ({
-                    id: b._id,
-                    child: b.childName || b.customer?.name || 'Student',
-                    program: b.programName || b.session?.className || 'Program',
-                    amount: b.payment?.amount || 0,
-                    date: b.createdAt,
-                    status: (b.payment?.status || 'pending').toLowerCase(),
-                    method: b.payment?.method || 'Card',
-                })),
+                upcomingClasses: upcoming.map((b: any) => {
+                    const sp: Record<string, string> = {};
+                    (b.specialRequests || []).forEach((r: string) => {
+                        const [k, ...v] = r.split(':');
+                        if (k) sp[k] = v.join(':');
+                    });
+                    return {
+                        id: b._id,
+                        child: sp.childName || b.childName || b.customer?.name || 'Student',
+                        program: sp.program || sp.className || b.programName || b.session?.className || 'Class',
+                        coach: b.coachName || b.session?.coach || '',
+                        date: b.sessionDate || b.session?.date || b.date || '',
+                        time: b.sessionTime?.startTime || b.session?.startTime || sp.timeSlot || b.time || '',
+                        location: sp.location || b.session?.location || b.location || '',
+                        status: (b.status || 'pending').toLowerCase(),
+                        duration: b.bookingType === 'assessment' ? '30 min' : (b.session?.duration || '1 hour'),
+                    };
+                }),
+                recentPayments: recentPay.map((b: any) => {
+                    const sp: Record<string, string> = {};
+                    (b.specialRequests || []).forEach((r: string) => {
+                        const [k, ...v] = r.split(':');
+                        if (k) sp[k] = v.join(':');
+                    });
+                    return {
+                        id: b._id,
+                        child: sp.childName || b.childName || b.customer?.name || 'Student',
+                        program: sp.program || sp.className || b.programName || b.session?.className || 'Program',
+                        amount: b.payment?.amount || 0,
+                        date: b.createdAt,
+                        status: (b.payment?.status || 'pending').toLowerCase(),
+                        method: b.payment?.method || 'Card',
+                    };
+                }),
             }
         });
     } catch (error: any) {
@@ -419,10 +444,18 @@ router.get('/bookings', async (req: Request, res: Response) => {
         const parentId = getParentId(req);
         const { status, search } = req.query;
 
+        // Match bookings created by the parent regardless of which field the
+        // creating endpoint used. Bookings made through /bookings/class and
+        // /bookings/assessment store `bookedBy` and `familyId`; admin shim
+        // sets `familyId` + `participants.childId`; older flows used `userId`
+        // or `parentId`.
         const filter: any = {
             $or: [
+                { bookedBy: parentId },
+                { familyId: parentId },
                 { userId: parentId },
-                { parentId: parentId }
+                { parentId: parentId },
+                { 'participants.childId': parentId },
             ]
         };
 
@@ -436,6 +469,18 @@ router.get('/bookings', async (req: Request, res: Response) => {
 
         const bookings = await Booking.find(filter).sort({ createdAt: -1 }).limit(50).lean();
 
+        // Helper: extract values stuffed into specialRequests by the simplified
+        // booking service (e.g. "childName:Test Kid"). Keeps the dashboard rich
+        // until we move these into proper structured fields.
+        const parseSpecial = (b: any): Record<string, string> => {
+            const out: Record<string, string> = {};
+            (b.specialRequests || []).forEach((r: string) => {
+                const [k, ...v] = r.split(':');
+                if (k) out[k] = v.join(':');
+            });
+            return out;
+        };
+
         const stats = {
             total: bookings.length,
             upcoming: bookings.filter((b: any) => ['confirmed', 'pending', 'CONFIRMED', 'PENDING'].includes(b.status)).length,
@@ -447,19 +492,23 @@ router.get('/bookings', async (req: Request, res: Response) => {
             success: true,
             data: {
                 stats,
-                bookings: bookings.map((b: any) => ({
-                    id: b._id || b.bookingId,
-                    child: b.childName || b.customer?.name || 'Student',
-                    program: b.programName || b.session?.className || 'Class',
-                    coach: b.coachName || b.session?.coach || '',
-                    date: b.session?.date || b.date || b.createdAt,
-                    time: b.session?.startTime || b.time || '',
-                    duration: b.session?.duration || '1 hour',
-                    location: b.session?.location || b.location || '',
-                    status: (b.status || 'pending').toLowerCase(),
-                    price: b.payment?.amount || 0,
-                    type: b.type || 'regular',
-                })),
+                bookings: bookings.map((b: any) => {
+                    const sp = parseSpecial(b);
+                    return {
+                        id: b._id || b.bookingId,
+                        child: sp.childName || b.childName || b.customer?.name || 'Student',
+                        program: sp.program || sp.className || b.programName || b.session?.className
+                            || (b.bookingType === 'assessment' ? 'Assessment' : 'Class'),
+                        coach: b.coachName || b.session?.coach || '',
+                        date: b.sessionDate || b.session?.date || b.date || b.createdAt,
+                        time: b.sessionTime?.startTime || b.session?.startTime || sp.timeSlot || b.time || '',
+                        duration: b.bookingType === 'assessment' ? '30 min' : (b.session?.duration || '1 hour'),
+                        location: sp.location || b.session?.location || b.location || '',
+                        status: (b.status || 'pending').toLowerCase(),
+                        price: b.payment?.amount || 0,
+                        type: b.bookingType || b.type || 'regular',
+                    };
+                }),
             }
         });
     } catch (error: any) {
