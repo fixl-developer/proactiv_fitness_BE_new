@@ -763,7 +763,17 @@ export class BookingService extends BaseService<IBooking> {
     async getMyBookings(userId: string, filters?: { status?: string; bookingType?: string }): Promise<IBooking[]> {
         try {
             const userObjId = this.toObjectId(userId);
-            const query: any = { bookedBy: userObjId };
+            // A user "owns" a booking if they are: the booker (bookedBy), the
+            // family the booking belongs to (familyId — what admin shim sets
+            // when creating on behalf of a parent), or one of the participants.
+            // This $or makes admin-created bookings visible to the customer.
+            const query: any = {
+                $or: [
+                    { bookedBy: userObjId },
+                    { familyId: userObjId },
+                    { 'participants.childId': userObjId },
+                ],
+            };
             if (filters?.status) query.status = filters.status;
             if (filters?.bookingType) query.bookingType = filters.bookingType;
 
