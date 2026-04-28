@@ -4,12 +4,17 @@ import { HTTP_STATUS } from '@shared/constants';
 import { UserRole } from '@shared/enums';
 import userService from './user.service';
 
-// Role hierarchy map - each role can create roles listed in its array
+// Role hierarchy map - each role can create roles listed in its array.
+// PARENT / USER / STUDENT are self-register roles (created via /auth/register),
+// so they are intentionally excluded from admin-creatable roles here.
 const ROLE_HIERARCHY: Record<string, string[]> = {
-    'ADMIN': ['ADMIN', 'REGIONAL_ADMIN', 'FRANCHISE_OWNER', 'LOCATION_MANAGER', 'COACH', 'PARTNER_ADMIN', 'SUPPORT_STAFF'],
-    'REGIONAL_ADMIN': ['FRANCHISE_OWNER', 'LOCATION_MANAGER', 'COACH', 'SUPPORT_STAFF'],
-    'FRANCHISE_OWNER': ['LOCATION_MANAGER', 'COACH'],
-    'LOCATION_MANAGER': ['COACH'],
+    'ADMIN': [
+        'ADMIN', 'REGIONAL_ADMIN', 'FRANCHISE_OWNER', 'LOCATION_MANAGER',
+        'MANAGER', 'COACH', 'STAFF', 'SUPPORT_STAFF', 'PARTNER_ADMIN'
+    ],
+    'REGIONAL_ADMIN': ['FRANCHISE_OWNER', 'LOCATION_MANAGER', 'COACH', 'STAFF', 'SUPPORT_STAFF'],
+    'FRANCHISE_OWNER': ['LOCATION_MANAGER', 'COACH', 'STAFF'],
+    'LOCATION_MANAGER': ['COACH', 'STAFF'],
     'COACH': [],
     'PARENT': [],
     'USER': [],
@@ -17,12 +22,16 @@ const ROLE_HIERARCHY: Record<string, string[]> = {
     'SUPPORT_STAFF': [],
 };
 
-// Who can delete whom (more restrictive)
+// Who can delete whom — admin can also clean up self-registered PARENT/USER accounts.
 const DELETE_HIERARCHY: Record<string, string[]> = {
-    'ADMIN': ['ADMIN', 'REGIONAL_ADMIN', 'FRANCHISE_OWNER', 'LOCATION_MANAGER', 'COACH', 'PARTNER_ADMIN', 'SUPPORT_STAFF'],
-    'REGIONAL_ADMIN': ['FRANCHISE_OWNER', 'LOCATION_MANAGER', 'COACH'],
-    'FRANCHISE_OWNER': ['LOCATION_MANAGER', 'COACH'],
-    'LOCATION_MANAGER': ['COACH'],
+    'ADMIN': [
+        'ADMIN', 'REGIONAL_ADMIN', 'FRANCHISE_OWNER', 'LOCATION_MANAGER',
+        'MANAGER', 'COACH', 'STAFF', 'SUPPORT_STAFF', 'PARTNER_ADMIN',
+        'PARENT', 'STUDENT', 'USER'
+    ],
+    'REGIONAL_ADMIN': ['FRANCHISE_OWNER', 'LOCATION_MANAGER', 'COACH', 'STAFF', 'PARENT', 'STUDENT', 'USER'],
+    'FRANCHISE_OWNER': ['LOCATION_MANAGER', 'COACH', 'STAFF', 'PARENT', 'STUDENT', 'USER'],
+    'LOCATION_MANAGER': ['COACH', 'STAFF', 'PARENT', 'STUDENT', 'USER'],
 };
 
 // Who can update status of whom

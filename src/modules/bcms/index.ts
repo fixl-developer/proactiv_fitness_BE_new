@@ -24,6 +24,7 @@ export { default as locationRoutes } from './location.routes';
 export { default as roomRoutes } from './room.routes';
 export { default as holidayCalendarRoutes } from './holiday-calendar.routes';
 export { default as termRoutes } from './term.routes';
+export { default as bcmsPublicRoutes } from './public.routes';
 
 // Models
 export { Country } from './country.model';

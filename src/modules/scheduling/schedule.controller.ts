@@ -44,12 +44,105 @@ export class ScheduleController {
     });
 
     /**
-     * Get all schedules
+     * Get all schedules. The base list endpoint returns Schedule containers
+     * (no per-session data), but the admin list view wants to show "what
+     * programs / coaches / locations / dates does this schedule cover" — those
+     * facts live on the Sessions, not the Schedule. So after pagination we do
+     * one batched aggregation over the Sessions that belong to the returned
+     * schedules and merge the resulting names into each row.
+     *
+     * Without this enrichment, the admin list-view rendered "Day 0, 09:00-10:00,
+     * (blank instructor)" placeholders for every row regardless of what the
+     * schedule actually contained.
      */
     getSchedules = asyncHandler(async (req: Request, res: Response) => {
         const filters = this.buildScheduleFilters(req.query);
 
-        const result = await this.scheduleService.findWithPagination(filters, req.query);
+        const result: any = await this.scheduleService.findWithPagination(filters, req.query);
+
+        // The pagination wrapper might be `{data: [...], pagination}` or
+        // `{docs: [...], totalDocs, ...}` depending on which BaseService
+        // variant runs. Find the array regardless of shape.
+        const rows: any[] = Array.isArray(result?.data)
+            ? result.data
+            : Array.isArray(result?.docs)
+                ? result.docs
+                : Array.isArray(result)
+                    ? result
+                    : [];
+
+        if (rows.length > 0) {
+            const { Schedule, Session } = require('./schedule.model');
+            const scheduleIds = rows.map((s: any) => s._id).filter(Boolean);
+
+            // Group every session of the listed schedules by its scheduleId,
+            // pulling enough fields to derive program/coach/location names plus
+            // the schedule's overall day/time signature for the table row.
+            const sessionAgg: any[] = await Session.find({
+                scheduleId: { $in: scheduleIds },
+                isDeleted: { $ne: true },
+            })
+                .populate({ path: 'programId', select: 'name' })
+                .populate({ path: 'locationId', select: 'name' })
+                .populate({ path: 'coachAssignments.coachId', select: 'firstName lastName name email' })
+                .select('scheduleId programId locationId coachAssignments timeSlot date')
+                .lean();
+
+            const byScheduleId = new Map<string, any[]>();
+            for (const sess of sessionAgg) {
+                const key = String(sess.scheduleId);
+                if (!byScheduleId.has(key)) byScheduleId.set(key, []);
+                byScheduleId.get(key)!.push(sess);
+            }
+
+            const enriched = rows.map((row: any) => {
+                const sList = byScheduleId.get(String(row._id)) || [];
+                const first = sList[0] || {};
+
+                const programNames = Array.from(new Set(
+                    sList.map((s: any) => s.programId?.name).filter(Boolean)
+                ));
+                const locationNames = Array.from(new Set(
+                    sList.map((s: any) => s.locationId?.name).filter(Boolean)
+                ));
+                const coachNames = Array.from(new Set(
+                    sList.flatMap((s: any) => (s.coachAssignments || [])
+                        .map((c: any) => c.coachId)
+                        .filter((c: any) => c && typeof c === 'object')
+                        .map((c: any) => c.name || `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.email || '')
+                    ).filter(Boolean)
+                ));
+
+                // Pick a representative day/time for the row (first session's slot).
+                const startTime = first?.timeSlot?.startTime || '';
+                const endTime = first?.timeSlot?.endTime || '';
+                const dayOfWeek = first?.date
+                    ? new Date(first.date).getDay()
+                    : (first?.timeSlot?.dayOfWeek ?? 0);
+
+                return {
+                    ...row,
+                    programName: programNames.join(', ') || row.name || '',
+                    programNames,
+                    locationNames,
+                    coachNames,
+                    instructor: coachNames.join(', '),
+                    locationName: locationNames.join(', '),
+                    dayOfWeek,
+                    startTime,
+                    endTime,
+                    sessionCount: sList.length,
+                };
+            });
+
+            // Re-pack into whichever shape we received.
+            if (Array.isArray(result?.data)) result.data = enriched;
+            else if (Array.isArray(result?.docs)) result.docs = enriched;
+            else if (Array.isArray(result)) {
+                ResponseUtil.success(res, enriched, 'Schedules retrieved successfully');
+                return;
+            }
+        }
 
         ResponseUtil.success(res, result, 'Schedules retrieved successfully');
     });

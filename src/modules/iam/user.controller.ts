@@ -24,6 +24,15 @@ export class UserController extends BaseController {
             );
         }
 
+        // Admin-created users skip the email-verification gate and can log in
+        // immediately. The flag also flows into formatUserResponse so the UI
+        // can surface "auto-verified" badges if needed.
+        (data as any).createdByAdmin = true;
+        (data as any).isEmailVerified = true;
+        if (!(data as any).status) {
+            (data as any).status = 'ACTIVE';
+        }
+
         // Auto-assign scope fields based on the requester's role
         switch (requester.role) {
             case UserRole.REGIONAL_ADMIN:
