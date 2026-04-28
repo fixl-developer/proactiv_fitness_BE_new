@@ -27,8 +27,12 @@ export class UserService extends BaseService<IUser> {
      * Create a new user
      */
     async createUser(data: IUserCreate): Promise<IUser> {
-        // Check if user already exists
-        const existingUser = await User.findOne({ email: data.email.toLowerCase() });
+        // Only block on *active* duplicates — soft-deleted accounts (isDeleted: true)
+        // free up the email so admins can re-create a user with the same address.
+        const existingUser = await User.findOne({
+            email: data.email.toLowerCase(),
+            isDeleted: { $ne: true },
+        });
         if (existingUser) {
             throw new AppError('User with this email already exists', HTTP_STATUS.CONFLICT);
         }

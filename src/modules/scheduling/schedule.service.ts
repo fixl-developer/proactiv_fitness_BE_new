@@ -68,9 +68,11 @@ export class ScheduleService extends BaseService<ISchedule> {
                 sessionQuery.date = { ...sessionQuery.date as any, $lte: filters.endDate };
             }
 
-            // Fetch sessions with populated references
+            // Fetch sessions with populated references. Pull the real Program
+            // fields (programType / pricingModel / ageGroups / skillLevels) so
+            // the frontend can render true values instead of placeholders.
             const sessions = await Session.find(sessionQuery)
-                .populate('programId', 'name category type ageGroup')
+                .populate('programId', 'name programType category pricingModel ageGroups skillLevels')
                 .populate('locationId', 'name address')
                 .populate('coachAssignments.coachId', 'firstName lastName name')
                 .sort({ date: 1, 'timeSlot.startTime': 1 })
@@ -96,20 +98,42 @@ export class ScheduleService extends BaseService<ISchedule> {
                     status = 'full';
                 }
 
+                // Build a human-friendly age-group label from the Program's
+                // ageGroups array. Programs can target multiple bands, so we
+                // pick the first defined one (which is enough for filter
+                // dropdowns) and fall back to a generic label.
+                const firstAgeGroup = Array.isArray(program.ageGroups) && program.ageGroups.length > 0
+                    ? program.ageGroups[0]
+                    : null;
+                const ageGroupLabel = firstAgeGroup
+                    ? (firstAgeGroup.description
+                        || `${firstAgeGroup.minAge}-${firstAgeGroup.maxAge} ${firstAgeGroup.ageType || 'years'}`)
+                    : 'All ages';
+
+                // Real price from the program's pricing model. Falls back to
+                // 0 only if pricing wasn't set up — the frontend renders 0 as
+                // "FREE" which matches existing assessment / trial behavior.
+                const price = Number(program?.pricingModel?.basePrice ?? 0);
+
+                // Skill level for the slot card ("Beginner", "Intermediate"…).
+                const level = Array.isArray(program.skillLevels) && program.skillLevels.length > 0
+                    ? String(program.skillLevels[0])
+                    : 'All levels';
+
                 return {
                     id: session._id.toString(),
                     startTime: session.timeSlot?.startTime || '',
                     endTime: session.timeSlot?.endTime || '',
-                    programType: program.type || program.category || 'class',
+                    programType: program.programType || program.category || 'class',
                     programName: program.name || 'Session',
                     coach: coach.name || `${coach.firstName || ''} ${coach.lastName || ''}`.trim() || 'TBA',
                     location: location.name || 'TBA',
-                    ageGroup: program.ageGroup || 'All ages',
+                    ageGroup: ageGroupLabel,
                     capacity,
                     booked,
                     waitlist,
-                    price: 0,
-                    level: program.level || 'All levels',
+                    price,
+                    level,
                     status,
                     date: session.date?.toISOString().split('T')[0] || ''
                 };
@@ -233,9 +257,10 @@ export class ScheduleService extends BaseService<ISchedule> {
             const conflicts: IConflict[] = [];
             let successfulSessions = 0;
             let failedSessions = 0;
+            const allErrorReasons = new Set<string>();
 
             for (const programId of request.programIds) {
-                const programSessions = await this.generateSessionsForProgram(
+                const programSessions: any = await this.generateSessionsForProgram(
                     programId,
                     schedule._id.toString(),
                     request,
@@ -246,6 +271,25 @@ export class ScheduleService extends BaseService<ISchedule> {
                 conflicts.push(...programSessions.conflicts);
                 successfulSessions += programSessions.successful;
                 failedSessions += programSessions.failed;
+                if (programSessions.errorReasons instanceof Set) {
+                    programSessions.errorReasons.forEach((r: string) => allErrorReasons.add(r));
+                }
+            }
+
+            // If we created the schedule but ended up with zero sessions, the
+            // admin's "Generate Schedule" effectively did nothing useful. Roll
+            // back the schedule and surface a 400 with the actual cause so the
+            // UI can display "no active coaches" / "no location" etc. instead
+            // of a phantom draft schedule + empty calendar.
+            if (sessions.length === 0) {
+                await Schedule.deleteOne({ _id: schedule._id }).catch(() => null);
+                const reason = allErrorReasons.size > 0
+                    ? Array.from(allErrorReasons).join('; ')
+                    : 'No sessions could be generated for the selected programs/dates.';
+                throw new AppError(
+                    `Schedule generation produced 0 sessions: ${reason}`,
+                    HTTP_STATUS.BAD_REQUEST
+                );
             }
 
             // Update schedule with sessions
@@ -266,7 +310,7 @@ export class ScheduleService extends BaseService<ISchedule> {
                 successfulSessions,
                 failedSessions,
                 conflicts,
-                warnings: [],
+                warnings: Array.from(allErrorReasons),
                 statistics
             };
         } catch (error: any) {
@@ -538,13 +582,20 @@ export class ScheduleService extends BaseService<ISchedule> {
         const conflicts: IConflict[] = [];
         let successful = 0;
         let failed = 0;
+        // Capture distinct creation errors so the caller can surface a real
+        // reason ("no active coach", "location missing"...) to admin instead of
+        // silently returning a schedule with 0 sessions. Without this, on a
+        // freshly deployed environment the admin sees a draft schedule but an
+        // empty calendar and has no idea what went wrong.
+        const errorReasons = new Set<string>();
 
         // Get program details and roster template
         const program = await this.getProgram(programId);
         let template = await this.getRosterTemplate(programId);
 
         if (!program) {
-            return { sessions, conflicts, successful, failed };
+            errorReasons.add(`Program ${programId} not found`);
+            return { sessions, conflicts, successful, failed, errorReasons } as any;
         }
 
         // Fallback: if no roster template exists, synthesise a minimal one
@@ -580,10 +631,24 @@ export class ScheduleService extends BaseService<ISchedule> {
         const resolvedLocationId = (request.locationIds && request.locationIds[0]) || undefined;
         // termId comes through request — pass to session so termId is correct
         const resolvedTermId = (request as any).termId;
+        // Admin-selected coach pool. We distribute these round-robin across the
+        // sessions we generate; if empty, createSession falls back to "any
+        // active COACH user" so deployments that haven't yet wired the new UI
+        // continue to work.
+        const adminCoachIds = Array.isArray(request.coachIds)
+            ? request.coachIds.filter(Boolean)
+            : [];
+        let coachCursor = 0;
 
         while (currentDate <= endDate) {
             for (const timeSlot of template.timeSlots) {
                 if (currentDate.getDay() === timeSlot.dayOfWeek) {
+                    // Pick the next coach in the rotation. Skipping when the
+                    // pool is empty leaves coachIds undefined → createSession
+                    // does its own auto-pick.
+                    const coachId = adminCoachIds.length > 0
+                        ? adminCoachIds[coachCursor++ % adminCoachIds.length]
+                        : undefined;
                     try {
                         const session = await this.createSession({
                             programId,
@@ -593,17 +658,23 @@ export class ScheduleService extends BaseService<ISchedule> {
                             template,
                             locationId: resolvedLocationId,
                             termId: resolvedTermId,
+                            coachId,
                             createdBy
                         });
 
                         sessions.push(session);
                         successful++;
-                    } catch (error) {
+                    } catch (error: any) {
                         failed++;
+                        // Convert mongoose validation errors into a one-line
+                        // human cause that admin can act on. Repeated identical
+                        // failures collapse to a single reason via the Set.
+                        const cause = humaniseSessionCreateError(error);
+                        errorReasons.add(cause);
                         conflicts.push({
                             type: ConflictType.TIME_OVERLAP,
                             severity: 'medium',
-                            description: `Failed to create session: ${error.message}`,
+                            description: `Failed to create session: ${cause}`,
                             affectedSessions: []
                         });
                     }
@@ -612,7 +683,7 @@ export class ScheduleService extends BaseService<ISchedule> {
             currentDate.setDate(currentDate.getDate() + 1);
         }
 
-        return { sessions, conflicts, successful, failed };
+        return { sessions, conflicts, successful, failed, errorReasons } as any;
     }
 
     private async createSession(params: {
@@ -858,4 +929,31 @@ export class ScheduleService extends BaseService<ISchedule> {
     private async getRosterTemplate(programId: string): Promise<IRosterTemplate | null> {
         return await RosterTemplate.findOne({ programId, isActive: true });
     }
+}
+
+// Translate raw mongoose / driver errors thrown by Session.save() into a single
+// short cause-line that admin can act on. The most common silent failures on a
+// fresh deployment are the validators on `coachAssignments` (no active coach
+// in the DB) and `locationId` (no location seeded), so we recognise those
+// explicitly. Anything else falls through to the raw message.
+function humaniseSessionCreateError(error: any): string {
+    if (!error) return 'Unknown error';
+    const msg = String(error?.message || error);
+
+    if (/coach assignment is required/i.test(msg) || /coachAssignments/.test(msg)) {
+        return 'No active coaches available — add at least one coach (status=ACTIVE) before generating a schedule';
+    }
+    if (/Location ID is required/i.test(msg) || /locationId/.test(msg)) {
+        return 'No location available — add at least one location for this business unit before generating a schedule';
+    }
+    if (/Max capacity is required/i.test(msg)) {
+        return 'Program is missing capacity rules — set maxCapacity on the program';
+    }
+    if (/Duration is required/i.test(msg)) {
+        return 'Program is missing sessionDuration — update the program before generating a schedule';
+    }
+    if (/duplicate key/i.test(msg) && /sessionId/.test(msg)) {
+        return 'Duplicate session detected — a schedule for this program/date/time already exists';
+    }
+    return msg;
 }

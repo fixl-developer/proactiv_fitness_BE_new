@@ -294,6 +294,11 @@ export interface IScheduleGenerationRequest {
     termId: string;
     programIds: string[];
     locationIds: string[];
+    // Coach User._ids selected by admin in the Generate Schedule form. Optional —
+    // when omitted (or empty), the service falls back to assigning any active
+    // coach automatically. When provided, these are distributed round-robin
+    // across generated sessions so a multi-coach roster gets fair coverage.
+    coachIds?: string[];
     startDate: Date;
     endDate: Date;
     settings: {

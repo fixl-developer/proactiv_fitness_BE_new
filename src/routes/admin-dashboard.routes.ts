@@ -71,12 +71,14 @@ router.get('/metrics', async (req: Request, res: Response) => {
             pendingBookings,
             newUsersInRange,
         ] = await Promise.all([
-            Location.countDocuments({ isActive: true, isDeleted: { $ne: true } }),
+            // Location: schema uses `status: 'ACTIVE'` (LocationStatus enum), no `isActive` field
+            Location.countDocuments({ status: { $in: ['ACTIVE', 'active'] }, isDeleted: { $ne: true } }),
             User.countDocuments({ role: { $in: STUDENT_ROLES }, status: 'ACTIVE', isDeleted: { $ne: true } }),
             User.countDocuments({ role: { $in: STAFF_ROLES }, status: 'ACTIVE', isDeleted: { $ne: true } }),
             Staff.countDocuments({ status: { $in: ['ACTIVE', 'active'] }, isDeleted: { $ne: true } }).catch(() => 0),
-            Schedule.countDocuments({ status: { $in: ['ACTIVE', 'PUBLISHED'] }, isDeleted: { $ne: true } }).catch(() => 0),
-            Session.countDocuments({ status: { $in: ['scheduled', 'in_progress'] }, date: { $gte: start, $lte: end }, isDeleted: { $ne: true } }).catch(() => 0),
+            // Schedule: ScheduleStatus enum stores lowercase ('active', 'published')
+            Schedule.countDocuments({ status: { $in: ['active', 'published', 'ACTIVE', 'PUBLISHED'] }, isDeleted: { $ne: true } }).catch(() => 0),
+            Session.countDocuments({ status: { $in: ['scheduled', 'in_progress', 'SCHEDULED', 'IN_PROGRESS'] }, date: { $gte: start, $lte: end }, isDeleted: { $ne: true } }).catch(() => 0),
             Booking.aggregate([
                 { $match: { 'payment.status': { $in: PAID_STATUSES }, createdAt: { $gte: start, $lte: end } } },
                 { $group: { _id: null, total: { $sum: '$payment.amount' } } },
@@ -97,7 +99,8 @@ router.get('/metrics', async (req: Request, res: Response) => {
             User.countDocuments({ status: 'ACTIVE', isDeleted: { $ne: true } }),
             Booking.countDocuments({ isDeleted: { $ne: true } }),
             Booking.countDocuments({ createdAt: { $gte: start, $lte: end }, isDeleted: { $ne: true } }),
-            Booking.countDocuments({ status: 'PENDING', isDeleted: { $ne: true } }),
+            // BookingStatus interface stores lowercase ('pending'); old enum used 'PENDING' — cover both
+            Booking.countDocuments({ status: { $in: ['pending', 'PENDING'] }, isDeleted: { $ne: true } }),
             User.countDocuments({ createdAt: { $gte: start, $lte: end }, isDeleted: { $ne: true } }),
         ]);
 
@@ -178,7 +181,7 @@ router.get('/business-metrics', async (_req: Request, res: Response) => {
         const [totalStudents, totalCoaches, activeLocations, monthRevAgg, totalRevAgg] = await Promise.all([
             User.countDocuments({ role: { $in: ['STUDENT', 'USER', 'PARENT'] }, status: 'ACTIVE', isDeleted: { $ne: true } }),
             User.countDocuments({ role: 'COACH', status: 'ACTIVE', isDeleted: { $ne: true } }),
-            Location.countDocuments({ isActive: true, isDeleted: { $ne: true } }),
+            Location.countDocuments({ status: { $in: ['ACTIVE', 'active'] }, isDeleted: { $ne: true } }),
             Booking.aggregate([
                 { $match: { 'payment.status': { $in: ['paid', 'COMPLETED', 'completed'] }, createdAt: { $gte: monthStart } } },
                 { $group: { _id: null, total: { $sum: '$payment.amount' } } },
@@ -408,6 +411,208 @@ router.get('/alerts', async (req: Request, res: Response) => {
         res.json({ success: true, data: transformed });
     } catch {
         res.json({ success: true, data: [] });
+    }
+});
+
+// =========================================================================
+// GET /admin/dashboard/sidebar-stats
+// Returns counts for every sidebar section so the dashboard can show
+// per-module live numbers (CMS, Users, BCMS, Programs, Operations, Finance,
+// Reports, Communications, System, Support).
+// All sub-queries are individually try/catch-guarded so a missing collection
+// doesn't break the whole response.
+// =========================================================================
+router.get('/sidebar-stats', async (_req: Request, res: Response) => {
+    const safe = async <T>(p: Promise<T>, fallback: T): Promise<T> => {
+        try { return await p; } catch { return fallback; }
+    };
+
+    try {
+        // ── CMS models ──
+        const cms = require('../modules/cms/cms.model');
+        // ── User / Staff ──
+        const { User } = require('../modules/iam/user.model');
+        const { Staff } = require('../modules/staff/staff.model');
+        // ── BCMS ──
+        const { Country } = require('../modules/bcms/country.model');
+        const { BusinessUnit } = require('../modules/bcms/business-unit.model');
+        const { Region } = require('../modules/bcms/region.model');
+        const { Location } = require('../modules/bcms/location.model');
+        const { Room } = require('../modules/bcms/room.model');
+        const { Term } = require('../modules/bcms/term.model');
+        const { HolidayCalendar } = require('../modules/bcms/holiday-calendar.model');
+        const { PaymentGatewayModel } = require('../modules/payments/payment-gateway.model');
+        // ── Programs / Scheduling ──
+        const { Program } = require('../modules/programs/program.model');
+        const { Schedule, Session } = require('../modules/scheduling/schedule.model');
+        const { Rule } = require('../modules/rules/rule.model');
+        // ── Operations ──
+        const { AttendanceRecord } = require('../modules/attendance/attendance.model');
+        const { Booking } = require('../modules/booking/booking.model');
+        // ── Finance ──
+        const { PaymentModel } = require('../modules/payments/payments.model');
+        const { BillingModel } = require('../modules/billing/billing.model');
+        const { FinancialLedgerModel } = require('../modules/financial-ledger/financial-ledger.model');
+        // ── Communications ──
+        const { NotificationModel } = require('../modules/notifications/notifications.model');
+        const { NotificationTemplate } = require('../modules/notifications/notification-template.model');
+        const { LeadManagement, Inquiry } = require('../modules/crm/crm.model');
+        // ── System ──
+        const { FeatureFlagsModel } = require('../modules/feature-flags/feature-flags.model');
+        const { AuditVaultModel } = require('../modules/audit-vault/audit-vault.model');
+        // ── Support ──
+        const { SupportTicket, KnowledgeBaseArticle } = require('../modules/support/support.model');
+
+        const notDeleted = { isDeleted: { $ne: true } };
+
+        // Run all counts in parallel; each one independently guarded.
+        const [
+            // CMS counters (top-level content collections)
+            cmsPages, cmsBlogPosts, cmsTestimonials, cmsFaqs, cmsHeroSlides,
+            cmsServices, cmsTeam, cmsJobs, cmsPrograms,
+            // User mgmt
+            totalUsers, activeUsers, parentUsers, coachUsers, adminUsers,
+            // BCMS
+            countries, businessUnits, regions, locations, rooms, terms, holidays, paymentGateways,
+            // Programs / Scheduling
+            programs, schedules, publishedSchedules, sessions, rules,
+            // Operations
+            staffCount, attendanceTotal, manualBookings,
+            // Finance
+            paymentsCount, billingCount, ledgerEntries,
+            // Communications
+            notifications, notificationTemplates, crmLeads, crmInquiries,
+            // System
+            featureFlags, auditEntries,
+            // Support
+            openTickets, totalTickets, kbArticles,
+        ] = await Promise.all([
+            // CMS
+            safe(cms.PageContent?.countDocuments(notDeleted) ?? Promise.resolve(0), 0),
+            safe(cms.BlogPost?.countDocuments(notDeleted) ?? Promise.resolve(0), 0),
+            safe(cms.Testimonial?.countDocuments(notDeleted) ?? Promise.resolve(0), 0),
+            safe(cms.FAQItem?.countDocuments(notDeleted) ?? Promise.resolve(0), 0),
+            safe(cms.HeroSlide?.countDocuments(notDeleted) ?? Promise.resolve(0), 0),
+            safe(cms.ServiceCard?.countDocuments(notDeleted) ?? Promise.resolve(0), 0),
+            safe(cms.TeamMember?.countDocuments(notDeleted) ?? Promise.resolve(0), 0),
+            safe(cms.JobPosition?.countDocuments(notDeleted) ?? Promise.resolve(0), 0),
+            safe(cms.ProgramLevel?.countDocuments(notDeleted) ?? Promise.resolve(0), 0),
+            // Users
+            safe(User.countDocuments(notDeleted), 0),
+            safe(User.countDocuments({ status: 'ACTIVE', ...notDeleted }), 0),
+            safe(User.countDocuments({ role: 'PARENT', ...notDeleted }), 0),
+            safe(User.countDocuments({ role: 'COACH', ...notDeleted }), 0),
+            safe(User.countDocuments({ role: { $in: ['ADMIN', 'SUPER_ADMIN'] }, ...notDeleted }), 0),
+            // BCMS
+            safe(Country.countDocuments(notDeleted), 0),
+            safe(BusinessUnit.countDocuments(notDeleted), 0),
+            safe(Region.countDocuments(notDeleted), 0),
+            safe(Location.countDocuments({ status: { $in: ['ACTIVE', 'active'] }, ...notDeleted }), 0),
+            safe(Room.countDocuments(notDeleted), 0),
+            safe(Term.countDocuments(notDeleted), 0),
+            safe(HolidayCalendar.countDocuments(notDeleted), 0),
+            safe(PaymentGatewayModel.countDocuments(notDeleted), 0),
+            // Programs / Scheduling
+            safe(Program.countDocuments(notDeleted), 0),
+            safe(Schedule.countDocuments(notDeleted), 0),
+            safe(Schedule.countDocuments({ status: { $in: ['active', 'published', 'ACTIVE', 'PUBLISHED'] }, ...notDeleted }), 0),
+            safe(Session.countDocuments(notDeleted), 0),
+            safe(Rule.countDocuments(notDeleted), 0),
+            // Operations
+            safe(Staff.countDocuments({ status: { $in: ['ACTIVE', 'active'] }, ...notDeleted }), 0),
+            safe(AttendanceRecord.countDocuments({}), 0),
+            safe(Booking.countDocuments(notDeleted), 0),
+            // Finance
+            safe(PaymentModel.countDocuments({}), 0),
+            safe(BillingModel.countDocuments({}), 0),
+            safe(FinancialLedgerModel.countDocuments({}), 0),
+            // Communications
+            safe(NotificationModel.countDocuments({}), 0),
+            safe(NotificationTemplate.countDocuments({}), 0),
+            safe(LeadManagement?.countDocuments(notDeleted) ?? Promise.resolve(0), 0),
+            safe(Inquiry?.countDocuments(notDeleted) ?? Promise.resolve(0), 0),
+            // System
+            safe(FeatureFlagsModel.countDocuments({}), 0),
+            safe(AuditVaultModel.countDocuments({}), 0),
+            // Support
+            safe(SupportTicket.countDocuments({ status: { $in: ['open', 'in-progress', 'pending'] } }), 0),
+            safe(SupportTicket.countDocuments({}), 0),
+            safe(KnowledgeBaseArticle.countDocuments({ status: 'published' }), 0),
+        ]);
+
+        const totalCmsItems =
+            cmsPages + cmsBlogPosts + cmsTestimonials + cmsFaqs + cmsHeroSlides +
+            cmsServices + cmsTeam + cmsJobs + cmsPrograms;
+
+        res.json({
+            success: true,
+            data: {
+                cms: {
+                    total: totalCmsItems,
+                    pages: cmsPages,
+                    blogPosts: cmsBlogPosts,
+                    testimonials: cmsTestimonials,
+                    faqs: cmsFaqs,
+                    heroSlides: cmsHeroSlides,
+                    services: cmsServices,
+                    teamMembers: cmsTeam,
+                    jobPositions: cmsJobs,
+                    programLevels: cmsPrograms,
+                },
+                users: {
+                    total: totalUsers,
+                    active: activeUsers,
+                    parents: parentUsers,
+                    coaches: coachUsers,
+                    admins: adminUsers,
+                },
+                bcms: {
+                    countries,
+                    businessUnits,
+                    regions,
+                    locations,
+                    rooms,
+                    terms,
+                    holidays,
+                    paymentGateways,
+                },
+                programs: {
+                    programs,
+                    schedules,
+                    publishedSchedules,
+                    sessions,
+                    rules,
+                },
+                operations: {
+                    activeStaff: staffCount,
+                    attendanceRecords: attendanceTotal,
+                    manualBookings,
+                },
+                finance: {
+                    payments: paymentsCount,
+                    billings: billingCount,
+                    ledgerEntries,
+                },
+                communications: {
+                    notifications,
+                    templates: notificationTemplates,
+                    crmLeads,
+                    crmInquiries,
+                },
+                system: {
+                    featureFlags,
+                    auditEntries,
+                },
+                support: {
+                    openTickets,
+                    totalTickets,
+                    knowledgeBaseArticles: kbArticles,
+                },
+            },
+        });
+    } catch (error: any) {
+        console.error('Error in /admin/dashboard/sidebar-stats:', error?.message);
+        res.json({ success: true, data: {} });
     }
 });
 

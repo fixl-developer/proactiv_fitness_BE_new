@@ -136,7 +136,7 @@ import iamRbacRoutes from './iam-rbac.routes';
 import financeRoutes from './finance.routes';
 
 // === BCMS (Business Configuration Management) ===
-import { termRoutes, holidayCalendarRoutes, countryRoutes, regionRoutes, businessUnitRoutes, locationRoutes, roomRoutes } from '../modules/bcms';
+import { termRoutes, holidayCalendarRoutes, countryRoutes, regionRoutes, businessUnitRoutes, locationRoutes, roomRoutes, bcmsPublicRoutes } from '../modules/bcms';
 
 // === Named exports ===
 import { microCredentialRoutes } from '../modules/micro-credentials/micro-credentials.routes';
@@ -296,6 +296,10 @@ router.use('/locations', locationRoutes);
 router.use('/rooms', roomRoutes);
 router.use('/terms', termRoutes);
 router.use('/holiday-calendars', holidayCalendarRoutes);
+
+// Public, unauthenticated endpoints (e.g. marketing site lists active locations).
+// Mount AFTER the authenticated /locations router so this only handles /public/*.
+router.use('/public', bcmsPublicRoutes);
 
 // =============================================
 // NEWLY MOUNTED MODULES

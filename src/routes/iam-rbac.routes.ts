@@ -1,5 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { Schema, model, models } from 'mongoose';
+import { authenticate, authorize } from '../modules/iam/auth.middleware';
+import { UserRole } from '../shared/enums';
 
 /**
  * Dynamic Roles & Permissions CRUD
@@ -173,6 +175,16 @@ function normalizeDoc(doc: any): any {
 }
 
 const router = Router();
+
+// All RBAC management endpoints require an authenticated admin-tier user.
+// Without this, any unauthenticated client could mutate roles & permissions.
+router.use(authenticate);
+router.use(authorize(
+    UserRole.ADMIN,
+    UserRole.REGIONAL_ADMIN,
+    UserRole.FRANCHISE_OWNER,
+    UserRole.LOCATION_MANAGER,
+));
 
 // ---------------------------------------------------------------------------
 // ROLES

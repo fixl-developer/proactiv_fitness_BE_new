@@ -35,6 +35,10 @@ const generateScheduleValidation = [
     body('termId').optional({ nullable: true }).isMongoId().withMessage('Valid term ID is required'),
     body('programIds').isArray({ min: 1 }).withMessage('At least one program ID is required'),
     body('locationIds').isArray({ min: 1 }).withMessage('At least one location ID is required'),
+    // coachIds is optional. When supplied, every entry must be a Mongo ObjectId
+    // (User._id). When omitted/empty, the service auto-picks any active coach.
+    body('coachIds').optional({ nullable: true }).isArray().withMessage('coachIds must be an array'),
+    body('coachIds.*').optional().isMongoId().withMessage('Each coach ID must be a valid Mongo ID'),
     body('startDate').isISO8601().withMessage('Valid start date is required'),
     body('endDate').isISO8601().withMessage('Valid end date is required'),
     body('settings').optional().isObject().withMessage('Settings must be an object'),
