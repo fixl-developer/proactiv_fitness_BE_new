@@ -2,24 +2,119 @@ import { Request, Response } from 'express';
 import { BaseController } from '@shared/base/base.controller';
 import userService from './user.service';
 import { IUserCreate, IUserUpdate, IUserQuery } from './user.interface';
-import { UserStatus } from '@shared/enums';
+import { UserRole, UserStatus } from '@shared/enums';
+import { ROLE_HIERARCHY, DELETE_HIERARCHY, STATUS_HIERARCHY } from './rbac.middleware';
+import { PartnerProfile } from '../partner-portal/schemas/partner-profile.schema';
 
 export class UserController extends BaseController {
     /**
-     * Create a new user (Admin only)
+     * Create a new user (with RBAC hierarchy checks)
      * POST /api/v1/users
      */
     async create(req: Request, res: Response) {
         const data: IUserCreate = req.body;
+        const requester = req.user!;
+
+        // Verify the requester can create the requested role
+        const allowedRoles = ROLE_HIERARCHY[requester.role] || [];
+        if (!allowedRoles.includes(data.role)) {
+            return this.sendForbidden(
+                res,
+                `Role '${requester.role}' cannot create users with role '${data.role}'`
+            );
+        }
+
+        // Admin-created users skip the email-verification gate and can log in
+        // immediately. The flag also flows into formatUserResponse so the UI
+        // can surface "auto-verified" badges if needed.
+        (data as any).createdByAdmin = true;
+        (data as any).isEmailVerified = true;
+        if (!(data as any).status) {
+            (data as any).status = 'ACTIVE';
+        }
+
+        // Auto-assign scope fields based on the requester's role
+        switch (requester.role) {
+            case UserRole.REGIONAL_ADMIN:
+                // Auto-assign the same regionId and organizationId
+                if ((requester as any).regionId) {
+                    data.regionId = (requester as any).regionId;
+                }
+                if (requester.organizationId) {
+                    data.organizationId = requester.organizationId;
+                }
+                break;
+
+            case UserRole.FRANCHISE_OWNER:
+                // Auto-assign the same regionId, organizationId; location can be chosen
+                if ((requester as any).regionId) {
+                    data.regionId = (requester as any).regionId;
+                }
+                if (requester.organizationId) {
+                    data.organizationId = requester.organizationId;
+                }
+                if (requester.locationId && !data.locationId) {
+                    data.locationId = requester.locationId;
+                }
+                break;
+
+            case UserRole.LOCATION_MANAGER:
+                // Auto-assign everything from creator's scope
+                if ((requester as any).regionId) {
+                    data.regionId = (requester as any).regionId;
+                }
+                if (requester.organizationId) {
+                    data.organizationId = requester.organizationId;
+                }
+                if (requester.locationId) {
+                    data.locationId = requester.locationId;
+                }
+                break;
+
+            default:
+                // ADMIN can set any scope fields manually via the request body
+                break;
+        }
+
         const user = await userService.createUser(data);
+
+        // If creating a PARTNER_ADMIN, also create their partner profile with the selected partnerType
+        if (data.role === UserRole.PARTNER_ADMIN && data.partnerType) {
+            try {
+                await PartnerProfile.create({
+                    partnerId: `partner-${user._id}`,
+                    partnerName: `${data.firstName} ${data.lastName}`,
+                    partnerType: data.partnerType,
+                    email: data.email,
+                    phone: data.phone || '',
+                    address: '',
+                    city: '',
+                    state: '',
+                    country: 'India',
+                    businessName: '',
+                    businessType: data.partnerType,
+                    location: '',
+                    status: 'active',
+                    tier: 'bronze',
+                    commissionRate: 10,
+                    rating: 0,
+                });
+            } catch (profileError) {
+                // Log but don't fail user creation if profile creation fails
+                console.warn('[UserController] Failed to create partner profile:', profileError);
+            }
+        }
+
         return this.sendCreated(res, userService.formatUserResponse(user), 'User created successfully');
     }
 
     /**
-     * Get all users
+     * Get all users (scoped by role)
      * GET /api/v1/users
      */
     async getAll(req: Request, res: Response) {
+        const requester = req.user!;
+
         const query: IUserQuery = {
             role: req.query.role as any,
             status: req.query.status as any,
@@ -28,6 +123,49 @@ export class UserController extends BaseController {
             locationId: req.query.locationId as string,
             search: req.query.search as string,
         };
+
+        // Apply scope-based filtering
+        switch (requester.role) {
+            case UserRole.ADMIN:
+                // ADMIN sees all users - no additional filter
+                break;
+
+            case UserRole.REGIONAL_ADMIN:
+                // REGIONAL_ADMIN sees only users in their organization/region
+                if (requester.organizationId) {
+                    query.organizationId = requester.organizationId;
+                }
+                break;
+
+            case UserRole.FRANCHISE_OWNER:
+                // FRANCHISE_OWNER sees only users in their organization
+                if (requester.organizationId) {
+                    query.organizationId = requester.organizationId;
+                }
+                break;
+
+            case UserRole.LOCATION_MANAGER:
+                // LOCATION_MANAGER sees only users in their location
+                if (requester.locationId) {
+                    query.locationId = requester.locationId;
+                }
+                break;
+
+            default:
+                // Other roles shouldn't reach here due to route-level authorization,
+                // but if they do, return empty
+                return this.sendSuccess(res, []);
+        }
+
+        // Also apply scopeFilter from middleware if present
+        if (req.scopeFilter) {
+            if (req.scopeFilter.organizationId && !query.organizationId) {
+                query.organizationId = req.scopeFilter.organizationId;
+            }
+            if (req.scopeFilter.locationId && !query.locationId) {
+                query.locationId = req.scopeFilter.locationId;
+            }
+        }
 
         const users = await userService.getUsers(query);
         const formattedUsers = users.map((user) => userService.formatUserResponse(user));
@@ -68,11 +206,32 @@ export class UserController extends BaseController {
     }
 
     /**
-     * Delete user (soft delete)
+     * Delete user (soft delete) with RBAC hierarchy check
      * DELETE /api/v1/users/:id
      */
     async delete(req: Request, res: Response) {
         const { id } = req.params;
+        const requester = req.user!;
+
+        // Cannot delete yourself
+        if (requester.id === id) {
+            return this.sendForbidden(res, 'You cannot delete your own account');
+        }
+
+        // Verify requester can delete the target user
+        const targetUser = await userService.getUserById(id);
+        if (!targetUser) {
+            return this.sendNotFound(res, 'User not found');
+        }
+
+        const allowedRoles = DELETE_HIERARCHY[requester.role] || [];
+        if (!allowedRoles.includes(targetUser.role)) {
+            return this.sendForbidden(
+                res,
+                `Role '${requester.role}' cannot delete users with role '${targetUser.role}'`
+            );
+        }
+
         const result = await userService.deleteUser(id);
 
         if (!result) {
@@ -83,12 +242,32 @@ export class UserController extends BaseController {
     }
 
     /**
-     * Update user status
+     * Update user status with RBAC hierarchy check
      * PATCH /api/v1/users/:id/status
      */
     async updateStatus(req: Request, res: Response) {
         const { id } = req.params;
         const { status } = req.body;
+        const requester = req.user!;
+
+        // Cannot deactivate yourself
+        if (requester.id === id) {
+            return this.sendForbidden(res, 'You cannot change your own status');
+        }
+
+        // Verify requester can change the target user's status
+        const targetUser = await userService.getUserById(id);
+        if (!targetUser) {
+            return this.sendNotFound(res, 'User not found');
+        }
+
+        const allowedRoles = STATUS_HIERARCHY[requester.role] || [];
+        if (!allowedRoles.includes(targetUser.role)) {
+            return this.sendForbidden(
+                res,
+                `Role '${requester.role}' cannot update status of users with role '${targetUser.role}'`
+            );
+        }
 
         const user = await userService.updateUserStatus(id, status as UserStatus);
 

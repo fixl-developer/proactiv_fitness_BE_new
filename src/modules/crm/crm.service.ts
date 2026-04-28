@@ -18,13 +18,20 @@ import {
     InquiryStatus,
     LeadSource
 } from './crm.interface';
-import { BaseService } from '../../shared/base/base.service';
+import { BaseService, EntityContext } from '../../shared/base/base.service';
 import { AppError } from '../../shared/utils/app-error.util';
 import { HTTP_STATUS } from '../../shared/constants';
 
 export class FamilyService extends BaseService<IFamilyProfile> {
     constructor() {
-        super(FamilyProfile);
+        super(FamilyProfile, 'crm');
+    }
+
+    protected getEntityContext(doc: any): EntityContext | null {
+        return {
+            organizationId: doc.businessUnitId?.toString(),
+            locationId: doc.locationIds?.[0]?.toString(),
+        };
     }
 
     /**
@@ -55,6 +62,7 @@ export class FamilyService extends BaseService<IFamilyProfile> {
             });
 
             await family.save();
+            this.emitRealtimeEvent('created', family);
             return family;
         } catch (error: any) {
             throw new AppError(
@@ -73,7 +81,7 @@ export class FamilyService extends BaseService<IFamilyProfile> {
         addedBy: string
     ): Promise<IFamilyProfile> {
         try {
-            const family = await this.getById(familyId);
+            const family = await this.findById(familyId);
             if (!family) {
                 throw new AppError('Family not found', HTTP_STATUS.NOT_FOUND);
             }
@@ -123,7 +131,7 @@ export class FamilyService extends BaseService<IFamilyProfile> {
         addedBy: string
     ): Promise<IFamilyProfile> {
         try {
-            const family = await this.getById(familyId);
+            const family = await this.findById(familyId);
             if (!family) {
                 throw new AppError('Family not found', HTTP_STATUS.NOT_FOUND);
             }
@@ -280,7 +288,7 @@ export class ChildService extends BaseService<IChildProfile> {
         addedBy: string
     ): Promise<IChildProfile> {
         try {
-            const child = await this.getById(childId);
+            const child = await this.findById(childId);
             if (!child) {
                 throw new AppError('Child not found', HTTP_STATUS.NOT_FOUND);
             }
@@ -307,7 +315,7 @@ export class ChildService extends BaseService<IChildProfile> {
         addedBy: string
     ): Promise<IChildProfile> {
         try {
-            const child = await this.getById(childId);
+            const child = await this.findById(childId);
             if (!child) {
                 throw new AppError('Child not found', HTTP_STATUS.NOT_FOUND);
             }
@@ -340,12 +348,12 @@ export class ChildService extends BaseService<IChildProfile> {
         updatedBy: string
     ): Promise<IChildProfile> {
         try {
-            const child = await this.getById(childId);
+            const child = await this.findById(childId);
             if (!child) {
                 throw new AppError('Child not found', HTTP_STATUS.NOT_FOUND);
             }
 
-            child.skillLevels.set(skill, level);
+            (child.skillLevels as any).set(skill, level);
             child.updatedBy = updatedBy;
             await child.save();
 
@@ -367,7 +375,7 @@ export class ChildService extends BaseService<IChildProfile> {
         addedBy: string
     ): Promise<IChildProfile> {
         try {
-            const child = await this.getById(childId);
+            const child = await this.findById(childId);
             if (!child) {
                 throw new AppError('Child not found', HTTP_STATUS.NOT_FOUND);
             }
@@ -491,7 +499,7 @@ export class InquiryService extends BaseService<IInquiry> {
         addedBy: string
     ): Promise<IInquiry> {
         try {
-            const inquiry = await this.getById(inquiryId);
+            const inquiry = await this.findById(inquiryId);
             if (!inquiry) {
                 throw new AppError('Inquiry not found', HTTP_STATUS.NOT_FOUND);
             }
@@ -658,7 +666,7 @@ export class LeadService extends BaseService<ILeadManagement> {
         updatedBy: string
     ): Promise<ILeadManagement> {
         try {
-            const lead = await this.getById(leadId);
+            const lead = await this.findById(leadId);
             if (!lead) {
                 throw new AppError('Lead not found', HTTP_STATUS.NOT_FOUND);
             }

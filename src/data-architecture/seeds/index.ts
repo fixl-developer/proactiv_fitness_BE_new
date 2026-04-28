@@ -18,5 +18,4 @@ export const allSeedData = [
     regionSeedData,
     businessUnitSeedData,
     locationSeedData,
-    userSeedData,
 ];

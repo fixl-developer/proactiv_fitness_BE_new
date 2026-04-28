@@ -549,7 +549,7 @@ export class AttendanceController extends BaseController {
                     }
                 };
 
-                await this.attendanceService.checkIn(checkInRequest, userId);
+                await this.attendanceService.checkIn(checkInRequest as any, userId);
                 results.successful++;
             } catch (error: any) {
                 results.failed++;

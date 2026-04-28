@@ -213,3 +213,7 @@ export const migration001: Migration = {
         console.log('✅ Migration 001: Collections dropped successfully');
     },
 };
+
+
+// Export alias for backward compatibility
+export const createCollectionsMigration = migration001;

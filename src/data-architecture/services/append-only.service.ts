@@ -1,4 +1,4 @@
-import { Collection, Db, InsertOneResult, InsertManyResult } from 'mongodb';
+import { Collection, Db, InsertOneResult, InsertManyResult, Document } from 'mongodb';
 import { AuditLog, LedgerEntry } from '../interfaces';
 import logger from '../../shared/utils/logger.util';
 
@@ -24,9 +24,9 @@ export class AppendOnlyService<T extends Document> {
             const docWithTimestamp = {
                 ...document,
                 timestamp: new Date(),
-            } as T;
+            } as unknown as T;
 
-            const result = await this.collection.insertOne(docWithTimestamp);
+            const result = await (this.collection as any).insertOne(docWithTimestamp);
 
             logger.info(`Document inserted into ${this.collectionName}`, {
                 insertedId: result.insertedId,
@@ -52,9 +52,9 @@ export class AppendOnlyService<T extends Document> {
             const docsWithTimestamps = documents.map(doc => ({
                 ...doc,
                 timestamp: new Date(),
-            })) as T[];
+            })) as unknown as T[];
 
-            const result = await this.collection.insertMany(docsWithTimestamps);
+            const result = await (this.collection as any).insertMany(docsWithTimestamps);
 
             logger.info(`${documents.length} documents inserted into ${this.collectionName}`, {
                 insertedCount: result.insertedCount,

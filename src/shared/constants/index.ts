@@ -13,7 +13,7 @@ export const REFRESH_TOKEN_EXPIRY = '30d';
 
 // Rate Limiting
 export const RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
-export const RATE_LIMIT_MAX = 100;
+export const RATE_LIMIT_MAX = process.env.NODE_ENV === 'development' ? 10000 : 200;
 
 // File Upload
 export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -85,6 +85,7 @@ export const REGEX_PATTERNS = {
 export const HTTP_STATUS = {
     OK: 200,
     CREATED: 201,
+    ACCEPTED: 202,
     NO_CONTENT: 204,
     BAD_REQUEST: 400,
     UNAUTHORIZED: 401,
@@ -94,5 +95,6 @@ export const HTTP_STATUS = {
     UNPROCESSABLE_ENTITY: 422,
     TOO_MANY_REQUESTS: 429,
     INTERNAL_SERVER_ERROR: 500,
+    NOT_IMPLEMENTED: 501,
     SERVICE_UNAVAILABLE: 503,
 };

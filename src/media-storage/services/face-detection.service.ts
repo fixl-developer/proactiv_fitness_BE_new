@@ -1,5 +1,13 @@
-import sharp from 'sharp';
 import logger from '../../shared/utils/logger.util';
+
+// Optional import for sharp
+let sharp: any;
+try {
+    sharp = require('sharp');
+} catch (error) {
+    logger.warn('Sharp library not available, face detection will be disabled');
+    sharp = null;
+}
 
 export interface FaceDetectionResult {
     facesDetected: number;
@@ -32,7 +40,7 @@ export class FaceDetectionService {
      * Detect faces in an image
      */
     async detectFaces(imageBuffer: Buffer): Promise<FaceDetectionResult> {
-        if (!this.isEnabled) {
+        if (!this.isEnabled || !sharp) {
             return {
                 facesDetected: 0,
                 faces: []
@@ -67,7 +75,7 @@ export class FaceDetectionService {
         width: number;
         height: number;
     }>): Promise<Buffer> {
-        if (!this.isEnabled) {
+        if (!this.isEnabled || !sharp) {
             return imageBuffer;
         }
 

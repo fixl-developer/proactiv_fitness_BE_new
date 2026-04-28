@@ -18,13 +18,20 @@ import {
     CertificationStatus,
     BackgroundCheckStatus
 } from './staff.interface';
-import { BaseService } from '../../shared/base/base.service';
+import { BaseService, EntityContext } from '../../shared/base/base.service';
 import { AppError } from '../../shared/utils/app-error.util';
 import { HTTP_STATUS } from '../../shared/constants';
 
 export class StaffService extends BaseService<IStaff> {
     constructor() {
-        super(Staff);
+        super(Staff, 'staff');
+    }
+
+    protected getEntityContext(doc: any): EntityContext | null {
+        return {
+            organizationId: doc.businessUnitId?.toString(),
+            locationId: doc.primaryLocationId?.toString(),
+        };
     }
 
     /**
@@ -64,6 +71,7 @@ export class StaffService extends BaseService<IStaff> {
             });
 
             await staff.save();
+            this.emitRealtimeEvent('created', staff);
             return staff;
         } catch (error: any) {
             throw new AppError(
@@ -97,9 +105,15 @@ export class StaffService extends BaseService<IStaff> {
             if (updateRequest.skills) staff.skills = updateRequest.skills;
             if (updateRequest.specializations) staff.specializations = updateRequest.specializations;
             if (updateRequest.maxHoursPerWeek) staff.maxHoursPerWeek = updateRequest.maxHoursPerWeek;
+            // Allow callers to soft-delete via isActive (the controller's
+            // deleteStaff path uses this to deactivate without dropping the doc).
+            if (typeof (updateRequest as any).isActive === 'boolean') {
+                (staff as any).isActive = (updateRequest as any).isActive;
+            }
 
             staff.updatedBy = updatedBy;
             await staff.save();
+            this.emitRealtimeEvent('updated', staff);
 
             return staff;
         } catch (error: any) {
@@ -137,12 +151,9 @@ export class StaffService extends BaseService<IStaff> {
             return await this.findWithPagination(query, {
                 page,
                 limit,
-                sort: { createdAt: -1 },
-                populate: [
-                    { path: 'businessUnitId', select: 'name type' },
-                    { path: 'primaryLocationId', select: 'name address' }
-                ]
-            });
+                sortBy: 'createdAt',
+                sortOrder: 'desc'
+            } as any);
         } catch (error: any) {
             throw new AppError(
                 error.message || 'Failed to get staff members',

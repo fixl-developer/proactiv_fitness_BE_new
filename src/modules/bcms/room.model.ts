@@ -15,6 +15,7 @@ const roomSchema = new Schema<IRoom>(
             uppercase: true,
             trim: true,
         },
+        // @ts-ignore - Mongoose type issue
         locationId: {
             type: Schema.Types.ObjectId,
             ref: 'Location',

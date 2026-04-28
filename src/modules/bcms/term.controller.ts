@@ -14,11 +14,18 @@ export class TermController extends BaseController {
         const query: ITermQuery = {
             businessUnitId: req.query.businessUnitId as string,
             locationId: req.query.locationId as string,
-            isActive: req.query.isActive === 'true',
-            allowEnrollment: req.query.allowEnrollment === 'true',
             year: req.query.year ? parseInt(req.query.year as string) : undefined,
-            current: req.query.current === 'true',
         };
+
+        if (req.query.isActive !== undefined) {
+            query.isActive = req.query.isActive === 'true';
+        }
+        if (req.query.allowEnrollment !== undefined) {
+            query.allowEnrollment = req.query.allowEnrollment === 'true';
+        }
+        if (req.query.current !== undefined) {
+            query.current = req.query.current === 'true';
+        }
 
         const terms = await termService.getTerms(query);
         return this.sendSuccess(res, terms);

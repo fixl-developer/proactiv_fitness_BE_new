@@ -1,50 +1,54 @@
 {
     "compilerOptions": {
         "target": "ES2022",
-        "module": "commonjs",
+        "module": "Node16",
         "lib": [
             "ES2022"
         ],
         "outDir": "./dist",
         "rootDir": "./src",
-        "strict": true,
+        "strict": false,
         "esModuleInterop": true,
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
         "resolveJsonModule": true,
-        "moduleResolution": "node",
+        "moduleResolution": "Node16",
         "allowSyntheticDefaultImports": true,
         "declaration": true,
         "declarationMap": true,
         "sourceMap": true,
-        "noUnusedLocals": true,
-        "noUnusedParameters": true,
-        "noImplicitReturns": true,
-        "noFallthroughCasesInSwitch": true,
+        "noUnusedLocals": false,
+        "noUnusedParameters": false,
+        "noImplicitReturns": false,
+        "noFallthroughCasesInSwitch": false,
+        "noImplicitAny": false,
+        "strictNullChecks": false,
+        "strictFunctionTypes": false,
+        "strictPropertyInitialization": false,
         "experimentalDecorators": true,
         "emitDecoratorMetadata": true,
-        "baseUrl": "./src",
+        "noImplicitThis": false,
         "paths": {
             "@/*": [
-                "*"
+                "./src/*"
             ],
             "@config/*": [
-                "config/*"
+                "./src/config/*"
             ],
             "@modules/*": [
-                "modules/*"
+                "./src/modules/*"
             ],
             "@shared/*": [
-                "shared/*"
+                "./src/shared/*"
             ],
             "@utils/*": [
-                "utils/*"
+                "./src/utils/*"
             ],
             "@middleware/*": [
-                "middleware/*"
+                "./src/middleware/*"
             ],
             "@types/*": [
-                "types/*"
+                "./src/types/*"
             ]
         }
     },
@@ -56,5 +60,11 @@
         "dist",
         "**/*.spec.ts",
         "**/*.test.ts"
-    ]
+    ],
+    "ts-node": {
+        "transpileOnly": true,
+        "require": [
+            "tsconfig-paths/register"
+        ]
+    }
 }

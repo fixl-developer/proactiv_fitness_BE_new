@@ -4,29 +4,48 @@
  * Implementation of StorageProvider interface for AWS S3 and S3-compatible services.
  */
 
-import {
-    S3Client,
-    PutObjectCommand,
-    GetObjectCommand,
-    DeleteObjectCommand,
-    HeadObjectCommand,
-    ListObjectsV2Command,
-    CreateMultipartUploadCommand,
-    CompleteMultipartUploadCommand,
-    AbortMultipartUploadCommand,
-    CopyObjectCommand
-} from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { StorageProvider } from './storage-provider.interface';
 import { SignedUrlResponse } from '../interfaces';
 import { Logger } from '../../shared/utils/logger.util';
 import { AppError } from '../../shared/utils/app-error.util';
 
+// Optional imports for AWS SDK
+let S3Client: any;
+let PutObjectCommand: any;
+let GetObjectCommand: any;
+let DeleteObjectCommand: any;
+let HeadObjectCommand: any;
+let ListObjectsV2Command: any;
+let CreateMultipartUploadCommand: any;
+let CompleteMultipartUploadCommand: any;
+let AbortMultipartUploadCommand: any;
+let CopyObjectCommand: any;
+let getSignedUrl: any;
+
+try {
+    const awsSdk = require('@aws-sdk/client-s3');
+    S3Client = awsSdk.S3Client;
+    PutObjectCommand = awsSdk.PutObjectCommand;
+    GetObjectCommand = awsSdk.GetObjectCommand;
+    DeleteObjectCommand = awsSdk.DeleteObjectCommand;
+    HeadObjectCommand = awsSdk.HeadObjectCommand;
+    ListObjectsV2Command = awsSdk.ListObjectsV2Command;
+    CreateMultipartUploadCommand = awsSdk.CreateMultipartUploadCommand;
+    CompleteMultipartUploadCommand = awsSdk.CompleteMultipartUploadCommand;
+    AbortMultipartUploadCommand = awsSdk.AbortMultipartUploadCommand;
+    CopyObjectCommand = awsSdk.CopyObjectCommand;
+
+    const presigner = require('@aws-sdk/s3-request-presigner');
+    getSignedUrl = presigner.getSignedUrl;
+} catch (error) {
+    Logger.warn('AWS SDK not available, S3 storage provider will not work');
+}
+
 export class S3StorageProvider implements StorageProvider {
     private logger = Logger.getInstance();
 
     constructor(
-        private s3Client: S3Client,
+        private s3Client: any,
         private bucketName: string,
         private region: string
     ) { }

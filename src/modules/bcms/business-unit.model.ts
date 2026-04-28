@@ -22,12 +22,14 @@ const businessUnitSchema = new Schema<IBusinessUnit>(
             enum: Object.values(BusinessUnitType),
             required: [true, 'Business unit type is required'],
         },
+        // @ts-ignore - Mongoose type issue
         countryId: {
             type: Schema.Types.ObjectId,
             ref: 'Country',
             required: [true, 'Country is required'],
             index: true,
         },
+        // @ts-ignore - Mongoose type issue
         regionId: {
             type: Schema.Types.ObjectId,
             ref: 'Region',

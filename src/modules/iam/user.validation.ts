@@ -139,11 +139,24 @@ export const updateUserValidation = [
         .withMessage('Last name cannot be empty')
         .isLength({ max: 50 })
         .withMessage('Last name cannot exceed 50 characters'),
+    // Accept phone with formatting characters (spaces, dashes, parentheses).
+    // Backend strips them via customSanitizer before regex check, then stores
+    // the digits-only (with optional leading +) form.
     body('phone')
-        .optional()
-        .trim()
+        .optional({ checkFalsy: true })
+        .customSanitizer((value: string) => {
+            if (!value) return value;
+            const str = String(value);
+            const hasPlus = str.trim().startsWith('+');
+            const digits = str.replace(/\D/g, '');
+            return hasPlus ? `+${digits}` : digits;
+        })
         .matches(/^\+?[1-9]\d{1,14}$/)
-        .withMessage('Please provide a valid phone number'),
+        .withMessage('Please provide a valid phone number (7-15 digits, optional leading +)'),
+    body('role')
+        .optional()
+        .isIn(Object.values(UserRole))
+        .withMessage('Invalid role'),
     body('dateOfBirth')
         .optional()
         .isISO8601()
@@ -189,11 +202,20 @@ export const createUserValidation = [
         .withMessage('Role is required')
         .isIn(Object.values(UserRole))
         .withMessage('Invalid role'),
+    // Accept phone with formatting characters (spaces, dashes, parentheses).
+    // We strip non-digit characters before the regex check so users can paste
+    // pretty-formatted numbers like "+1 555 123 4567" or "(555) 123-4567".
     body('phone')
-        .optional()
-        .trim()
+        .optional({ checkFalsy: true })
+        .customSanitizer((value: string) => {
+            if (!value) return value;
+            const str = String(value);
+            const hasPlus = str.trim().startsWith('+');
+            const digits = str.replace(/\D/g, '');
+            return hasPlus ? `+${digits}` : digits;
+        })
         .matches(/^\+?[1-9]\d{1,14}$/)
-        .withMessage('Please provide a valid phone number'),
+        .withMessage('Please provide a valid phone number (7-15 digits, optional leading +)'),
 ];
 
 // Update user status validation

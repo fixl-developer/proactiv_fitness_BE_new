@@ -1,4 +1,4 @@
-import { Db } from 'mongodb';
+import { Db, Document } from 'mongodb';
 import { MigrationRunner } from './migrations/migration-runner';
 import { SeedLoader, allSeedData } from './seeds';
 import { ChangeStreamManager, LocationDailyStatsProcessor, UserActivitySummaryProcessor } from './utils';

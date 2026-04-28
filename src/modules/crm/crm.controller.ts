@@ -20,7 +20,7 @@ export class FamilyController {
         const { page, limit, skip } = PaginationUtil.getPaginationParams(req.query);
         const filters = this.buildFamilyFilters(req.query);
 
-        const { data, total } = await this.familyService.getAll(filters, {
+        const result: any = await (this.familyService as any).findAll(filters, {
             page,
             limit,
             skip,
@@ -32,16 +32,14 @@ export class FamilyController {
             ]
         });
 
-        const meta = PaginationUtil.buildMeta(total, page, limit);
-
-        ResponseUtil.success(res, data, 'Families retrieved successfully', HTTP_STATUS.OK, meta);
+        ResponseUtil.success(res, result, 'Families retrieved successfully');
     });
 
     /**
      * Get family by ID
      */
     getFamilyById = asyncHandler(async (req: Request, res: Response) => {
-        const family = await this.familyService.getById(req.params.id, {
+        const family = await (this.familyService as any).findById(req.params.id, {
             populate: [
                 { path: 'children' },
                 { path: 'members.userId', select: 'firstName lastName email phone' },
@@ -182,7 +180,7 @@ export class ChildController {
         const { page, limit, skip } = PaginationUtil.getPaginationParams(req.query);
         const filters = this.buildChildFilters(req.query);
 
-        const { data, total } = await this.childService.getAll(filters, {
+        const result: any = await (this.childService as any).findAll(filters, {
             page,
             limit,
             skip,
@@ -194,16 +192,14 @@ export class ChildController {
             ]
         });
 
-        const meta = PaginationUtil.buildMeta(total, page, limit);
-
-        ResponseUtil.success(res, data, 'Children retrieved successfully', HTTP_STATUS.OK, meta);
+        ResponseUtil.success(res, result, 'Children retrieved successfully');
     });
 
     /**
      * Get child by ID
      */
     getChildById = asyncHandler(async (req: Request, res: Response) => {
-        const child = await this.childService.getById(req.params.id, {
+        const child = await (this.childService as any).findById(req.params.id, {
             populate: [
                 { path: 'familyId' },
                 { path: 'parentIds', select: 'firstName lastName email phone' },
@@ -351,7 +347,7 @@ export class InquiryController {
         const { page, limit, skip } = PaginationUtil.getPaginationParams(req.query);
         const filters = this.buildInquiryFilters(req.query);
 
-        const { data, total } = await this.inquiryService.getAll(filters, {
+        const result: any = await (this.inquiryService as any).findAll(filters, {
             page,
             limit,
             skip,
@@ -364,16 +360,14 @@ export class InquiryController {
             ]
         });
 
-        const meta = PaginationUtil.buildMeta(total, page, limit);
-
-        ResponseUtil.success(res, data, 'Inquiries retrieved successfully', HTTP_STATUS.OK, meta);
+        ResponseUtil.success(res, result, 'Inquiries retrieved successfully');
     });
 
     /**
      * Get inquiry by ID
      */
     getInquiryById = asyncHandler(async (req: Request, res: Response) => {
-        const inquiry = await this.inquiryService.getById(req.params.id, {
+        const inquiry = await (this.inquiryService as any).findById(req.params.id, {
             populate: [
                 { path: 'businessUnitId' },
                 { path: 'assignedTo', select: 'firstName lastName email phone' },
@@ -530,7 +524,7 @@ export class LeadController {
         const { page, limit, skip } = PaginationUtil.getPaginationParams(req.query);
         const filters = this.buildLeadFilters(req.query);
 
-        const { data, total } = await this.leadService.getAll(filters, {
+        const result: any = await (this.leadService as any).findAll(filters, {
             page,
             limit,
             skip,
@@ -541,16 +535,14 @@ export class LeadController {
             ]
         });
 
-        const meta = PaginationUtil.buildMeta(total, page, limit);
-
-        ResponseUtil.success(res, data, 'Leads retrieved successfully', HTTP_STATUS.OK, meta);
+        ResponseUtil.success(res, result, 'Leads retrieved successfully');
     });
 
     /**
      * Get lead by ID
      */
     getLeadById = asyncHandler(async (req: Request, res: Response) => {
-        const lead = await this.leadService.getById(req.params.id, {
+        const lead = await (this.leadService as any).findById(req.params.id, {
             populate: [
                 { path: 'assignedTo', select: 'firstName lastName email phone' },
                 { path: 'convertedToInquiryId' }
@@ -642,3 +634,4 @@ export class LeadController {
         return filters;
     }
 }
+

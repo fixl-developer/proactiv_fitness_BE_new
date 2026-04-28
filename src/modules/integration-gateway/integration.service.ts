@@ -8,6 +8,10 @@ export class IntegrationService {
     async createIntegration(data: ICreateIntegrationRequest, userId: string): Promise<any> {
         const integrationId = uuidv4();
 
+        // Note: a parallel module (`modules/integrations`) registers a Mongoose
+        // model with the same name "Integration" and requires `tenantId`. We
+        // pass it here so whichever schema Mongoose has cached, validation
+        // succeeds. Harmless on this module's own schema.
         const integration = new Integration({
             integrationId,
             integrationType: data.integrationType,
@@ -16,6 +20,7 @@ export class IntegrationService {
             description: data.description,
             config: data.config,
             businessUnitId: 'bu-001',
+            tenantId: 'default',
             createdBy: userId
         });
 

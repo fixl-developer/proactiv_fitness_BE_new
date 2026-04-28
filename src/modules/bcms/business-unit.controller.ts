@@ -11,13 +11,16 @@ export class BusinessUnitController extends BaseController {
     }
 
     async getAll(req: Request, res: Response) {
+        // Only apply isActive filter if explicitly provided (otherwise list ALL statuses).
         const query: IBusinessUnitQuery = {
             countryId: req.query.countryId as string,
             regionId: req.query.regionId as string,
             type: req.query.type as any,
-            isActive: req.query.isActive === 'true',
             search: req.query.search as string,
         };
+        if (req.query.isActive !== undefined && req.query.isActive !== '') {
+            query.isActive = req.query.isActive === 'true';
+        }
 
         const businessUnits = await businessUnitService.getBusinessUnits(query);
         return this.sendSuccess(res, businessUnits);

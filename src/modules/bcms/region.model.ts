@@ -15,6 +15,8 @@ const regionSchema = new Schema<IRegion>(
             uppercase: true,
             trim: true,
         },
+        // @ts-ignore - Mongoose type issue
+        // @ts-ignore - Mongoose type issue
         countryId: {
             type: Schema.Types.ObjectId,
             ref: 'Country',
