@@ -8,7 +8,15 @@ const router = Router();
 router.get(
     '/locations',
     asyncHandler(async (_req: Request, res: Response) => {
-        const docs = await Location.find({ status: LocationStatus.ACTIVE })
+        // Show every location that isn't explicitly INACTIVE or soft-deleted.
+        // Legacy seed data and locations created before the status enum existed
+        // have either no `status` field or a non-canonical value — strict
+        // `status === 'ACTIVE'` filtering hid them from the marketing site even
+        // though the admin Locations table showed them as Active.
+        const docs = await Location.find({
+            status: { $ne: LocationStatus.INACTIVE },
+            isDeleted: { $ne: true },
+        })
             .select('name code address contactInfo operatingHours facilities amenities images coverImage capacity status')
             .sort({ name: 1 })
             .lean();

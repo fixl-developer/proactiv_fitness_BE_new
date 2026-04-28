@@ -658,6 +658,7 @@ const buildLocationPayload = async (body: any): Promise<any> => {
 router.post('/locations', async (req: Request, res: Response) => {
     try {
         const { Location } = require('../modules/bcms/location.model');
+        const { emitEntityEvent } = require('../modules/realtime/realtime.emitter');
         if (!req.body?.name || typeof req.body.name !== 'string' || !req.body.name.trim()) {
             return res.status(400).json({ success: false, message: 'Location name is required' });
         }
@@ -669,6 +670,15 @@ router.post('/locations', async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, message: 'No country configured. Please seed countries first.' });
         }
         const location = await Location.create(payload);
+
+        // Emit real-time event for dashboard refresh
+        emitEntityEvent('location', 'created', location, {
+            userId: (req as any).user?.id,
+            organizationId: (req as any).user?.organizationId,
+            locationId: location._id,
+            additionalRooms: ['role:ADMIN', 'role:REGIONAL_ADMIN', 'role:FRANCHISE_OWNER'],
+        });
+
         res.status(201).json({ success: true, data: location });
     } catch (error: any) {
         console.error('Location create error:', error);
@@ -679,6 +689,7 @@ router.post('/locations', async (req: Request, res: Response) => {
 router.put('/locations/:id', async (req: Request, res: Response) => {
     try {
         const { Location } = require('../modules/bcms/location.model');
+        const { emitEntityEvent } = require('../modules/realtime/realtime.emitter');
         const update: any = {};
         // Only update fields that were sent
         if (req.body.name !== undefined) update.name = req.body.name;
@@ -711,6 +722,15 @@ router.put('/locations/:id', async (req: Request, res: Response) => {
         }
         const location = await Location.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true });
         if (!location) return res.status(404).json({ success: false, message: 'Location not found' });
+
+        // Emit real-time event for dashboard refresh
+        emitEntityEvent('location', 'updated', location, {
+            userId: (req as any).user?.id,
+            organizationId: (req as any).user?.organizationId,
+            locationId: location._id,
+            additionalRooms: ['role:ADMIN', 'role:REGIONAL_ADMIN', 'role:FRANCHISE_OWNER'],
+        });
+
         res.json({ success: true, data: location });
     } catch (error: any) {
         console.error('Location update error:', error);
@@ -721,8 +741,18 @@ router.put('/locations/:id', async (req: Request, res: Response) => {
 router.delete('/locations/:id', async (req: Request, res: Response) => {
     try {
         const { Location } = require('../modules/bcms/location.model');
+        const { emitEntityEvent } = require('../modules/realtime/realtime.emitter');
         const location = await Location.findByIdAndUpdate(req.params.id, { isDeleted: true, status: 'INACTIVE' }, { new: true });
         if (!location) return res.status(404).json({ success: false, message: 'Location not found' });
+
+        // Emit real-time event for dashboard refresh
+        emitEntityEvent('location', 'deleted', location, {
+            userId: (req as any).user?.id,
+            organizationId: (req as any).user?.organizationId,
+            locationId: location._id,
+            additionalRooms: ['role:ADMIN', 'role:REGIONAL_ADMIN', 'role:FRANCHISE_OWNER'],
+        });
+
         res.json({ success: true, message: 'Location deleted successfully' });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
