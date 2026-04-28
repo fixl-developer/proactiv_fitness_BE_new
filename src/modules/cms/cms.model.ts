@@ -141,7 +141,8 @@ export interface IClientPartner extends Document {
 
 const clientPartnerSchema = new Schema<IClientPartner>({
     name: { type: String, required: true },
-    logo: { type: String, required: true },
+    // Optional: when no logo is uploaded, the frontend renders fallbackText + color gradient.
+    logo: { type: String, default: '' },
     fallbackText: { type: String, default: '' },
     color: { type: String, default: 'from-blue-500 to-cyan-500' },
     order: { type: Number, default: 0 },
@@ -633,3 +634,141 @@ const faqItemSchema = new Schema<IFAQItem>({
 faqItemSchema.index({ category: 1, order: 1, isActive: 1 });
 
 export const FAQItem = model<IFAQItem>('FAQItem', faqItemSchema);
+
+// =============================================
+// 18. NAV MENU ITEM (Header navigation - dynamic)
+// Each item is either a top-level link or a child of a parent (dropdown).
+// =============================================
+export interface INavMenuItem extends Document {
+    label: string;
+    href: string;
+    parentLabel: string;        // '' for top-level items, otherwise the parent label (e.g. 'About Us')
+    order: number;
+    isActive: boolean;
+    icon: string;               // optional icon name (lucide)
+}
+
+const navMenuItemSchema = new Schema<INavMenuItem>({
+    label: { type: String, required: true, trim: true },
+    href: { type: String, required: true, trim: true, default: '#' },
+    parentLabel: { type: String, default: '', trim: true },
+    order: { type: Number, default: 0 },
+    isActive: { type: Boolean, default: true },
+    icon: { type: String, default: '' },
+    ...baseSchemaFields,
+}, { ...baseSchemaOptions, timestamps: true, collection: 'cms_nav_menu_items' });
+
+navMenuItemSchema.index({ parentLabel: 1, order: 1, isActive: 1 });
+
+export const NavMenuItem = model<INavMenuItem>('NavMenuItem', navMenuItemSchema);
+
+// =============================================
+// 19. PAGE CONTENT (Singleton-per-slug — hero + flexible sections)
+// One document per landing-page (slug). Used to drive the hero of each
+// header-linked page (school-gymnastics, parties, blog, team, terms, etc.)
+// =============================================
+export interface IPageContent extends Document {
+    slug: string;               // 'school-gymnastics', 'parties', 'team', 'terms', 'blog', 'careers', 'about', 'contact', 'cyberport', 'wan-chai', 'gymnastics-camps', 'multi-activity-camps', 'shenzhen-competitive'
+    name: string;               // human-readable name shown in admin (e.g. 'School Gymnastics')
+    hero: {
+        title: string;
+        subtitle: string;
+        backgroundImage: string;
+        fallbackGradient: string;
+        ctaText: string;
+        ctaLink: string;
+        height: 'small' | 'medium' | 'large' | 'xlarge';
+    };
+    sections: Array<{
+        key: string;
+        title: string;
+        subtitle: string;
+        body: string;
+        image: string;
+        items: any[];           // arbitrary structured items per section
+        order: number;
+        isActive: boolean;
+    }>;
+    seo: {
+        metaTitle: string;
+        metaDescription: string;
+        keywords: string[];
+    };
+    isActive: boolean;
+}
+
+const pageContentSchema = new Schema<IPageContent>({
+    slug: { type: String, required: true, unique: true, trim: true, lowercase: true },
+    name: { type: String, required: true, trim: true },
+    hero: {
+        title: { type: String, default: '' },
+        subtitle: { type: String, default: '' },
+        backgroundImage: { type: String, default: '' },
+        fallbackGradient: { type: String, default: 'from-blue-600 to-purple-600' },
+        ctaText: { type: String, default: '' },
+        ctaLink: { type: String, default: '' },
+        height: { type: String, enum: ['small', 'medium', 'large', 'xlarge'], default: 'medium' },
+    },
+    sections: [{
+        key: { type: String, default: '' },
+        title: { type: String, default: '' },
+        subtitle: { type: String, default: '' },
+        body: { type: String, default: '' },
+        image: { type: String, default: '' },
+        items: { type: Schema.Types.Mixed, default: [] },
+        order: { type: Number, default: 0 },
+        isActive: { type: Boolean, default: true },
+    }],
+    seo: {
+        metaTitle: { type: String, default: '' },
+        metaDescription: { type: String, default: '' },
+        keywords: [{ type: String }],
+    },
+    isActive: { type: Boolean, default: true },
+    ...baseSchemaFields,
+}, { ...baseSchemaOptions, timestamps: true, collection: 'cms_page_contents' });
+
+pageContentSchema.index({ slug: 1 });
+
+export const PageContent = model<IPageContent>('PageContent', pageContentSchema);
+
+// =============================================
+// 20. TEAM MEMBER (for /team page - collection of coaches/staff)
+// =============================================
+export interface ITeamMember extends Document {
+    name: string;
+    role: string;
+    bio: string;
+    image: string;
+    fallbackGradient: string;
+    specialization: string;
+    experience: string;
+    qualifications: string[];
+    socialLinks: Array<{ platform: string; url: string }>;
+    location: string;
+    order: number;
+    isActive: boolean;
+}
+
+const teamMemberSchema = new Schema<ITeamMember>({
+    name: { type: String, required: true, trim: true },
+    role: { type: String, required: true, trim: true },
+    bio: { type: String, default: '' },
+    image: { type: String, default: '' },
+    fallbackGradient: { type: String, default: 'from-blue-500 to-purple-500' },
+    specialization: { type: String, default: '' },
+    experience: { type: String, default: '' },
+    qualifications: [{ type: String }],
+    socialLinks: [{
+        platform: { type: String, required: true },
+        url: { type: String, required: true },
+    }],
+    location: { type: String, default: '' },
+    order: { type: Number, default: 0 },
+    isActive: { type: Boolean, default: true },
+    ...baseSchemaFields,
+}, { ...baseSchemaOptions, timestamps: true, collection: 'cms_team_members' });
+
+teamMemberSchema.index({ order: 1, isActive: 1 });
+
+export const TeamMember = model<ITeamMember>('TeamMember', teamMemberSchema);

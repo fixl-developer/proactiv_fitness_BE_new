@@ -3,8 +3,20 @@ import { ResponseUtil } from '@shared/utils/response.util';
 import { asyncHandler } from '@shared/utils/async-handler.util';
 
 export abstract class BaseController {
-    protected sendSuccess = (res: Response, data: any, message: string = 'Success') => {
-        return ResponseUtil.success(res, data, message);
+    // Some legacy callers pass `{ message, data }` as the second arg (instead of
+    // separate data + message). Detect that shape and unwrap so the response
+    // body is `{ success, message, data }` — not `{ success, message, data: { message, data } }`.
+    protected sendSuccess = (res: Response, payload: any, message: string = 'Success') => {
+        if (
+            payload &&
+            typeof payload === 'object' &&
+            !Array.isArray(payload) &&
+            'message' in payload &&
+            'data' in payload
+        ) {
+            return ResponseUtil.success(res, (payload as any).data, (payload as any).message);
+        }
+        return ResponseUtil.success(res, payload, message);
     };
 
     protected sendCreated = (res: Response, data: any, message: string = 'Created successfully') => {

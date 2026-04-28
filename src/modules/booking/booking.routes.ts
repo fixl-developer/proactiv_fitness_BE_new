@@ -47,6 +47,52 @@ router.post('/class',
 );
 
 /**
+ * @route   POST /api/v1/bookings/trial
+ * @desc    Create trial booking from public Book Trial form
+ * @access  Private
+ */
+router.post('/trial',
+    authenticate,
+    [
+        body('program').isString().notEmpty().withMessage('Program is required'),
+        body('childName').isString().isLength({ min: 2 }).withMessage('Child name is required'),
+        body('childAge').isInt({ min: 1, max: 25 }).withMessage('Valid child age is required'),
+        body('location').isString().notEmpty().withMessage('Location is required'),
+        body('date').isString().notEmpty().withMessage('Date is required'),
+        body('timeSlot').isString().notEmpty().withMessage('Time slot is required'),
+        body('parentName').isString().isLength({ min: 2 }).withMessage('Parent name is required'),
+        body('parentEmail').isEmail().withMessage('Valid parent email is required'),
+        body('parentPhone').isString().isLength({ min: 8 }).withMessage('Valid parent phone is required'),
+    ],
+    validate,
+    bookingController.createTrialBooking
+);
+
+/**
+ * @route   POST /api/v1/bookings/camp
+ * @desc    Create holiday camp booking from public camp pages (gymnastics / multi-activity / shenzhen)
+ * @access  Private
+ */
+router.post('/camp',
+    authenticate,
+    [
+        body('campId').isString().notEmpty().withMessage('Camp id is required'),
+        body('campName').isString().notEmpty().withMessage('Camp name is required'),
+        body('campCategory').isString().notEmpty().withMessage('Camp category is required'),
+        body('campDates').isString().notEmpty().withMessage('Camp dates are required'),
+        body('childName').isString().isLength({ min: 2 }).withMessage('Child name is required'),
+        body('childAge').isInt({ min: 1, max: 25 }).withMessage('Valid child age is required'),
+        body('location').isString().notEmpty().withMessage('Location is required'),
+        body('date').isString().notEmpty().withMessage('Date is required'),
+        body('parentName').isString().isLength({ min: 2 }).withMessage('Parent name is required'),
+        body('parentEmail').isEmail().withMessage('Valid parent email is required'),
+        body('parentPhone').isString().isLength({ min: 8 }).withMessage('Valid parent phone is required'),
+    ],
+    validate,
+    bookingController.createCampBooking
+);
+
+/**
  * @route   GET /api/v1/bookings/my-bookings
  * @desc    Get logged-in user's bookings
  * @access  Private
@@ -254,9 +300,10 @@ router.patch('/:id/cancel',
     param('id').isMongoId().withMessage('Valid booking ID is required'),
     validate,
     async (req: any, res: any, next: any) => {
-        // Allow cancel without explicit reason from admin UI; default it
+        // Allow cancel without explicit reason from admin UI; default to a
+        // valid CancellationReason enum value (the schema rejects free text).
         if (!req.body) req.body = {};
-        if (!req.body.reason) req.body.reason = 'Cancelled by admin';
+        if (!req.body.reason) req.body.reason = 'other';
         return bookingController.cancelBooking(req, res, next);
     }
 );

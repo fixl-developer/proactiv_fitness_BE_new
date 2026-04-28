@@ -58,12 +58,128 @@ export class ScheduleController {
      * Get schedule by ID
      */
     getScheduleById = asyncHandler(async (req: Request, res: Response) => {
-        const schedule = await this.scheduleService.findById(req.params.id);
+        // Hand-rolled query so we can populate sessions + their programs/locations
+        // — admin "view schedule" drawer needs the full session list with names
+        // and times, not just session IDs.
+        const { Schedule, Session } = require('./schedule.model');
+        const schedule = await Schedule.findOne({ _id: req.params.id, isDeleted: { $ne: true } })
+            .populate({ path: 'locationIds', select: 'name code' })
+            .populate({ path: 'termId', select: 'name termName' })
+            .lean();
         if (!schedule) {
             throw new AppError('Schedule not found', HTTP_STATUS.NOT_FOUND);
         }
 
-        ResponseUtil.success(res, schedule, 'Schedule retrieved successfully');
+        // Pull all sessions belonging to this schedule, sorted chronologically
+        const sessions = await Session.find({
+            scheduleId: schedule._id,
+            isDeleted: { $ne: true },
+        })
+            .populate({ path: 'programId', select: 'name title programType' })
+            .populate({ path: 'locationId', select: 'name code' })
+            .populate({ path: 'coachAssignments.coachId', select: 'firstName lastName name email' })
+            .sort({ date: 1, 'timeSlot.startTime': 1 })
+            .lean();
+
+        // Project a compact, frontend-friendly shape for each session
+        const sessionsList = sessions.map((s: any) => {
+            const program: any = s.programId && typeof s.programId === 'object' ? s.programId : null;
+            const location: any = s.locationId && typeof s.locationId === 'object' ? s.locationId : null;
+            const primary = (s.coachAssignments || []).find((c: any) => c.role === 'primary') || (s.coachAssignments || [])[0];
+            const coach: any = primary?.coachId && typeof primary.coachId === 'object' ? primary.coachId : null;
+            return {
+                id: s._id?.toString?.() || s._id,
+                date: s.date,
+                startTime: s.timeSlot?.startTime || '',
+                endTime: s.timeSlot?.endTime || '',
+                programName: program ? (program.name || program.title) : '',
+                programType: program?.programType || '',
+                locationName: location ? location.name : '',
+                coachName: coach ? (coach.name || `${coach.firstName || ''} ${coach.lastName || ''}`.trim() || coach.email) : 'Unassigned',
+                status: s.status,
+                enrolled: Array.isArray(s.enrolledParticipants) ? s.enrolledParticipants.length : 0,
+                capacity: s.maxCapacity || 0,
+            };
+        });
+
+        const term: any = schedule.termId && typeof schedule.termId === 'object' ? schedule.termId : null;
+        const locations: any[] = Array.isArray(schedule.locationIds) ? schedule.locationIds : [];
+
+        ResponseUtil.success(res, {
+            ...schedule,
+            id: schedule._id?.toString?.() || schedule._id,
+            termName: term ? (term.name || term.termName) : '',
+            locationNames: locations.map((l: any) => (l && typeof l === 'object' ? l.name : '')).filter(Boolean),
+            sessionsList,
+        }, 'Schedule retrieved successfully');
+    });
+
+    /**
+     * Admin "all sessions" — flat list of every Session across every schedule,
+     * populated for calendar rendering. The list endpoint returns SCHEDULE
+     * containers; this returns the underlying SESSIONS so the calendar can
+     * place each session in its real day/time cell instead of falling back to
+     * the schedule's container defaults.
+     */
+    getAllSessions = asyncHandler(async (req: Request, res: Response) => {
+        const { Schedule, Session } = require('./schedule.model');
+
+        const filter: any = { isDeleted: { $ne: true } };
+        if (req.query.scheduleId) filter.scheduleId = req.query.scheduleId;
+        if (req.query.status) filter.status = req.query.status;
+        if (req.query.startDate || req.query.endDate) {
+            filter.date = {} as any;
+            if (req.query.startDate) filter.date.$gte = new Date(req.query.startDate as string);
+            if (req.query.endDate) filter.date.$lt = new Date(req.query.endDate as string);
+        }
+
+        const sessions = await Session.find(filter)
+            .populate({ path: 'programId', select: 'name programType' })
+            .populate({ path: 'locationId', select: 'name code' })
+            .populate({ path: 'coachAssignments.coachId', select: 'firstName lastName name email' })
+            .sort({ date: 1, 'timeSlot.startTime': 1 })
+            .limit(500)
+            .lean();
+
+        // Pull schedule names in one batch so each session can carry its parent's name.
+        const scheduleIds = Array.from(new Set(sessions.map((s: any) => String(s.scheduleId)).filter(Boolean)));
+        const schedules = await Schedule.find({ _id: { $in: scheduleIds } })
+            .select('name status')
+            .lean();
+        const scheduleMap = new Map<string, any>();
+        schedules.forEach((sc: any) => scheduleMap.set(String(sc._id), sc));
+
+        const result = sessions.map((s: any) => {
+            const program: any = s.programId && typeof s.programId === 'object' ? s.programId : null;
+            const location: any = s.locationId && typeof s.locationId === 'object' ? s.locationId : null;
+            const primary = (s.coachAssignments || []).find((c: any) => c.role === 'primary') || (s.coachAssignments || [])[0];
+            const coach: any = primary?.coachId && typeof primary.coachId === 'object' ? primary.coachId : null;
+            const parent = scheduleMap.get(String(s.scheduleId));
+
+            const date = s.date ? new Date(s.date) : null;
+            return {
+                id: String(s._id),
+                scheduleId: String(s.scheduleId || ''),
+                scheduleName: parent?.name || '',
+                scheduleStatus: parent?.status || '',
+                date: date,
+                dayOfWeek: date ? date.getDay() : (s.timeSlot?.dayOfWeek ?? 0),
+                startTime: s.timeSlot?.startTime || '',
+                endTime: s.timeSlot?.endTime || '',
+                duration: s.duration || 0,
+                programName: program ? program.name : '',
+                programType: program?.programType || '',
+                locationName: location ? location.name : '',
+                coachName: coach
+                    ? (coach.name || `${coach.firstName || ''} ${coach.lastName || ''}`.trim() || coach.email)
+                    : 'Unassigned',
+                status: s.status || 'scheduled',
+                enrolled: Array.isArray(s.enrolledParticipants) ? s.enrolledParticipants.length : 0,
+                capacity: s.maxCapacity || 0,
+            };
+        });
+
+        ResponseUtil.success(res, result, 'Sessions retrieved successfully');
     });
 
     /**

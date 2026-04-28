@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import mongoose, { Schema, model } from 'mongoose';
+import mongoose, { Schema, model, models } from 'mongoose';
 
 const router = Router();
 
@@ -29,7 +29,59 @@ const databaseHealthRecordSchema = new Schema<IDatabaseHealthRecord>({
     lastBackup: Date,
 }, { timestamps: true });
 
-const DatabaseHealthRecord = model<IDatabaseHealthRecord>('DatabaseHealthRecord', databaseHealthRecordSchema);
+const DatabaseHealthRecord: any = (models as any).DatabaseHealthRecord || model<IDatabaseHealthRecord>('DatabaseHealthRecord', databaseHealthRecordSchema);
+
+// =============================================
+// ApiMonitoringRecord — admin-managed API endpoints to monitor (the
+// frontend "API Monitoring" page calls this endpoint). Persisted so the
+// list reflects what the user just created.
+// =============================================
+interface IApiMonitoringRecord {
+    name: string;
+    endpoint: string;
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
+    status: 'active' | 'inactive' | 'error';
+    responseTime: number;
+    lastChecked?: Date;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+const apiMonitoringRecordSchema = new Schema<IApiMonitoringRecord>({
+    name: { type: String, required: true, trim: true },
+    endpoint: { type: String, required: true, trim: true },
+    method: { type: String, enum: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'], default: 'GET' },
+    status: { type: String, enum: ['active', 'inactive', 'error'], default: 'active' },
+    responseTime: { type: Number, default: 0, min: 0 },
+    lastChecked: Date,
+}, { timestamps: true });
+
+const ApiMonitoringRecord: any = (models as any).ApiMonitoringRecord || model<IApiMonitoringRecord>('ApiMonitoringRecord', apiMonitoringRecordSchema);
+
+// =============================================
+// SystemLogRecord — admin-managed log entries. The /admin/system/logs GET
+// reads from AuditVaultModel, but admins can also append manual log
+// entries that surface in the same list.
+// =============================================
+interface ISystemLogRecord {
+    timestamp: Date;
+    level: 'info' | 'warning' | 'error' | 'critical';
+    service: string;
+    message: string;
+    details?: string;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+const systemLogRecordSchema = new Schema<ISystemLogRecord>({
+    timestamp: { type: Date, default: Date.now },
+    level: { type: String, enum: ['info', 'warning', 'error', 'critical'], default: 'info' },
+    service: { type: String, required: true, trim: true },
+    message: { type: String, required: true },
+    details: String,
+}, { timestamps: true });
+
+const SystemLogRecord: any = (models as any).SystemLogRecord || model<ISystemLogRecord>('SystemLogRecord', systemLogRecordSchema);
 
 
 // =============================================
@@ -380,11 +432,46 @@ router.put('/features/:key', (req: Request, res: Response) => {
 });
 
 // =============================================
-// INTEGRATIONS
+// INTEGRATIONS  (Admin "API Monitoring" page — persisted CRUD)
+// Each row is an API endpoint admins want to monitor; previously this was a
+// hardcoded list of env-driven SaaS integrations. The frontend create/edit
+// form now persists rows here so they appear in the table after save.
 // =============================================
 
-// GET /admin/system/integrations
-router.get('/integrations', (_req: Request, res: Response) => {
+const RESERVED_INTEGRATION_SUBPATHS = new Set(['env', 'test']);
+
+// GET /admin/system/integrations  → paginated list (Mongoose-backed)
+router.get('/integrations', async (req: Request, res: Response) => {
+    try {
+        const page = parseInt((req.query.page as string) || '1');
+        const limit = parseInt((req.query.limit as string) || '20');
+        const filter: any = {};
+        if (req.query.status) filter.status = req.query.status;
+        if (req.query.search) {
+            const term = String(req.query.search);
+            filter.$or = [
+                { name: { $regex: term, $options: 'i' } },
+                { endpoint: { $regex: term, $options: 'i' } },
+            ];
+        }
+        const [items, total] = await Promise.all([
+            ApiMonitoringRecord.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+            ApiMonitoringRecord.countDocuments(filter),
+        ]);
+        res.json({
+            success: true,
+            data: items,
+            pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
+        });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// GET /admin/system/integrations/env  → static list of env-driven SaaS
+// connections (for the Settings panel). Kept on a sub-path so it does not
+// collide with the persisted CRUD list above.
+router.get('/integrations/env', (_req: Request, res: Response) => {
     res.json({
         success: true,
         data: [
@@ -399,21 +486,65 @@ router.get('/integrations', (_req: Request, res: Response) => {
     });
 });
 
-// POST /admin/system/integrations
-router.post('/integrations', (req: Request, res: Response) => {
-    res.json({
-        success: true,
-        data: { ...req.body, id: `int-${Date.now()}`, createdAt: new Date().toISOString() },
-        message: 'Integration configured successfully',
-    });
+// GET /admin/system/integrations/:id
+router.get('/integrations/:id', async (req: Request, res: Response, next) => {
+    try {
+        if (RESERVED_INTEGRATION_SUBPATHS.has(req.params.id)) return next();
+        const item = await ApiMonitoringRecord.findById(req.params.id).lean();
+        if (!item) return res.status(404).json({ success: false, message: 'Integration not found' });
+        res.json({ success: true, data: item });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
 });
 
-// GET /admin/system/integrations/:id
-router.get('/integrations/:id', (req: Request, res: Response) => {
-    res.json({
-        success: true,
-        data: { id: req.params.id, status: 'active', lastSync: new Date().toISOString() },
-    });
+// POST /admin/system/integrations
+router.post('/integrations', async (req: Request, res: Response) => {
+    try {
+        const { name, endpoint, method, status, responseTime, lastChecked } = req.body || {};
+        if (!name || !endpoint) {
+            return res.status(400).json({ success: false, message: 'name and endpoint are required' });
+        }
+        const item = await ApiMonitoringRecord.create({
+            name: String(name).trim(),
+            endpoint: String(endpoint).trim(),
+            method: method || 'GET',
+            status: status || 'active',
+            responseTime: typeof responseTime === 'number' ? responseTime : Number(responseTime) || 0,
+            lastChecked: lastChecked ? new Date(lastChecked) : undefined,
+        });
+        res.status(201).json({ success: true, data: item, message: 'API endpoint created' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// PUT /admin/system/integrations/:id
+router.put('/integrations/:id', async (req: Request, res: Response, next) => {
+    try {
+        if (RESERVED_INTEGRATION_SUBPATHS.has(req.params.id)) return next();
+        const update: any = {};
+        ['name', 'endpoint', 'method', 'status', 'responseTime', 'lastChecked'].forEach(k => {
+            if (req.body[k] !== undefined) update[k] = req.body[k];
+        });
+        const item = await ApiMonitoringRecord.findByIdAndUpdate(req.params.id, update, { new: true });
+        if (!item) return res.status(404).json({ success: false, message: 'Integration not found' });
+        res.json({ success: true, data: item, message: 'API endpoint updated' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// DELETE /admin/system/integrations/:id
+router.delete('/integrations/:id', async (req: Request, res: Response, next) => {
+    try {
+        if (RESERVED_INTEGRATION_SUBPATHS.has(req.params.id)) return next();
+        const result = await ApiMonitoringRecord.findByIdAndDelete(req.params.id);
+        if (!result) return res.status(404).json({ success: false, message: 'Integration not found' });
+        res.json({ success: true, message: 'API endpoint deleted' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
 });
 
 // POST /admin/system/integrations/:id/test
@@ -497,39 +628,124 @@ router.get('/security/failed-logins', async (req: Request, res: Response) => {
 
 // =============================================
 // LOGS
+// Merges admin-created SystemLogRecord entries with the AuditVault audit
+// trail so the admin Logs page shows both. Response shape matches every
+// other list endpoint: `{ data: [...], pagination: {...} }`.
 // =============================================
 
 // GET /admin/system/logs
 router.get('/logs', async (req: Request, res: Response) => {
     try {
-        const { AuditVaultModel } = require('../modules/audit-vault/audit-vault.model');
         const page = parseInt(req.query.page as string) || 1;
         const limit = parseInt(req.query.limit as string) || 50;
         const level = req.query.level as string;
         const search = req.query.search as string;
-        const skip = (page - 1) * limit;
 
-        const filter: any = {};
-        if (level) filter.action = level;
+        const adminFilter: any = {};
+        if (level) adminFilter.level = level;
         if (search) {
-            filter.$or = [
-                { action: { $regex: search, $options: 'i' } },
-                { entityType: { $regex: search, $options: 'i' } },
-                { reason: { $regex: search, $options: 'i' } },
+            adminFilter.$or = [
+                { service: { $regex: search, $options: 'i' } },
+                { message: { $regex: search, $options: 'i' } },
             ];
         }
 
-        const [logs, total] = await Promise.all([
-            AuditVaultModel.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
-            AuditVaultModel.countDocuments(filter),
-        ]);
+        const adminLogs = await SystemLogRecord.find(adminFilter).sort({ createdAt: -1 }).limit(500).lean();
+        const adminMapped = adminLogs.map((l: any) => ({
+            id: String(l._id),
+            timestamp: l.timestamp || l.createdAt,
+            level: l.level,
+            service: l.service,
+            message: l.message,
+            details: l.details,
+            createdAt: l.createdAt,
+        }));
+
+        let auditMapped: any[] = [];
+        try {
+            const { AuditVaultModel } = require('../modules/audit-vault/audit-vault.model');
+            const auditFilter: any = {};
+            if (search) {
+                auditFilter.$or = [
+                    { action: { $regex: search, $options: 'i' } },
+                    { entityType: { $regex: search, $options: 'i' } },
+                    { reason: { $regex: search, $options: 'i' } },
+                ];
+            }
+            const auditDocs = await AuditVaultModel.find(auditFilter).sort({ createdAt: -1 }).limit(500).lean();
+            auditMapped = auditDocs.map((a: any) => ({
+                id: String(a._id),
+                timestamp: a.createdAt,
+                level: 'info',
+                service: a.entityType || 'audit',
+                message: a.action || 'audit event',
+                details: a.reason || JSON.stringify(a.metadata || {}),
+                createdAt: a.createdAt,
+            }));
+            // If a level filter is active, audit entries (always 'info') should
+            // be excluded for non-info levels.
+            if (level && level !== 'info') auditMapped = [];
+        } catch {}
+
+        const merged = [...adminMapped, ...auditMapped]
+            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        const total = merged.length;
+        const start = (page - 1) * limit;
+        const items = merged.slice(start, start + limit);
 
         res.json({
             success: true,
-            data: { logs, pagination: { page, limit, total, pages: Math.ceil(total / limit) } },
+            data: items,
+            pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
         });
     } catch (error: any) {
-        res.json({ success: true, data: { logs: [], pagination: { page: 1, limit: 50, total: 0, pages: 0 } } });
+        res.json({ success: true, data: [], pagination: { page: 1, limit: 50, total: 0, totalPages: 1 } });
+    }
+});
+
+// POST /admin/system/logs — admin creates a manual log entry
+router.post('/logs', async (req: Request, res: Response) => {
+    try {
+        const { service, message, level, details, timestamp } = req.body || {};
+        if (!service || !message) {
+            return res.status(400).json({ success: false, message: 'service and message are required' });
+        }
+        const item = await SystemLogRecord.create({
+            timestamp: timestamp ? new Date(timestamp) : new Date(),
+            level: level || 'info',
+            service: String(service).trim(),
+            message: String(message),
+            details: details || '',
+        });
+        res.status(201).json({ success: true, data: item, message: 'Log entry created' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// PUT /admin/system/logs/:id
+router.put('/logs/:id', async (req: Request, res: Response) => {
+    try {
+        const update: any = {};
+        ['service', 'message', 'level', 'details', 'timestamp'].forEach(k => {
+            if (req.body[k] !== undefined) update[k] = k === 'timestamp' ? new Date(req.body[k]) : req.body[k];
+        });
+        const item = await SystemLogRecord.findByIdAndUpdate(req.params.id, update, { new: true });
+        if (!item) return res.status(404).json({ success: false, message: 'Log entry not found' });
+        res.json({ success: true, data: item, message: 'Log entry updated' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// DELETE /admin/system/logs/:id
+router.delete('/logs/:id', async (req: Request, res: Response) => {
+    try {
+        const result = await SystemLogRecord.findByIdAndDelete(req.params.id);
+        if (!result) return res.status(404).json({ success: false, message: 'Log entry not found' });
+        res.json({ success: true, message: 'Log entry deleted' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
     }
 });
 

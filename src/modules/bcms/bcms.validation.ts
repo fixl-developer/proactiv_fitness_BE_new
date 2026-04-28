@@ -94,11 +94,15 @@ export const createLocationValidation = [
     body('address.street').trim().notEmpty().withMessage('Street is required'),
     body('address.city').trim().notEmpty().withMessage('City is required'),
     body('address.postalCode').trim().notEmpty().withMessage('Postal code is required'),
-    body('contactInfo').isObject().withMessage('Contact info is required'),
-    body('contactInfo.email').isEmail().withMessage('Valid email is required'),
-    body('contactInfo.phone').trim().notEmpty().withMessage('Phone is required'),
+    // contactInfo + its phone/email are optional. Mongoose schema treats them as
+    // optional Strings, so the API contract should match. Internal/warehouse
+    // locations save without contact details; customer-facing pages already
+    // hide the "Call now"/"Email" rows when these are absent.
+    body('contactInfo').optional().isObject().withMessage('Contact info must be an object'),
+    body('contactInfo.email').optional({ values: 'falsy' }).isEmail().withMessage('Email must be a valid address when provided'),
+    body('contactInfo.phone').optional({ values: 'falsy' }).isString().withMessage('Phone must be a string when provided'),
     body('capacity').isInt({ min: 1 }).withMessage('Capacity must be at least 1'),
-    body('operatingHours').isObject().withMessage('Operating hours are required'),
+    body('operatingHours').optional().isObject().withMessage('Operating hours must be an object when provided'),
 ];
 
 export const updateLocationValidation = [

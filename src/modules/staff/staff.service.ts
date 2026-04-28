@@ -105,6 +105,11 @@ export class StaffService extends BaseService<IStaff> {
             if (updateRequest.skills) staff.skills = updateRequest.skills;
             if (updateRequest.specializations) staff.specializations = updateRequest.specializations;
             if (updateRequest.maxHoursPerWeek) staff.maxHoursPerWeek = updateRequest.maxHoursPerWeek;
+            // Allow callers to soft-delete via isActive (the controller's
+            // deleteStaff path uses this to deactivate without dropping the doc).
+            if (typeof (updateRequest as any).isActive === 'boolean') {
+                (staff as any).isActive = (updateRequest as any).isActive;
+            }
 
             staff.updatedBy = updatedBy;
             await staff.save();

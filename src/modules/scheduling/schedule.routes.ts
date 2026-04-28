@@ -21,6 +21,15 @@ router.get('/available',
 // Apply authentication to all routes below
 router.use(authenticate);
 
+/**
+ * @route   GET /api/v1/scheduling/all-sessions
+ * @desc    Admin calendar feed — flat list of every Session with date+time+program+coach+location
+ * @access  Private
+ */
+router.get('/all-sessions',
+    scheduleController.getAllSessions
+);
+
 // Validation rules
 const generateScheduleValidation = [
     body('termId').optional({ nullable: true }).isMongoId().withMessage('Valid term ID is required'),
