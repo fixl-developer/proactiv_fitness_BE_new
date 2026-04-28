@@ -135,6 +135,10 @@ import iamRbacRoutes from './iam-rbac.routes';
 // === NEW: Finance routes (admin Finance pages: revenue + ledger CRUD) ===
 import financeRoutes from './finance.routes';
 
+// === NEW: Permissions & Roles Management (Priority 1 Fields) ===
+import permissionRoutes from '../modules/permissions/permission.routes';
+import roleRoutes from '../modules/roles/role.routes';
+
 // === BCMS (Business Configuration Management) ===
 import { termRoutes, holidayCalendarRoutes, countryRoutes, regionRoutes, businessUnitRoutes, locationRoutes, roomRoutes, bcmsPublicRoutes } from '../modules/bcms';
 
@@ -690,5 +694,11 @@ router.get('/system/analytics', (_req: Request, res: Response) => {
         }
     });
 });
+
+// =============================================
+// PERMISSIONS & ROLES MANAGEMENT (Priority 1 Fields)
+// =============================================
+router.use('/permissions', permissionRoutes);
+router.use('/roles', roleRoutes);
 
 export default router;

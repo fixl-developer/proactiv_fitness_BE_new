@@ -1171,23 +1171,95 @@ export class StaffController extends BaseController {
     });
 
     // ==================== COACH MANAGEMENT ====================
-    // A "coach" is a Staff record with staffType === 'coach'.
+    // A "coach" is anyone with role=COACH. Two physical sources:
+    //   1. Staff collection with staffType='coach' — has full HR metadata
+    //   2. User collection with role=COACH — created via /users (admin) or
+    //      seeded — may or may not have a matching Staff record
+    // The schedule generator + assignment forms need the *union* so that
+    // admin-created or seeded coach users show up even before HR onboarding.
 
     getCoaches = asyncHandler(async (req: Request, res: Response) => {
         const { page = 1, limit = 10, status, locationId, searchText } = req.query;
-        const result = await this.staffService.getStaffMembers(
+        const limitNum = Number(limit) || 10;
+        const pageNum = Number(page) || 1;
+
+        const staffResult = await this.staffService.getStaffMembers(
             {
                 staffType: StaffType.COACH,
                 status: status as any,
                 locationId: locationId as any,
                 searchText: searchText as any,
             } as any,
-            Number(page),
-            Number(limit)
+            1,
+            500 // pull a wide page; we paginate client-side after merge
         );
+
+        const staffList: any[] = (staffResult as any)?.data || [];
+
+        // Pull every COACH-role user from the User collection. We merge by
+        // userId so a user with both a Staff record and a User record only
+        // appears once (Staff record wins because it has richer metadata).
+        const { User } = require('../iam/user.model');
+        const userFilter: any = {
+            role: UserRole.COACH,
+            isDeleted: { $ne: true },
+        };
+        if (status === 'active' || status === 'ACTIVE') userFilter.status = 'ACTIVE';
+        if (searchText) {
+            const re = new RegExp(String(searchText), 'i');
+            userFilter.$or = [
+                { firstName: re },
+                { lastName: re },
+                { email: re },
+            ];
+        }
+        const coachUsers: any[] = await User.find(userFilter).limit(500).lean();
+
+        const staffUserIds = new Set(
+            staffList
+                .map((s: any) => (s.userId ? String(s.userId) : null))
+                .filter(Boolean) as string[]
+        );
+
+        // For users without a staff record, synthesise a coach-shaped object
+        // so the frontend dropdown logic (`personalInfo.firstName`, `userId`)
+        // continues to work without branching.
+        const userOnlyEntries = coachUsers
+            .filter((u: any) => !staffUserIds.has(String(u._id)))
+            .map((u: any) => ({
+                _id: String(u._id),
+                userId: String(u._id),
+                staffType: 'coach',
+                status: u.status === 'ACTIVE' ? 'active' : (u.status || 'active').toLowerCase(),
+                personalInfo: {
+                    firstName: u.firstName,
+                    lastName: u.lastName,
+                },
+                contactInfo: {
+                    email: u.email,
+                    phone: u.phone || '',
+                },
+                locationIds: u.locationId ? [String(u.locationId)] : [],
+                primaryLocationId: u.locationId ? String(u.locationId) : undefined,
+                source: 'user', // hint for the UI when needed
+            }));
+
+        const merged = [...staffList, ...userOnlyEntries];
+        const total = merged.length;
+        const start = (pageNum - 1) * limitNum;
+        const paginated = merged.slice(start, start + limitNum);
+
         return this.sendSuccess(res, {
             message: 'Coaches retrieved successfully',
-            data: result,
+            data: {
+                data: paginated,
+                pagination: {
+                    page: pageNum,
+                    limit: limitNum,
+                    total,
+                    totalPages: Math.max(1, Math.ceil(total / limitNum)),
+                },
+            },
         });
     });
 

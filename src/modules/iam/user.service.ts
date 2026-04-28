@@ -20,7 +20,18 @@ const PASSWORD_HISTORY_SIZE = 5;
 
 export class UserService extends BaseService<IUser> {
     constructor() {
-        super(User);
+        super(User, 'user');
+    }
+
+    /**
+     * Provide context for realtime event routing
+     */
+    protected getEntityContext(doc: IUser): any {
+        return {
+            userId: doc._id?.toString(),
+            organizationId: doc.organizationId?.toString(),
+            locationId: doc.locationId?.toString(),
+        };
     }
 
     /**

@@ -71,8 +71,11 @@ router.get('/metrics', async (req: Request, res: Response) => {
             pendingBookings,
             newUsersInRange,
         ] = await Promise.all([
-            // Location: schema uses `status: 'ACTIVE'` (LocationStatus enum), no `isActive` field
-            Location.countDocuments({ status: { $in: ['ACTIVE', 'active'] }, isDeleted: { $ne: true } }),
+            // Count every location that isn't explicitly INACTIVE / soft-deleted.
+            // Legacy seed data and pre-enum rows have empty/non-canonical status —
+            // strict `status === 'ACTIVE'` undercounts them and disagrees with the
+            // admin Locations table (which treats missing status as Active).
+            Location.countDocuments({ status: { $ne: 'INACTIVE' }, isDeleted: { $ne: true } }),
             User.countDocuments({ role: { $in: STUDENT_ROLES }, status: 'ACTIVE', isDeleted: { $ne: true } }),
             User.countDocuments({ role: { $in: STAFF_ROLES }, status: 'ACTIVE', isDeleted: { $ne: true } }),
             Staff.countDocuments({ status: { $in: ['ACTIVE', 'active'] }, isDeleted: { $ne: true } }).catch(() => 0),
@@ -181,7 +184,7 @@ router.get('/business-metrics', async (_req: Request, res: Response) => {
         const [totalStudents, totalCoaches, activeLocations, monthRevAgg, totalRevAgg] = await Promise.all([
             User.countDocuments({ role: { $in: ['STUDENT', 'USER', 'PARENT'] }, status: 'ACTIVE', isDeleted: { $ne: true } }),
             User.countDocuments({ role: 'COACH', status: 'ACTIVE', isDeleted: { $ne: true } }),
-            Location.countDocuments({ status: { $in: ['ACTIVE', 'active'] }, isDeleted: { $ne: true } }),
+            Location.countDocuments({ status: { $ne: 'INACTIVE' }, isDeleted: { $ne: true } }),
             Booking.aggregate([
                 { $match: { 'payment.status': { $in: ['paid', 'COMPLETED', 'completed'] }, createdAt: { $gte: monthStart } } },
                 { $group: { _id: null, total: { $sum: '$payment.amount' } } },
@@ -507,7 +510,7 @@ router.get('/sidebar-stats', async (_req: Request, res: Response) => {
             safe(Country.countDocuments(notDeleted), 0),
             safe(BusinessUnit.countDocuments(notDeleted), 0),
             safe(Region.countDocuments(notDeleted), 0),
-            safe(Location.countDocuments({ status: { $in: ['ACTIVE', 'active'] }, ...notDeleted }), 0),
+            safe(Location.countDocuments({ status: { $ne: 'INACTIVE' }, ...notDeleted }), 0),
             safe(Room.countDocuments(notDeleted), 0),
             safe(Term.countDocuments(notDeleted), 0),
             safe(HolidayCalendar.countDocuments(notDeleted), 0),
