@@ -1,13 +1,13 @@
 import { Router, Request, Response } from 'express';
-import { AICoachService } from '../ai-coach/ai-coach.service';
 import { BookingService } from '../booking/booking.service';
+import { AIChatbotService } from './ai-chatbot.service';
 import { ResponseUtil } from '@/shared/utils/response.util';
 import { AppError } from '@/shared/utils/app-error.util';
 import { HTTP_STATUS } from '@/shared/constants';
 
 const router = Router();
-const aiCoachService = new AICoachService();
 const bookingService = new BookingService();
+const aiChatbotService = new AIChatbotService();
 
 interface ChatMessage {
     message: string;
@@ -28,52 +28,36 @@ interface BookingRequest {
     timeSlot: string;
 }
 
-// AI Chat endpoint
+// AI Chat endpoint — delegates to AIChatbotService (OpenAI-powered with rich keyword fallback)
 router.post('/chat', async (req: Request, res: Response) => {
     try {
-        const { message, conversationHistory } = req.body as ChatMessage;
+        const { message, conversationHistory = [] } = req.body as ChatMessage;
 
         if (!message || !message.trim()) {
             throw new AppError('Message is required', HTTP_STATUS.BAD_REQUEST);
         }
 
-        // Detect intent from message
-        const intent = detectIntent(message);
-        let response = '';
-        let suggestions: string[] = [];
-        let bookingIntent = null;
+        // Normalize incoming history to the {role, content} shape the AI service expects
+        const safeHistory = Array.isArray(conversationHistory)
+            ? conversationHistory
+                .filter((m: any) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+                .slice(-10) // keep context window manageable
+            : [];
 
-        // Handle different intents
-        if (intent.type === 'book_trial' || intent.type === 'book_assessment') {
-            response = `Great! I'd love to help you book a ${intent.type === 'book_trial' ? 'trial class' : 'assessment'}. Let me collect some information from you.`;
-            suggestions = ['Tell me about your child', 'What program interests you?', 'Which location?'];
-            bookingIntent = {
-                intent: intent.type,
-                childName: intent.childName,
-                childAge: intent.childAge,
-                program: intent.program,
-                location: intent.location
-            };
-        } else if (intent.type === 'program_info') {
-            response = `We offer several programs:\n\n🤸‍♀️ **Gymnastics** - For all ages and skill levels\n🏃‍♂️ **Multi-Sports** - Develop diverse athletic skills\n🏕️ **Holiday Camps** - Fun and intensive training\n\nWhich program interests you?`;
-            suggestions = ['Tell me about Gymnastics', 'Multi-Sports details', 'Holiday Camps info'];
-        } else if (intent.type === 'location_info') {
-            response = `We have locations at:\n\n📍 **Cyberport** - Central location with modern facilities\n📍 **Wan Chai** - Convenient for East Island residents\n\nWhich location works best for you?`;
-            suggestions = ['Cyberport details', 'Wan Chai details', 'Both locations'];
-        } else if (intent.type === 'pricing_info') {
-            response = `Our pricing varies by program and age group:\n\n💰 **Trial Class** - HK$150 (includes assessment)\n💰 **Regular Classes** - From HK$300/month\n💰 **Holiday Camps** - From HK$2,000/week\n\nWould you like to book a trial class?`;
-            suggestions = ['Book trial class', 'More pricing details', 'Ask something else'];
-        } else {
-            // Default response with AI coach recommendations
-            response = `I'm here to help! I can assist you with:\n\n📅 Booking trial classes or assessments\n🏋️ Information about our programs\n📍 Location and schedule details\n💰 Pricing information\n\nWhat would you like to know?`;
-            suggestions = ['Book a trial', 'Program information', 'Locations', 'Pricing'];
-        }
+        const result = await aiChatbotService.processMessage(message, safeHistory);
 
         ResponseUtil.success(res, {
-            response,
-            suggestions,
-            intent: bookingIntent,
-            conversationHistory: [...conversationHistory, { role: 'user', content: message }, { role: 'assistant', content: response }]
+            response: result.response,
+            suggestions: result.suggestions,
+            intent: result.intent,
+            bookingIntent: result.bookingIntent,
+            requiresHumanSupport: result.requiresHumanSupport,
+            aiPowered: result.aiPowered,
+            conversationHistory: [
+                ...safeHistory,
+                { role: 'user', content: message },
+                { role: 'assistant', content: result.response },
+            ],
         }, 'Chat response generated successfully');
     } catch (error: any) {
         res.status(error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
@@ -129,55 +113,5 @@ router.post('/book-via-chat', async (req: Request, res: Response) => {
         });
     }
 });
-
-// Helper function to detect intent from message
-function detectIntent(message: string) {
-    const lowerMessage = message.toLowerCase();
-
-    // Book trial/assessment intent
-    if (lowerMessage.includes('book') || lowerMessage.includes('trial') || lowerMessage.includes('assessment')) {
-        return {
-            type: lowerMessage.includes('assessment') ? 'book_assessment' : 'book_trial',
-            childName: extractValue(message, 'child'),
-            childAge: extractValue(message, 'age'),
-            program: extractValue(message, 'program'),
-            location: extractValue(message, 'location')
-        };
-    }
-
-    // Program info intent
-    if (lowerMessage.includes('program') || lowerMessage.includes('class') || lowerMessage.includes('gymnastics') || lowerMessage.includes('sports')) {
-        return { type: 'program_info' };
-    }
-
-    // Location intent
-    if (lowerMessage.includes('location') || lowerMessage.includes('where') || lowerMessage.includes('cyberport') || lowerMessage.includes('wan chai')) {
-        return { type: 'location_info' };
-    }
-
-    // Pricing intent
-    if (lowerMessage.includes('price') || lowerMessage.includes('cost') || lowerMessage.includes('fee') || lowerMessage.includes('how much')) {
-        return { type: 'pricing_info' };
-    }
-
-    // Default
-    return { type: 'general' };
-}
-
-// Helper function to extract values from message
-function extractValue(message: string, key: string): string | undefined {
-    const patterns: { [key: string]: RegExp } = {
-        child: /(?:child|kid|son|daughter|name)[\s:]*([A-Za-z]+)/i,
-        age: /(?:age|years?|old)[\s:]*(\d+)/i,
-        program: /(?:program|class|gymnastics|sports)[\s:]*([A-Za-z\s]+)/i,
-        location: /(?:location|cyberport|wan\s?chai)/i
-    };
-
-    const pattern = patterns[key];
-    if (!pattern) return undefined;
-
-    const match = message.match(pattern);
-    return match ? match[1]?.trim() : undefined;
-}
 
 export default router;

@@ -146,29 +146,39 @@ router.post(
             throw new AppError('No image file provided. Send as form-data with key "image".', HTTP_STATUS.BAD_REQUEST);
         }
 
-        // Cloudinary path
+        // Cloudinary path — if configured, try it first. On failure (invalid creds,
+        // network error, etc.) fall back to inline base64 so admin uploads still work.
         if (isCloudinaryConfigured()) {
-            const folder = `proactiv/${(req.body.folder as string) || 'cms'}`;
-            const result = await uploadToCloudinary(req.file.buffer, { folder, resourceType: 'image' });
-            ResponseUtil.success(res, {
-                url: result.secure_url,
-                publicId: result.public_id,
-                width: result.width,
-                height: result.height,
-                format: result.format,
-                size: result.bytes,
-                originalName: req.file.originalname,
-                storage: 'cloudinary',
-            }, 'Image uploaded successfully');
-            return;
+            try {
+                const folder = `proactiv/${(req.body.folder as string) || 'cms'}`;
+                const result = await uploadToCloudinary(req.file.buffer, { folder, resourceType: 'image' });
+                ResponseUtil.success(res, {
+                    url: result.secure_url,
+                    publicId: result.public_id,
+                    width: result.width,
+                    height: result.height,
+                    format: result.format,
+                    size: result.bytes,
+                    originalName: req.file.originalname,
+                    storage: 'cloudinary',
+                }, 'Image uploaded successfully');
+                return;
+            } catch (cloudErr: any) {
+                // Cloudinary refused — log and fall through to base64 below.
+                // Common cause: invalid CLOUDINARY_CLOUD_NAME / API_KEY / API_SECRET in .env.
+                console.warn(
+                    '[cms-upload] Cloudinary upload failed, falling back to inline base64:',
+                    cloudErr?.message || cloudErr
+                );
+            }
         }
 
         // Fallback: inline base64 data URL
         if (req.file.size > MAX_DATA_URL_BYTES) {
             throw new AppError(
                 `Image too large for inline storage (${(req.file.size / 1024 / 1024).toFixed(1)}MB). ` +
-                `Limit is ${MAX_DATA_URL_BYTES / 1024 / 1024}MB when Cloudinary isn't configured. ` +
-                `Either compress the image or configure Cloudinary (CLOUDINARY_CLOUD_NAME, API_KEY, API_SECRET).`,
+                `Limit is ${MAX_DATA_URL_BYTES / 1024 / 1024}MB when Cloudinary isn't available. ` +
+                `Either compress the image or fix Cloudinary credentials (CLOUDINARY_CLOUD_NAME, API_KEY, API_SECRET).`,
                 HTTP_STATUS.BAD_REQUEST
             );
         }
@@ -199,24 +209,31 @@ router.post(
         }
 
         if (isCloudinaryConfigured()) {
-            const folder = `proactiv/${(req.body.folder as string) || 'cms'}`;
-            const results = await Promise.all(
-                files.map(async (file) => {
-                    const result = await uploadToCloudinary(file.buffer, { folder, resourceType: 'image' });
-                    return {
-                        url: result.secure_url,
-                        publicId: result.public_id,
-                        width: result.width,
-                        height: result.height,
-                        format: result.format,
-                        size: result.bytes,
-                        originalName: file.originalname,
-                        storage: 'cloudinary',
-                    };
-                })
-            );
-            ResponseUtil.success(res, results, `${results.length} images uploaded successfully`);
-            return;
+            try {
+                const folder = `proactiv/${(req.body.folder as string) || 'cms'}`;
+                const results = await Promise.all(
+                    files.map(async (file) => {
+                        const result = await uploadToCloudinary(file.buffer, { folder, resourceType: 'image' });
+                        return {
+                            url: result.secure_url,
+                            publicId: result.public_id,
+                            width: result.width,
+                            height: result.height,
+                            format: result.format,
+                            size: result.bytes,
+                            originalName: file.originalname,
+                            storage: 'cloudinary',
+                        };
+                    })
+                );
+                ResponseUtil.success(res, results, `${results.length} images uploaded successfully`);
+                return;
+            } catch (cloudErr: any) {
+                console.warn(
+                    '[cms-upload] Cloudinary multi-upload failed, falling back to inline base64:',
+                    cloudErr?.message || cloudErr
+                );
+            }
         }
 
         // Fallback: inline base64 for each

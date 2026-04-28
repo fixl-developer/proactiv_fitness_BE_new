@@ -21,6 +21,9 @@ import {
     JobPositionService,
     ContactInfoService,
     FAQItemService,
+    NavMenuItemService,
+    PageContentService,
+    TeamMemberService,
 } from './cms.service';
 import { CMSSeeder } from './cms.seeder';
 
@@ -45,6 +48,9 @@ export class CMSPublicController {
     private jobPositionService = new JobPositionService();
     private contactInfoService = new ContactInfoService();
     private faqItemService = new FAQItemService();
+    private navMenuItemService = new NavMenuItemService();
+    private pageContentService = new PageContentService();
+    private teamMemberService = new TeamMemberService();
 
     // --- Hero Slides ---
     getHeroSlides = asyncHandler(async (_req: Request, res: Response) => {
@@ -180,9 +186,33 @@ export class CMSPublicController {
         ResponseUtil.success(res, data);
     });
 
+    // --- Nav Menu (Header) ---
+    getNavMenu = asyncHandler(async (_req: Request, res: Response) => {
+        const data = await this.navMenuItemService.getActiveTree();
+        ResponseUtil.success(res, data);
+    });
+
+    // --- Page Content (per slug) ---
+    getPageContent = asyncHandler(async (req: Request, res: Response) => {
+        const data = await this.pageContentService.getBySlug(req.params.slug);
+        if (!data) throw new AppError('Page content not found', HTTP_STATUS.NOT_FOUND);
+        ResponseUtil.success(res, data);
+    });
+
+    listPageContents = asyncHandler(async (_req: Request, res: Response) => {
+        const data = await this.pageContentService.getAll();
+        ResponseUtil.success(res, data);
+    });
+
+    // --- Team Members ---
+    getTeamMembers = asyncHandler(async (_req: Request, res: Response) => {
+        const data = await this.teamMemberService.getActiveMembers();
+        ResponseUtil.success(res, data);
+    });
+
     // --- Landing Page Bundle (all data in one call) ---
     getLandingPageData = asyncHandler(async (_req: Request, res: Response) => {
-        const [heroSlides, stats, services, testimonials, partners, about, aiFeatures] = await Promise.all([
+        const [heroSlides, stats, services, testimonials, partners, about, aiFeatures, navMenu] = await Promise.all([
             this.heroSlideService.getActiveSlides(),
             this.siteStatService.getActiveStats(),
             this.serviceCardService.getActiveServices(),
@@ -190,8 +220,9 @@ export class CMSPublicController {
             this.clientPartnerService.getActivePartners(),
             this.aboutContentService.getContent(),
             this.aiFeatureService.getActiveFeatures(),
+            this.navMenuItemService.getActiveTree(),
         ]);
-        ResponseUtil.success(res, { heroSlides, stats, services, testimonials, partners, about, aiFeatures });
+        ResponseUtil.success(res, { heroSlides, stats, services, testimonials, partners, about, aiFeatures, navMenu });
     });
 }
 
@@ -216,6 +247,9 @@ export class CMSAdminController {
     private jobPositionService = new JobPositionService();
     private contactInfoService = new ContactInfoService();
     private faqItemService = new FAQItemService();
+    private navMenuItemService = new NavMenuItemService();
+    private pageContentService = new PageContentService();
+    private teamMemberService = new TeamMemberService();
 
     // ==========================================
     // Generic CRUD helper factory
@@ -296,6 +330,32 @@ export class CMSAdminController {
     // --- FAQ Items CRUD ---
     faqItems = this.createCRUD(this.faqItemService);
 
+    // --- Nav Menu Items CRUD ---
+    navMenuItems = this.createCRUD(this.navMenuItemService);
+
+    // --- Team Members CRUD ---
+    teamMembers = this.createCRUD(this.teamMemberService);
+
+    // --- Page Content (singleton-per-slug, upsert by slug) ---
+    listPageContents = asyncHandler(async (_req: Request, res: Response) => {
+        const data = await this.pageContentService.getAll();
+        ResponseUtil.success(res, data);
+    });
+
+    getPageContentBySlug = asyncHandler(async (req: Request, res: Response) => {
+        const data = await this.pageContentService.getBySlug(req.params.slug);
+        if (!data) throw new AppError('Page content not found', HTTP_STATUS.NOT_FOUND);
+        ResponseUtil.success(res, data);
+    });
+
+    upsertPageContentBySlug = asyncHandler(async (req: Request, res: Response) => {
+        const result = await this.pageContentService.upsertBySlug(req.params.slug, {
+            ...req.body,
+            updatedBy: req.user?.id,
+        });
+        ResponseUtil.success(res, result, 'Page content saved');
+    });
+
     // --- About Content (Singleton - upsert) ---
     getAboutContent = asyncHandler(async (_req: Request, res: Response) => {
         const data = await this.aboutContentService.getContent();
@@ -329,5 +389,11 @@ export class CMSAdminController {
         const cleared = await CMSSeeder.clearAll();
         const result = await CMSSeeder.seedAll();
         ResponseUtil.success(res, { cleared, ...result }, 'CMS data reset and re-seeded successfully');
+    });
+
+    // --- Re-seed Pages + Locations (overwrites those collections only) ---
+    reseedPagesAndLocations = asyncHandler(async (_req: Request, res: Response) => {
+        const result = await CMSSeeder.upsertPagesAndLocations();
+        ResponseUtil.success(res, result, 'Page contents and location details re-seeded with comprehensive sections');
     });
 }

@@ -71,6 +71,19 @@ publicRouter.get('/contact-info', publicCtrl.getContactInfo);
 // FAQs
 publicRouter.get('/faqs', publicCtrl.getFAQs);
 
+// Nav Menu (header navigation - dynamic)
+publicRouter.get('/nav-menu', publicCtrl.getNavMenu);
+
+// Page Content (per slug - school-gymnastics, parties, team, terms, etc.)
+publicRouter.get('/pages', publicCtrl.listPageContents);
+publicRouter.get('/page/:slug',
+    validate([param('slug').isString().notEmpty()]),
+    publicCtrl.getPageContent
+);
+
+// Team Members
+publicRouter.get('/team', publicCtrl.getTeamMembers);
+
 // =============================================
 // ADMIN ROUTES (Auth + Admin Role Required)
 // =============================================
@@ -283,6 +296,40 @@ adminRouter.post('/seed',
 adminRouter.post('/reset-and-seed',
     authenticate, authorize(...adminRoles),
     adminCtrl.resetAndSeedData
+);
+
+// --- Re-seed Pages + Locations (force-overwrites those two collections only) ---
+adminRouter.post('/reseed-pages-and-locations',
+    authenticate, authorize(...adminRoles),
+    adminCtrl.reseedPagesAndLocations
+);
+
+// --- Nav Menu Items (Header navigation) ---
+setupCRUD(adminRouter, '/nav-menu', adminCtrl.navMenuItems, [
+    { field: 'label', type: 'string' },
+    { field: 'href', type: 'string' },
+]);
+
+// --- Team Members ---
+setupCRUD(adminRouter, '/team', adminCtrl.teamMembers, [
+    { field: 'name', type: 'string' },
+    { field: 'role', type: 'string' },
+]);
+
+// --- Page Content (per slug, upsert) ---
+adminRouter.get('/pages',
+    authenticate, authorize(...adminRoles),
+    adminCtrl.listPageContents
+);
+adminRouter.get('/page/:slug',
+    authenticate, authorize(...adminRoles),
+    validate([param('slug').isString().notEmpty()]),
+    adminCtrl.getPageContentBySlug
+);
+adminRouter.put('/page/:slug',
+    authenticate, authorize(...adminRoles),
+    validate([param('slug').isString().notEmpty()]),
+    adminCtrl.upsertPageContentBySlug
 );
 
 export { publicRouter as cmsPublicRoutes, adminRouter as cmsAdminRoutes };

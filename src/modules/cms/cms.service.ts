@@ -17,6 +17,9 @@ import {
     JobPosition, IJobPosition,
     ContactInfo, IContactInfo,
     FAQItem, IFAQItem,
+    NavMenuItem, INavMenuItem,
+    PageContent, IPageContent,
+    TeamMember, ITeamMember,
 } from './cms.model';
 
 // =============================================
@@ -287,5 +290,85 @@ export class FAQItemService extends BaseService<IFAQItem> {
 
     async getActiveFAQs(): Promise<IFAQItem[]> {
         return FAQItem.find({ isActive: true, isDeleted: { $ne: true } }).sort({ category: 1, order: 1 });
+    }
+}
+
+// =============================================
+// NAV MENU ITEMS (Header)
+// =============================================
+export class NavMenuItemService extends BaseService<INavMenuItem> {
+    constructor() {
+        super(NavMenuItem, 'nav-menu-item');
+    }
+
+    async getActiveItems(): Promise<INavMenuItem[]> {
+        return NavMenuItem.find({ isActive: true, isDeleted: { $ne: true } })
+            .sort({ parentLabel: 1, order: 1 });
+    }
+
+    /**
+     * Returns header nav as a tree:
+     * [{ label, href, dropdown?: [{ label, href }] }, ...]
+     * Items with parentLabel='' are top-level; others are dropdown children of their parent.
+     */
+    async getActiveTree(): Promise<Array<{ label: string; href: string; order: number; dropdown?: Array<{ label: string; href: string }> }>> {
+        const all = await this.getActiveItems();
+        const top = all.filter(i => !i.parentLabel).sort((a, b) => a.order - b.order);
+        return top.map(parent => {
+            const children = all
+                .filter(c => c.parentLabel === parent.label)
+                .sort((a, b) => a.order - b.order)
+                .map(c => ({ label: c.label, href: c.href }));
+            return {
+                label: parent.label,
+                href: parent.href,
+                order: parent.order,
+                ...(children.length > 0 ? { dropdown: children } : {}),
+            };
+        });
+    }
+}
+
+// =============================================
+// PAGE CONTENT (singleton-per-slug)
+// =============================================
+export class PageContentService extends BaseService<IPageContent> {
+    constructor() {
+        super(PageContent, 'page-content');
+    }
+
+    async getBySlug(slug: string): Promise<IPageContent | null> {
+        return PageContent.findOne({ slug, isDeleted: { $ne: true } });
+    }
+
+    async getAll(): Promise<IPageContent[]> {
+        return PageContent.find({ isDeleted: { $ne: true } }).sort({ name: 1 });
+    }
+
+    async upsertBySlug(slug: string, data: Partial<IPageContent>): Promise<IPageContent> {
+        const existing = await PageContent.findOne({ slug, isDeleted: { $ne: true } });
+        if (existing) {
+            // Mongoose nested `.set` to merge hero/seo without losing untouched fields
+            if (data.hero) existing.set('hero', { ...(existing.hero || {}), ...data.hero });
+            if (data.seo) existing.set('seo', { ...(existing.seo || {}), ...data.seo });
+            if (data.sections) existing.sections = data.sections as any;
+            if (typeof data.name === 'string') existing.name = data.name;
+            if (typeof data.isActive === 'boolean') existing.isActive = data.isActive;
+            return existing.save();
+        }
+        return PageContent.create({ ...data, slug });
+    }
+}
+
+// =============================================
+// TEAM MEMBERS
+// =============================================
+export class TeamMemberService extends BaseService<ITeamMember> {
+    constructor() {
+        super(TeamMember, 'team-member');
+    }
+
+    async getActiveMembers(): Promise<ITeamMember[]> {
+        return TeamMember.find({ isActive: true, isDeleted: { $ne: true } }).sort({ order: 1 });
     }
 }

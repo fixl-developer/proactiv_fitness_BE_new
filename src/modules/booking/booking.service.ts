@@ -654,6 +654,223 @@ export class BookingService extends BaseService<IBooking> {
     }
 
     /**
+     * Create trial booking (simplified - from public website Book Trial form).
+     * Mirrors createAssessmentBooking but uses BookingType.TRIAL and a 60-min slot.
+     */
+    async createTrialBooking(data: {
+        program: string;
+        childName: string;
+        childAge: number;
+        childGender?: string;
+        location: string;
+        date: string;
+        timeSlot: string;
+        parentName: string;
+        parentEmail: string;
+        parentPhone: string;
+        comments?: string;
+    }, userId: string): Promise<any> {
+        try {
+            const bookingId = await this.generateBookingId();
+            const userObjId = this.toObjectId(userId);
+            const normalizedStart = this.normalizeTime(data.timeSlot);
+            const endTime = this.calculateEndTime(data.timeSlot, 60);
+
+            const booking = new Booking({
+                bookingId,
+                bookingType: BookingType.TRIAL,
+                status: BookingStatus.PENDING,
+                familyId: userObjId,
+                bookedBy: userObjId,
+                participants: [{
+                    childId: userObjId,
+                    skillLevel: 'trial',
+                    medicalFlags: [],
+                    specialRequirements: [],
+                    isActive: true,
+                }],
+                programId: userObjId,
+                locationId: userObjId,
+                sessionDate: new Date(data.date),
+                sessionTime: { startTime: normalizedStart, endTime },
+                specialRequests: [
+                    `program:${data.program}`,
+                    `childName:${data.childName}`,
+                    `childAge:${data.childAge}`,
+                    `childGender:${data.childGender || 'Not specified'}`,
+                    `location:${data.location}`,
+                    `parentName:${data.parentName}`,
+                    `parentEmail:${data.parentEmail}`,
+                    `parentPhone:${data.parentPhone}`,
+                    ...(data.comments ? [`notes:${data.comments}`] : []),
+                ],
+                preferences: {
+                    preferredDays: [],
+                    preferredTimes: [data.timeSlot],
+                    preferredLocations: [],
+                    preferredCoaches: [],
+                    avoidDays: [],
+                    avoidTimes: [],
+                    specialRequests: [],
+                },
+                isWaitlisted: false,
+                payment: {
+                    amount: 0,
+                    currency: 'HKD',
+                    status: PaymentStatus.PAID,
+                    fees: { registration: 0, processing: 0, late: 0, cancellation: 0 },
+                },
+                businessUnitId: userObjId,
+                confirmationSent: true,
+                remindersSent: 0,
+                createdBy: userObjId,
+                updatedBy: userObjId,
+            });
+
+            await booking.save();
+            this.emitRealtimeEvent('created', booking);
+
+            return {
+                bookingId: booking.bookingId,
+                confirmationNumber: `PT${booking.bookingId}`,
+                status: booking.status,
+                bookingType: 'trial',
+                program: data.program,
+                childName: data.childName,
+                childAge: data.childAge,
+                location: data.location,
+                date: data.date,
+                timeSlot: data.timeSlot,
+                parentName: data.parentName,
+                parentEmail: data.parentEmail,
+                createdAt: booking.createdAt,
+            };
+        } catch (error: any) {
+            throw new AppError(
+                error.message || 'Failed to create trial booking',
+                HTTP_STATUS.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    /**
+     * Create holiday camp booking (simplified - from public website Holiday Camp pages).
+     * Mirrors createTrialBooking but uses BookingType.CAMP and stores camp meta
+     * (campId, campName, campDates, campPrice, campCategory) in specialRequests
+     * so the parent dashboard can parse and display it.
+     */
+    async createCampBooking(data: {
+        campId: string;
+        campName: string;
+        campCategory: string;
+        campDates: string;
+        campPrice: string;
+        location: string;
+        date: string;
+        timeSlot: string;
+        childName: string;
+        childAge: number;
+        childGender?: string;
+        parentName: string;
+        parentEmail: string;
+        parentPhone: string;
+        emergencyContact?: string;
+        comments?: string;
+    }, userId: string): Promise<any> {
+        try {
+            const bookingId = await this.generateBookingId();
+            const userObjId = this.toObjectId(userId);
+            const normalizedStart = this.normalizeTime(data.timeSlot || '09:00');
+            const endTime = this.calculateEndTime(data.timeSlot || '09:00', 360); // ~6h camp day
+
+            const booking = new Booking({
+                bookingId,
+                bookingType: BookingType.CAMP,
+                status: BookingStatus.PENDING,
+                familyId: userObjId,
+                bookedBy: userObjId,
+                participants: [{
+                    childId: userObjId,
+                    skillLevel: 'camp',
+                    medicalFlags: [],
+                    specialRequirements: [],
+                    isActive: true,
+                }],
+                programId: userObjId,
+                locationId: userObjId,
+                sessionDate: new Date(data.date),
+                sessionTime: { startTime: normalizedStart, endTime },
+                specialRequests: [
+                    `campId:${data.campId}`,
+                    `campName:${data.campName}`,
+                    `campCategory:${data.campCategory}`,
+                    `campDates:${data.campDates}`,
+                    `campPrice:${data.campPrice}`,
+                    `program:${data.campCategory}`,
+                    `childName:${data.childName}`,
+                    `childAge:${data.childAge}`,
+                    `childGender:${data.childGender || 'Not specified'}`,
+                    `location:${data.location}`,
+                    `parentName:${data.parentName}`,
+                    `parentEmail:${data.parentEmail}`,
+                    `parentPhone:${data.parentPhone}`,
+                    ...(data.emergencyContact ? [`emergencyContact:${data.emergencyContact}`] : []),
+                    ...(data.comments ? [`notes:${data.comments}`] : []),
+                ],
+                preferences: {
+                    preferredDays: [],
+                    preferredTimes: [data.timeSlot],
+                    preferredLocations: [],
+                    preferredCoaches: [],
+                    avoidDays: [],
+                    avoidTimes: [],
+                    specialRequests: [],
+                },
+                isWaitlisted: false,
+                payment: {
+                    amount: 0,
+                    currency: 'HKD',
+                    status: PaymentStatus.PENDING,
+                    fees: { registration: 0, processing: 0, late: 0, cancellation: 0 },
+                },
+                businessUnitId: userObjId,
+                confirmationSent: true,
+                remindersSent: 0,
+                createdBy: userObjId,
+                updatedBy: userObjId,
+            });
+
+            await booking.save();
+            this.emitRealtimeEvent('created', booking);
+
+            return {
+                bookingId: booking.bookingId,
+                confirmationNumber: `PC${booking.bookingId}`,
+                status: booking.status,
+                bookingType: 'camp',
+                campId: data.campId,
+                campName: data.campName,
+                campCategory: data.campCategory,
+                campDates: data.campDates,
+                campPrice: data.campPrice,
+                childName: data.childName,
+                childAge: data.childAge,
+                location: data.location,
+                date: data.date,
+                timeSlot: data.timeSlot,
+                parentName: data.parentName,
+                parentEmail: data.parentEmail,
+                createdAt: booking.createdAt,
+            };
+        } catch (error: any) {
+            throw new AppError(
+                error.message || 'Failed to create camp booking',
+                HTTP_STATUS.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    /**
      * Create class booking (simplified - from website)
      */
     async createClassBooking(data: {

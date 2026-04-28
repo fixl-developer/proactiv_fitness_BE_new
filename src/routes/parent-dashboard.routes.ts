@@ -16,23 +16,38 @@ const getParentId = (req: Request): string => {
 // =============================================
 export const browseClassesHandler = async (req: Request, res: Response) => {
     try {
-        const { Session } = require('../modules/scheduling/schedule.model');
+        const { Session, Schedule } = require('../modules/scheduling/schedule.model');
         const { Program } = require('../modules/programs/program.model');
         const { location, program, level, date } = req.query;
 
-        // ---- Sessions (admin schedules) ----
-        const sessionFilter: any = { status: { $in: ['scheduled', 'active', 'ACTIVE'] } };
-        if (location) sessionFilter.location = { $regex: new RegExp(location as string, 'i') };
-        if (program) sessionFilter.className = { $regex: new RegExp(program as string, 'i') };
-        if (level) sessionFilter.level = { $regex: new RegExp(level as string, 'i') };
+        // ---- Sessions: only those whose parent Schedule is PUBLISHED ----
+        // Customers must never see draft schedules.
+        const publishedSchedules = await Schedule.find({ status: 'published' })
+            .select('_id')
+            .lean()
+            .catch(() => []);
+        const publishedScheduleIds = publishedSchedules.map((s: any) => s._id);
+
+        const sessionFilter: any = {
+            status: { $in: ['scheduled', 'confirmed', 'active', 'ACTIVE'] },
+            scheduleId: { $in: publishedScheduleIds },
+        };
         if (date) {
             const d = new Date(date as string);
             sessionFilter.date = { $gte: d, $lt: new Date(d.getTime() + 24 * 60 * 60 * 1000) };
         }
 
-        const sessions = await Session.find(sessionFilter).sort({ date: 1 }).limit(50).lean().catch(() => []);
+        // Populate refs so frontend cards have real names, not blank strings.
+        const sessions = await Session.find(sessionFilter)
+            .populate({ path: 'programId', select: 'name description shortDescription category skillLevels pricingModel' })
+            .populate({ path: 'locationId', select: 'name address' })
+            .populate({ path: 'coachAssignments.coachId', select: 'firstName lastName name' })
+            .sort({ date: 1 })
+            .limit(100)
+            .lean()
+            .catch((e: any) => { console.error('[browseClasses] session query failed:', e?.message); return []; });
 
-        // ---- Admin Programs (catalog entries) ----
+        // ---- Admin Programs (catalog entries — for programs without a published schedule yet) ----
         const programFilter: any = { isActive: true, isPublic: true, isDeleted: { $ne: true } };
         if (program) programFilter.name = { $regex: new RegExp(program as string, 'i') };
         if (level) programFilter.skillLevels = { $in: [String(level).toLowerCase()] };
@@ -44,21 +59,51 @@ export const browseClassesHandler = async (req: Request, res: Response) => {
             .lean()
             .catch(() => []);
 
-        // Normalize both into a single shape the frontend already understands.
-        const sessionItems = sessions.map((s: any) => ({
-            id: s._id,
-            source: 'session' as const,
-            program: s.className || s.programName || 'Class',
-            coach: s.coach || s.instructor || '',
-            level: s.level || 'All Levels',
-            location: s.location || '',
-            date: s.date || '',
-            time: s.startTime || '',
-            duration: s.duration || '1 hour',
-            availableSpots: s.maxCapacity ? Math.max(0, s.maxCapacity - (s.enrolledCount || 0)) : 10,
-            price: s.price || 0,
-            description: s.description || '',
-        }));
+        // Normalize sessions: pull human-readable values from populated refs.
+        const locStr = location ? String(location).toLowerCase() : '';
+        const progStr = program ? String(program).toLowerCase() : '';
+        const lvlStr = level ? String(level).toLowerCase() : '';
+
+        const sessionItems = sessions
+            .map((s: any) => {
+                const prog = s.programId || {};
+                const loc = s.locationId || {};
+                // Primary coach = first assignment marked 'primary', else the first assignment.
+                const assignments = Array.isArray(s.coachAssignments) ? s.coachAssignments : [];
+                const primary = assignments.find((a: any) => a?.role === 'primary') || assignments[0] || {};
+                const c = primary.coachId || {};
+                const coachName = (c.firstName || c.lastName)
+                    ? `${c.firstName || ''} ${c.lastName || ''}`.trim()
+                    : (c.name || '');
+
+                const enrolledCount = Array.isArray(s.enrolledParticipants) ? s.enrolledParticipants.length : 0;
+                const maxCap = typeof s.maxCapacity === 'number' ? s.maxCapacity : 10;
+
+                // Skill level — sessions don't carry one; surface the program's first level.
+                const sessionLevel = (Array.isArray(prog.skillLevels) && prog.skillLevels[0]) || 'All Levels';
+
+                return {
+                    id: s._id,
+                    source: 'session' as const,
+                    program: prog.name || 'Class',
+                    coach: coachName,
+                    level: sessionLevel,
+                    location: loc.name || '',
+                    date: s.date || '',
+                    time: s.timeSlot?.startTime || '',
+                    duration: s.duration ? `${s.duration} min` : '1 hour',
+                    availableSpots: Math.max(0, maxCap - enrolledCount),
+                    price: prog.pricingModel?.basePrice ?? 0,
+                    description: prog.shortDescription || prog.description || '',
+                };
+            })
+            // Apply human-readable filters AFTER populate (since refs aren't string-searchable in mongo).
+            .filter((it: any) => {
+                if (locStr && !String(it.location).toLowerCase().includes(locStr)) return false;
+                if (progStr && !String(it.program).toLowerCase().includes(progStr)) return false;
+                if (lvlStr && !String(it.level).toLowerCase().includes(lvlStr)) return false;
+                return true;
+            });
 
         const programItems = programs.map((p: any) => {
             const ag = (Array.isArray(p.ageGroups) && p.ageGroups[0]) || {};
@@ -323,7 +368,11 @@ router.get('/dashboard', async (req: Request, res: Response) => {
                         time: b.sessionTime?.startTime || b.session?.startTime || sp.timeSlot || b.time || '',
                         location: sp.location || b.session?.location || b.location || '',
                         status: (b.status || 'pending').toLowerCase(),
-                        duration: b.bookingType === 'assessment' ? '30 min' : (b.session?.duration || '1 hour'),
+                        duration: b.bookingType === 'assessment'
+                            ? '30 min'
+                            : b.bookingType === 'trial'
+                                ? '1 hour'
+                                : (b.session?.duration || '1 hour'),
                     };
                 }),
                 recentPayments: recentPay.map((b: any) => {
@@ -498,11 +547,19 @@ router.get('/bookings', async (req: Request, res: Response) => {
                         id: b._id || b.bookingId,
                         child: sp.childName || b.childName || b.customer?.name || 'Student',
                         program: sp.program || sp.className || b.programName || b.session?.className
-                            || (b.bookingType === 'assessment' ? 'Assessment' : 'Class'),
+                            || (b.bookingType === 'assessment'
+                                ? 'Assessment'
+                                : b.bookingType === 'trial'
+                                    ? 'Trial Class'
+                                    : 'Class'),
                         coach: b.coachName || b.session?.coach || '',
                         date: b.sessionDate || b.session?.date || b.date || b.createdAt,
                         time: b.sessionTime?.startTime || b.session?.startTime || sp.timeSlot || b.time || '',
-                        duration: b.bookingType === 'assessment' ? '30 min' : (b.session?.duration || '1 hour'),
+                        duration: b.bookingType === 'assessment'
+                            ? '30 min'
+                            : b.bookingType === 'trial'
+                                ? '1 hour'
+                                : (b.session?.duration || '1 hour'),
                         location: sp.location || b.session?.location || b.location || '',
                         status: (b.status || 'pending').toLowerCase(),
                         price: b.payment?.amount || 0,

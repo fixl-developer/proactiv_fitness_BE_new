@@ -227,10 +227,14 @@ router.get('/knowledge', async (req: Request, res: Response) => {
 
         const role = String(req.user?.role || '').toUpperCase();
         const isAdminCaller = ['ADMIN', 'REGIONAL_ADMIN', 'SUPPORT_STAFF'].includes(role);
-        if (!isAdminCaller && !req.query.status) {
-            filter.status = 'published';
+        // `status=all` is an admin-only escape hatch to see drafts + published + archived
+        // (the admin dashboard list uses it). Public callers always get published-only.
+        if (req.query.status === 'all') {
+            // no status filter
         } else if (req.query.status) {
             filter.status = req.query.status;
+        } else if (!isAdminCaller) {
+            filter.status = 'published';
         }
 
         if (req.query.category) filter.category = req.query.category;

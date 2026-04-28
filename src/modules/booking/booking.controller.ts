@@ -38,13 +38,49 @@ export class BookingController {
     });
 
     /**
-     * Get all bookings
+     * Get all bookings — populates bookedBy + programId so the admin list can
+     * show customer name + program name instead of bare ObjectIds.
      */
     getBookings = asyncHandler(async (req: Request, res: Response) => {
         const filters = this.buildBookingFilters(req.query);
 
-        const result = await this.bookingService.findWithPagination(filters, req.query);
+        // Hand-rolled pagination so we can populate refs. Mirrors
+        // BaseService.findWithPagination but with .populate() on the Mongoose query.
+        const { Booking } = require('./booking.model');
+        const { PaginationUtil } = require('../../shared/utils/pagination.util');
+        const { page, limit, skip } = PaginationUtil.getPaginationParams(req.query);
+        const sortOptions = PaginationUtil.getSortOptions(
+            (req.query as any).sortBy,
+            (req.query as any).sortOrder,
+        );
+        const query = { ...filters, isDeleted: { $ne: true } };
+        const [docs, total] = await Promise.all([
+            Booking.find(query)
+                .populate({ path: 'bookedBy', select: 'firstName lastName name email' })
+                .populate({ path: 'programId', select: 'name title' })
+                .sort(sortOptions)
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            Booking.countDocuments(query),
+        ]);
 
+        // Inline customerName + programName so the frontend list doesn't need a
+        // second round of lookups. Keep the original IDs as strings.
+        const data = docs.map((d: any) => {
+            const customer: any = d.bookedBy && typeof d.bookedBy === 'object' ? d.bookedBy : null;
+            const program: any = d.programId && typeof d.programId === 'object' ? d.programId : null;
+            return {
+                ...d,
+                id: d._id?.toString?.() || d._id,
+                bookedBy: customer?._id?.toString?.() || customer?._id || d.bookedBy,
+                customerName: customer ? (customer.name || `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || customer.email) : '',
+                programId: program?._id?.toString?.() || program?._id || d.programId,
+                programName: program ? (program.name || program.title) : '',
+            };
+        });
+
+        const result = PaginationUtil.buildPaginationResult(data, total, page, limit);
         ResponseUtil.success(res, result, 'Bookings retrieved successfully');
     });
 
@@ -101,6 +137,22 @@ export class BookingController {
     createClassBooking = asyncHandler(async (req: Request, res: Response) => {
         const result = await this.bookingService.createClassBooking(req.body, req.user!.id);
         ResponseUtil.success(res, result, 'Class booking created successfully', HTTP_STATUS.CREATED);
+    });
+
+    /**
+     * Create trial booking (simplified website flow)
+     */
+    createTrialBooking = asyncHandler(async (req: Request, res: Response) => {
+        const result = await this.bookingService.createTrialBooking(req.body, req.user!.id);
+        ResponseUtil.success(res, result, 'Trial booking created successfully', HTTP_STATUS.CREATED);
+    });
+
+    /**
+     * Create holiday camp booking (simplified website flow)
+     */
+    createCampBooking = asyncHandler(async (req: Request, res: Response) => {
+        const result = await this.bookingService.createCampBooking(req.body, req.user!.id);
+        ResponseUtil.success(res, result, 'Camp booking created successfully', HTTP_STATUS.CREATED);
     });
 
     /**
