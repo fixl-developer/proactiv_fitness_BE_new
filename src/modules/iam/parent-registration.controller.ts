@@ -75,39 +75,53 @@ export class ParentRegistrationController extends BaseController {
                 phone: data.phone,
             });
 
-            // Step 2: Create family profile (if CRM module exists)
-            let familyProfile = null;
-            try {
-                const familyService = require('../crm/family.service').default;
+            // Step 2: Create children as User docs (role=STUDENT, parentId=<parent>)
+            // — this is the SAME shape the parent dashboard reads from
+            // (GET /api/v1/parent/children queries User by parentId / role=STUDENT).
+            // The previous CRM-based path was a no-op: family.service / child.service
+            // were never implemented in modules/crm, and the catch swallowed the
+            // MODULE_NOT_FOUND so children were silently dropped.
+            const createdChildren: any[] = [];
+            if (Array.isArray(data.children) && data.children.length > 0) {
+                const { User } = require('./user.model');
+                const sanitize = (s: string) =>
+                    String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                const parentId = userResult.user.id;
 
-                familyProfile = await familyService.createFamily({
-                    parentId: userResult.user.id,
-                    parentFirstName: data.parentFirstName,
-                    parentLastName: data.parentLastName,
-                    email: data.email,
-                    phone: data.phone,
-                    address: data.address,
-                    emergencyContact: data.emergencyContact,
-                    preferences: data.preferences,
-                });
-
-                // Step 3: Create children profiles
-                if (data.children && data.children.length > 0) {
-                    const childService = require('../crm/child.service').default;
-
-                    for (const child of data.children) {
-                        await childService.createChild({
-                            familyId: familyProfile.id,
+                for (const child of data.children) {
+                    try {
+                        const localPart = `${sanitize(child.firstName) || 'child'}.${sanitize(child.lastName) || 'user'}.${Date.now()}${Math.floor(Math.random() * 1000)}`;
+                        const childDoc = await User.create({
                             firstName: child.firstName,
                             lastName: child.lastName,
-                            dateOfBirth: child.dateOfBirth,
-                            gender: child.gender,
-                            emergencyContact: data.emergencyContact,
+                            dateOfBirth: child.dateOfBirth || undefined,
+                            gender: child.gender ? String(child.gender).toUpperCase() : undefined,
+                            role: 'STUDENT',
+                            status: 'ACTIVE',
+                            parentId,
+                            createdBy: parentId,
+                            createdByAdmin: true,
+                            isEmailVerified: true,
+                            medicalInfo: {
+                                allergies: [],
+                                medications: [],
+                                emergencyContact: data.emergencyContact?.phone || '',
+                                conditions: [],
+                            },
+                            email: `${localPart}@student.local`,
+                            password: `student-placeholder-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+                        });
+                        createdChildren.push(childDoc._id);
+                    } catch (childErr: any) {
+                        // Don't fail the whole signup if a single child fails to save —
+                        // log it and continue so the parent account is still created.
+                        console.error('[parent-register] failed to create child', {
+                            firstName: child.firstName,
+                            lastName: child.lastName,
+                            error: childErr?.message,
                         });
                     }
                 }
-            } catch (error) {
-                console.log('CRM module not available, skipping family profile creation');
             }
 
             // Step 4: Send welcome email (if notification service exists)
@@ -140,12 +154,7 @@ export class ParentRegistrationController extends BaseController {
                         role: userResult.user.role,
                         isEmailVerified: userResult.user.isEmailVerified,
                     },
-                    family: familyProfile
-                        ? {
-                            id: familyProfile.id,
-                            childrenCount: data.children?.length || 0,
-                        }
-                        : null,
+                    childrenCount: createdChildren.length,
                 },
                 'Registration successful! Welcome to Proactiv Fitness.'
             );

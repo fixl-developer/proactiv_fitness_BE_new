@@ -178,8 +178,16 @@ const router = Router();
 
 // All RBAC management endpoints require an authenticated admin-tier user.
 // Without this, any unauthenticated client could mutate roles & permissions.
-router.use(authenticate);
-router.use(authorize(
+//
+// IMPORTANT: this router is mounted at '/' in routes/index.ts (so the actual
+// route paths /iam/roles etc. become /api/v1/iam/roles). When you mount a
+// Router at '/' with path-less router.use() middleware, that middleware fires
+// for EVERY request that flows into the router — including unrelated paths
+// like /parent/children. We MUST scope these auth checks to /iam, otherwise
+// they intercept (and 403) every non-admin request that would later have
+// matched a different mount (PARENT/COACH/STUDENT dashboards, etc.).
+router.use('/iam', authenticate);
+router.use('/iam', authorize(
     UserRole.ADMIN,
     UserRole.REGIONAL_ADMIN,
     UserRole.FRANCHISE_OWNER,

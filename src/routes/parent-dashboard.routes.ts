@@ -18,7 +18,8 @@ export const browseClassesHandler = async (req: Request, res: Response) => {
     try {
         const { Session, Schedule } = require('../modules/scheduling/schedule.model');
         const { Program } = require('../modules/programs/program.model');
-        const { location, program, level, date } = req.query;
+        const { location, program, level, date, sessionId } = req.query;
+        const isMongoId = (s: any) => typeof s === 'string' && /^[a-f\d]{24}$/i.test(s);
 
         // ---- Sessions: only those whose parent Schedule is PUBLISHED ----
         // Customers must never see draft schedules.
@@ -35,6 +36,11 @@ export const browseClassesHandler = async (req: Request, res: Response) => {
         if (date) {
             const d = new Date(date as string);
             sessionFilter.date = { $gte: d, $lt: new Date(d.getTime() + 24 * 60 * 60 * 1000) };
+        }
+        // Direct fetch by sessionId — used by /parent/book-class/[sessionId]
+        // to load a single class without scanning the full session list.
+        if (isMongoId(sessionId)) {
+            sessionFilter._id = sessionId;
         }
 
         // Populate refs so frontend cards have real names, not blank strings.
@@ -89,11 +95,17 @@ export const browseClassesHandler = async (req: Request, res: Response) => {
                     coach: coachName,
                     level: sessionLevel,
                     location: loc.name || '',
+                    locationAddress: loc.address?.street || loc.address || '',
                     date: s.date || '',
                     time: s.timeSlot?.startTime || '',
+                    endTime: s.timeSlot?.endTime || '',
                     duration: s.duration ? `${s.duration} min` : '1 hour',
+                    capacity: maxCap,
+                    enrolled: enrolledCount,
                     availableSpots: Math.max(0, maxCap - enrolledCount),
                     price: prog.pricingModel?.basePrice ?? 0,
+                    currency: prog.pricingModel?.currency || 'HKD',
+                    ageGroup: prog.category || '',
                     description: prog.shortDescription || prog.description || '',
                 };
             })
@@ -543,9 +555,12 @@ router.get('/bookings', async (req: Request, res: Response) => {
                 stats,
                 bookings: bookings.map((b: any) => {
                     const sp = parseSpecial(b);
+                    const mainParticipant = Array.isArray(b.participants) ? b.participants[0] : null;
                     return {
                         id: b._id || b.bookingId,
-                        child: sp.childName || b.childName || b.customer?.name || 'Student',
+                        bookingId: b.bookingId,
+                        childId: mainParticipant?.childId || b.childId || null,
+                        child: mainParticipant?.name || sp.childName || b.childName || b.customer?.name || 'Student',
                         program: sp.program || sp.className || b.programName || b.session?.className
                             || (b.bookingType === 'assessment'
                                 ? 'Assessment'
@@ -563,7 +578,9 @@ router.get('/bookings', async (req: Request, res: Response) => {
                         location: sp.location || b.session?.location || b.location || '',
                         status: (b.status || 'pending').toLowerCase(),
                         price: b.payment?.amount || 0,
+                        currency: b.payment?.currency || 'HKD',
                         type: b.bookingType || b.type || 'regular',
+                        sessionId: b.sessionId || null,
                     };
                 }),
             }
@@ -807,18 +824,26 @@ router.post('/children', async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, message: 'First name and last name are required' });
         }
 
+        // Strip whitespace/punctuation from name parts before composing the
+        // generated email — the User schema's email regex (^\S+@\S+\.\S+$)
+        // rejects spaces, so a name like "Mary Jane" would otherwise fail.
+        const sanitize = (s: string) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const localPart = `${sanitize(firstName) || 'child'}.${sanitize(lastName) || 'user'}.${Date.now()}${Math.floor(Math.random() * 1000)}`;
+
         const child = await User.create({
             firstName,
             lastName,
             dateOfBirth: dateOfBirth || undefined,
-            gender: gender || undefined,
+            gender: gender ? String(gender).toUpperCase() : undefined,
             role: 'STUDENT',
             status: 'ACTIVE',
             parentId: parentId,
             createdBy: parentId,
+            createdByAdmin: true,
+            isEmailVerified: true,
             medicalInfo: medicalInfo || {},
-            email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}.${Date.now()}@student.local`,
-            password: 'student-placeholder-' + Date.now(),
+            email: `${localPart}@student.local`,
+            password: `student-placeholder-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
         });
 
         res.json({
@@ -1004,28 +1029,169 @@ router.get('/browse-classes', browseClassesHandler);
 // =============================================
 // BOOK A CLASS
 // =============================================
+// POST /api/v1/parent/book-class
+// Body: { sessionId, childId, paymentMethod? }
+// Resolves the published Session (programId, locationId, date, timeSlot, price)
+// and the parent's child (must be a User doc owned by this parent), then writes
+// a canonical Booking with all schema-required fields. The matching GET
+// /parent/bookings endpoint already $or's bookedBy/familyId/userId/parentId,
+// so the booking is visible immediately on the parent's bookings page.
 router.post('/book-class', async (req: Request, res: Response) => {
     try {
         const { Booking } = require('../modules/booking/booking.model');
+        const { Session } = require('../modules/scheduling/schedule.model');
+        const { Program } = require('../modules/programs/program.model');
+        const { Location } = require('../modules/bcms/location.model');
+        const { User } = require('../modules/iam/user.model');
+
         const parentId = getParentId(req);
-        const { sessionId, childId, childName, paymentMethod } = req.body;
+        const { sessionId, childId, paymentMethod } = req.body || {};
+        const isMongoId = (s: any) => typeof s === 'string' && /^[a-f\d]{24}$/i.test(s);
+
+        if (!isMongoId(sessionId)) {
+            return res.status(400).json({ success: false, message: 'Valid sessionId is required' });
+        }
+        if (!isMongoId(childId)) {
+            return res.status(400).json({ success: false, message: 'Valid childId is required' });
+        }
+
+        // 1) Validate child belongs to this parent (registered children are
+        //    User docs with role=STUDENT and parentId pointing at the parent).
+        const child = await User.findOne({
+            _id: childId,
+            $or: [{ parentId }, { 'family.parentId': parentId }, { createdBy: parentId }],
+            isDeleted: { $ne: true },
+        }).select('firstName lastName fullName').lean();
+        if (!child) {
+            return res.status(403).json({
+                success: false,
+                message: 'This child is not registered under your account',
+            });
+        }
+
+        // 2) Resolve the session — must exist, must not be cancelled, must have
+        //    capacity, must be published (browse endpoint already filters to
+        //    published schedules; we re-check here so direct-URL bookings are
+        //    safe too).
+        const session = await Session.findById(sessionId)
+            .populate({ path: 'programId', select: 'name pricingModel businessUnitId' })
+            .populate({ path: 'locationId', select: 'name businessUnitId' })
+            .lean();
+        if (!session) {
+            return res.status(404).json({ success: false, message: 'Class session not found' });
+        }
+        if (['cancelled', 'CANCELLED'].includes(String(session.status || ''))) {
+            return res.status(409).json({ success: false, message: 'This session has been cancelled' });
+        }
+        const enrolledCount = Array.isArray(session.enrolledParticipants) ? session.enrolledParticipants.length : 0;
+        const maxCap = typeof session.maxCapacity === 'number' ? session.maxCapacity : 0;
+        if (maxCap > 0 && enrolledCount >= maxCap) {
+            return res.status(409).json({ success: false, message: 'This class is fully booked' });
+        }
+
+        const program: any = session.programId || {};
+        const location: any = session.locationId || {};
+
+        // 3) Prevent duplicate booking — if this child is already booked into
+        //    this session (active status), don't double-book.
+        const existing = await Booking.findOne({
+            sessionId,
+            'participants.childId': childId,
+            status: { $in: ['confirmed', 'pending', 'CONFIRMED', 'PENDING'] },
+            isDeleted: { $ne: true },
+        }).lean();
+        if (existing) {
+            return res.status(409).json({
+                success: false,
+                message: `${child.firstName} is already booked for this class`,
+            });
+        }
+
+        // 4) Resolve businessUnitId — required by schema. Prefer program's,
+        //    fall back to location's.
+        let businessUnitId: any = program.businessUnitId || location.businessUnitId;
+        if (!businessUnitId && isMongoId(session.locationId)) {
+            const loc = await Location.findById(session.locationId).select('businessUnitId').lean();
+            businessUnitId = loc?.businessUnitId;
+        }
+        if (!businessUnitId) {
+            return res.status(500).json({
+                success: false,
+                message: 'Could not resolve business unit for this session',
+            });
+        }
+
+        // 5) Build canonical Booking doc.
+        const now = new Date();
+        const bookingId = `BK-${now.getTime().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+        const childFullName = (child.fullName || `${child.firstName || ''} ${child.lastName || ''}`.trim() || 'Student');
+        const price = program?.pricingModel?.basePrice ?? 0;
+        const currency = program?.pricingModel?.currency || 'HKD';
 
         const booking = await Booking.create({
-            userId: parentId,
-            parentId: parentId,
-            childId: childId || undefined,
-            childName: childName || 'Student',
-            sessionId: sessionId,
+            bookingId,
+            bookingType: 'drop_in',
             status: 'confirmed',
-            type: 'regular',
-            payment: { amount: req.body.amount || 0, status: 'pending', method: paymentMethod || 'card' },
-            createdAt: new Date(),
+            familyId: parentId,
+            bookedBy: parentId,
+            participants: [{
+                childId,
+                name: childFullName,
+                isMainParticipant: true,
+            }],
+            programId: program._id || session.programId,
+            locationId: location._id || session.locationId,
+            businessUnitId,
+            sessionId,
+            sessionDate: session.date || now,
+            sessionTime: session.timeSlot
+                ? { startTime: session.timeSlot.startTime, endTime: session.timeSlot.endTime }
+                : undefined,
+            payment: {
+                amount: price,
+                currency,
+                status: 'pending',
+                method: paymentMethod || 'card',
+            },
+            specialRequests: [
+                `childName:${childFullName}`,
+                `program:${program.name || 'Class'}`,
+                `location:${location.name || ''}`,
+            ],
+            createdBy: parentId,
+            updatedBy: parentId,
         });
 
-        res.json({ success: true, data: { id: booking._id, status: 'confirmed' }, message: 'Class booked successfully' });
+        // 6) Add child to session.enrolledParticipants so the capacity counter
+        //    reflects the new booking immediately.
+        await Session.updateOne(
+            { _id: sessionId },
+            { $addToSet: { enrolledParticipants: childId } },
+        ).catch((e: any) => console.error('[parent/book-class] enrol update failed', e?.message));
+
+        return res.status(201).json({
+            success: true,
+            message: 'Class booked successfully',
+            data: {
+                id: booking._id,
+                bookingId: booking.bookingId,
+                status: booking.status,
+                childId,
+                childName: childFullName,
+                program: program.name || 'Class',
+                location: location.name || '',
+                sessionDate: booking.sessionDate,
+                sessionTime: booking.sessionTime,
+                price,
+                currency,
+            },
+        });
     } catch (error: any) {
         console.error('Book class error:', error);
-        res.status(500).json({ success: false, message: error.message || 'Failed to book class' });
+        return res.status(500).json({
+            success: false,
+            message: error?.message || 'Failed to book class',
+        });
     }
 });
 
