@@ -2,6 +2,18 @@ import { Types } from 'mongoose';
 import { SeedData } from './seed-data.interface';
 import { COLLECTIONS } from '../constants';
 
+// NOTE on shape: this seed loads via the raw Mongo driver (see seed-loader.ts)
+// which bypasses Mongoose validation — so the field shape MUST match the
+// Location model exactly. The Location schema requires nested
+// `address: { street, city, state, country, postalCode }` and
+// `contactInfo: { email, phone }`, plus required `businessUnitId` /
+// `countryId` ObjectIds. Earlier versions of this file used a flat shape
+// (top-level `address: string`, `city`, `phone`, `email`) that silently
+// inserted as malformed docs because raw inserts skip validation, leaving
+// the public /locations endpoint with rows that had no `address.city`.
+// For dev environments without seeded BUs/Countries, prefer the dedicated
+// scripts/seed-default-locations.ts which resolves real refs at runtime.
+
 export const locationSeedData: SeedData = {
     collection: COLLECTIONS.LOCATIONS,
     environment: 'all',
@@ -12,16 +24,20 @@ export const locationSeedData: SeedData = {
         {
             _id: new Types.ObjectId(),
             name: 'Cyberport',
-            code: 'CP-01',
-            address: 'Shop G01, Cyberport 1, 100 Cyberport Road',
-            city: 'Hong Kong',
-            state: 'Hong Kong',
-            country: 'Hong Kong',
-            postalCode: '',
-            phone: '+852 2234 5678',
-            email: 'cyberport@proactivsports.net',
+            code: 'CYBERPORT',
+            address: {
+                street: 'Shop 123, Cyberport 3, 100 Cyberport Road',
+                city: 'Hong Kong',
+                state: 'Hong Kong',
+                country: 'Hong Kong',
+                postalCode: '00000',
+            },
+            contactInfo: {
+                email: 'cyberport@proactivsports.net',
+                phone: '+85222345678',
+            },
             capacity: 100,
-            facilities: ['Gym', 'Pool', 'Parking', 'Locker Rooms', 'Cafeteria'],
+            facilities: ['Gym', 'Locker Rooms', 'Parking', 'Reception', 'Party Room'],
             isActive: true,
             status: 'ACTIVE',
             businessUnitId: null,
@@ -33,16 +49,20 @@ export const locationSeedData: SeedData = {
         {
             _id: new Types.ObjectId(),
             name: 'Wan Chai',
-            code: 'WC-01',
-            address: 'Wan Chai Sports Center, Wan Chai',
-            city: 'Hong Kong',
-            state: 'Hong Kong',
-            country: 'Hong Kong',
-            postalCode: '',
-            phone: '+852 2234 5679',
-            email: 'wanchai@proactivsports.net',
+            code: 'WAN-CHAI',
+            address: {
+                street: '5/F, 168 Hennessy Road',
+                city: 'Wan Chai',
+                state: 'Hong Kong',
+                country: 'Hong Kong',
+                postalCode: '00000',
+            },
+            contactInfo: {
+                email: 'wanchai@proactivsports.net',
+                phone: '+85223456789',
+            },
             capacity: 80,
-            facilities: ['Gym', 'Parking', 'Locker Rooms', 'Training Area'],
+            facilities: ['Gym', 'Locker Rooms', 'Parent Lounge', 'Multi-Purpose Room'],
             isActive: true,
             status: 'ACTIVE',
             businessUnitId: null,
