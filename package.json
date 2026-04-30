@@ -15,7 +15,8 @@
         "migrate": "ts-node -r tsconfig-paths/register src/database/migrations/runner.ts",
         "seed": "ts-node -r tsconfig-paths/register src/database/seeds/runner.ts",
         "seed:support": "ts-node -r tsconfig-paths/register src/scripts/seed-support-data.ts",
-        "seed:support:clear": "ts-node -r tsconfig-paths/register src/scripts/seed-support-data.ts --clear"
+        "seed:support:clear": "ts-node -r tsconfig-paths/register src/scripts/seed-support-data.ts --clear",
+        "seed:locations": "ts-node -r tsconfig-paths/register scripts/seed-default-locations.ts"
     },
     "keywords": [
         "fitness",
