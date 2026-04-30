@@ -64,6 +64,20 @@ export class ParentRegistrationController extends BaseController {
                 return this.sendBadRequest(res, 'Passwords do not match');
             }
 
+            // Normalize phones to E.164 — frontend PhoneInput historically emitted
+            // "+91 9876543210" (with space), which the User schema regex rejects.
+            const normalizePhone = (raw?: string) => {
+                if (!raw) return raw;
+                const trimmed = String(raw).trim();
+                const hasPlus = trimmed.startsWith('+');
+                const digits = trimmed.replace(/\D/g, '');
+                return hasPlus ? `+${digits}` : digits;
+            };
+            const normalizedPhone = normalizePhone(data.phone);
+            if (data.emergencyContact) {
+                data.emergencyContact.phone = normalizePhone(data.emergencyContact.phone) || '';
+            }
+
             // Step 1: Create user account
             const userResult = await authService.register({
                 email: data.email,
@@ -72,7 +86,7 @@ export class ParentRegistrationController extends BaseController {
                 firstName: data.parentFirstName,
                 lastName: data.parentLastName,
                 role: 'PARENT' as any,
-                phone: data.phone,
+                phone: normalizedPhone,
             });
 
             // Step 2: Create children as User docs (role=STUDENT, parentId=<parent>)
