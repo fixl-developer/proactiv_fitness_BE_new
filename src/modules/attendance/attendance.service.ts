@@ -15,13 +15,20 @@ import {
     SyncStatus,
     CheckInMethod
 } from './attendance.interface';
-import { BaseService } from '../../shared/base/base.service';
+import { BaseService, EntityContext } from '../../shared/base/base.service';
 import { AppError } from '../../shared/utils/app-error.util';
 import { HTTP_STATUS } from '../../shared/constants';
 
 export class AttendanceService extends BaseService<IAttendanceRecord> {
     constructor() {
-        super(AttendanceRecord);
+        super(AttendanceRecord, 'attendance');
+    }
+
+    protected getEntityContext(doc: any): EntityContext | null {
+        return {
+            locationId: doc.locationId?.toString(),
+            targetUserId: doc.personId?.toString(),
+        };
     }
 
     /**
@@ -105,6 +112,7 @@ export class AttendanceService extends BaseService<IAttendanceRecord> {
             // Send notifications if required
             await this.sendCheckInNotifications(attendanceRecord, rules);
 
+            this.emitRealtimeEvent('checkedIn', attendanceRecord);
             return attendanceRecord;
         } catch (error: any) {
             throw new AppError(
@@ -176,6 +184,7 @@ export class AttendanceService extends BaseService<IAttendanceRecord> {
             // Send notifications if required
             await this.sendCheckOutNotifications(attendanceRecord, rules);
 
+            this.emitRealtimeEvent('checkedOut', attendanceRecord);
             return attendanceRecord;
         } catch (error: any) {
             throw new AppError(
@@ -539,7 +548,17 @@ export class AttendanceService extends BaseService<IAttendanceRecord> {
             return acc;
         }, {});
     }
+
+    async findOneAndUpdate(filter: any, update: any, options?: any): Promise<any> {
+        return (this.model as any).findOneAndUpdate(filter, update, options);
+    }
+
+    async find(filter: any = {}): Promise<any[]> {
+        return (this.model as any).find(filter);
+    }
 }
+
+export const attendanceService = new AttendanceService();
 
 export class AttendanceSessionService extends BaseService<IAttendanceSession> {
     constructor() {
@@ -625,6 +644,10 @@ export class AttendanceSessionService extends BaseService<IAttendanceSession> {
     private generateSessionId(): string {
         return `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
+
+    async findOneAndUpdate(filter: any, update: any, options?: any): Promise<any> {
+        return (this.model as any).findOneAndUpdate(filter, update, options);
+    }
 }
 
 export class AttendanceDeviceService extends BaseService<IAttendanceDevice> {
@@ -680,5 +703,9 @@ export class AttendanceDeviceService extends BaseService<IAttendanceDevice> {
 
     private generateDeviceId(): string {
         return `dev_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
+
+    async findOneAndUpdate(filter: any, update: any, options?: any): Promise<any> {
+        return (this.model as any).findOneAndUpdate(filter, update, options);
     }
 }

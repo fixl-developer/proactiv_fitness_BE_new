@@ -2,10 +2,13 @@ import { Document } from 'mongoose';
 
 export enum PartnerType {
     SCHOOL = 'school',
+    GYM = 'gym',
     CORPORATE = 'corporate',
-    MUNICIPAL = 'municipal',
+    SPORTS_ACADEMY = 'sports_academy',
     NGO = 'ngo',
-    SPORTS_CLUB = 'sports_club'
+    MUNICIPAL = 'municipal',
+    SPORTS_CLUB = 'sports_club',
+    OTHER = 'other'
 }
 
 export enum PartnershipStatus {

@@ -24,7 +24,6 @@ export { FeatureFlagsController } from './feature-flags.controller';
 export { MediaStorageController } from './media-storage.controller';
 
 // Phase 2 Controllers
-export { ProgramController } from './program.controller';
 export { ScheduleController } from './schedule.controller';
 export { RuleController, PolicyController, RuleTemplateController } from './rule.controller';
 

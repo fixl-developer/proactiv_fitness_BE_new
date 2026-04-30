@@ -7,7 +7,7 @@
 import { Router } from 'express';
 import { MediaStorageController } from '../controllers/media-storage.controller';
 import { authenticate, authorize } from '../../modules/iam/auth.middleware';
-import { rateLimitMiddleware } from '../../middleware/rate-limit.middleware';
+import { createRateLimitMiddleware } from '../../middleware/rate-limit.middleware';
 import { validationMiddleware } from '../../middleware/validation.middleware';
 import { UserRole } from '../../shared/enums';
 import multer from 'multer';
@@ -27,10 +27,9 @@ export function createMediaStorageRoutes(controller: MediaStorageController): Ro
     router.use(authenticate);
 
     // Apply rate limiting
-    router.use(rateLimitMiddleware({
+    router.use(createRateLimitMiddleware({
         windowMs: 15 * 60 * 1000, // 15 minutes
         max: 500, // 500 requests per window
-        message: 'Too many media requests'
     }));
 
     // File upload endpoints
@@ -67,15 +66,15 @@ export function createMediaStorageRoutes(controller: MediaStorageController): Ro
 
     // Admin endpoints
     router.get('/quota/:tenantId',
-        authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+        authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN),
         controller.getStorageQuota
     );
     router.put('/quota/:tenantId',
-        authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN),
+        authorize(UserRole.ADMIN),
         controller.updateStorageQuota
     );
     router.get('/audit/:fileId',
-        authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+        authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN),
         controller.getFileAuditTrail
     );
 

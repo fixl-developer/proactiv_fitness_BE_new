@@ -184,7 +184,7 @@ export interface IPayrollInfo {
 
 export interface IStaff extends Document {
     // Basic Information
-    staffId: string;
+    staffId: any;
     personalInfo: IPersonalInfo;
     contactInfo: IContactInfo;
 
@@ -196,7 +196,7 @@ export interface IStaff extends Document {
     probationEndDate?: Date;
 
     // Work Assignment
-    businessUnitId: string;
+    businessUnitId: any;
     locationIds: string[];
     primaryLocationId: string;
     departmentId?: string;
@@ -245,16 +245,16 @@ export interface IStaff extends Document {
     notes?: string;
 
     // Audit
-    createdBy: string;
-    updatedBy: string;
+    createdBy: any;
+    updatedBy: any;
     createdAt: Date;
     updatedAt: Date;
 }
 
 export interface IStaffSchedule extends Document {
     scheduleId: string;
-    staffId: string;
-    locationId: string;
+    staffId: any;
+    locationId: any;
 
     // Schedule Details
     date: Date;
@@ -290,17 +290,17 @@ export interface IStaffSchedule extends Document {
     managerNotes?: string;
 
     // Audit
-    createdBy: string;
-    updatedBy: string;
+    createdBy: any;
+    updatedBy: any;
     createdAt: Date;
     updatedAt: Date;
 }
 
 export interface IStaffAttendance extends Document {
     attendanceId: string;
-    staffId: string;
+    staffId: any;
     scheduleId?: string;
-    locationId: string;
+    locationId: any;
 
     // Attendance Details
     date: Date;
@@ -338,15 +338,15 @@ export interface IStaffAttendance extends Document {
     // Verification
     checkInMethod: 'manual' | 'qr_code' | 'nfc' | 'biometric' | 'mobile_app';
     checkOutMethod?: 'manual' | 'qr_code' | 'nfc' | 'biometric' | 'mobile_app';
-    verifiedBy?: string;
+    verifiedBy?: any;
 
     // Notes
     notes?: string;
     managerNotes?: string;
 
     // Audit
-    createdBy: string;
-    updatedBy: string;
+    createdBy: any;
+    updatedBy: any;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -390,8 +390,8 @@ export interface IStaffFilter {
 }
 
 export interface IScheduleStaffRequest {
-    staffId: string;
-    locationId: string;
+    staffId: any;
+    locationId: any;
     date: Date;
     shiftType: ShiftType;
     startTime: Date;
@@ -400,13 +400,13 @@ export interface IScheduleStaffRequest {
 }
 
 export interface IStaffAvailabilityRequest {
-    staffId: string;
+    staffId: any;
     weeklyAvailability: IAvailabilitySlot[];
     availabilityStatus: AvailabilityStatus;
 }
 
 export interface ITimeOffRequestData {
-    staffId: string;
+    staffId: any;
     type: LeaveType;
     startDate: Date;
     endDate: Date;
@@ -421,7 +421,7 @@ export interface IStaffStatistics {
     staffByType: Record<StaffType, number>;
     staffByStatus: Record<StaffStatus, number>;
     staffByLocation: {
-        locationId: string;
+        locationId: any;
         locationName: string;
         staffCount: number;
     }[];
@@ -442,7 +442,7 @@ export interface IAttendanceStatistics {
     attendanceRate: number;
     punctualityRate: number;
     attendanceByLocation: {
-        locationId: string;
+        locationId: any;
         locationName: string;
         attendanceRate: number;
     }[];

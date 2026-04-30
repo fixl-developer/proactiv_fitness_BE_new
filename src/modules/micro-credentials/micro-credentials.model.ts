@@ -129,11 +129,11 @@ const microCredentialSchema = new Schema<IMicroCredential>({
     version: { type: String, required: true, default: '1.0' },
 
     // Business Context
-    businessUnitId: { type: Schema.Types.ObjectId, ref: 'BusinessUnit', required: true, index: true },
+    businessUnitId: { type: String, ref: 'BusinessUnit', required: true, index: true },
 
     // Audit
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true }
+    createdBy: { type: String, ref: 'User', required: true },
+    updatedBy: { type: String, ref: 'User', required: true }
 }, {
     ...baseSchemaOptions,
     timestamps: true
@@ -150,7 +150,7 @@ const issuedCredentialSchema = new Schema<IIssuedCredential>({
 
     // Issuance Details
     issuedDate: { type: Date, required: true, index: true },
-    issuedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    issuedBy: { type: String, ref: 'User', required: true },
     issuedByName: { type: String, required: true, trim: true },
     status: { type: String, enum: Object.values(CertificationStatus), default: CertificationStatus.EARNED, index: true },
 
@@ -249,12 +249,12 @@ const issuedCredentialSchema = new Schema<IIssuedCredential>({
     },
 
     // Business Context
-    businessUnitId: { type: Schema.Types.ObjectId, ref: 'BusinessUnit', required: true, index: true },
-    locationId: { type: Schema.Types.ObjectId, ref: 'Location', required: true, index: true },
+    businessUnitId: { type: String, ref: 'BusinessUnit', required: true, index: true },
+    locationId: { type: String, ref: 'Location', required: true, index: true },
 
     // Audit
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true }
+    createdBy: { type: String, ref: 'User', required: true },
+    updatedBy: { type: String, ref: 'User', required: true }
 }, {
     ...baseSchemaOptions,
     timestamps: true
@@ -306,11 +306,11 @@ const badgeSystemSchema = new Schema<IBadgeSystem>({
     isVisible: { type: Boolean, default: true },
 
     // Business Context
-    businessUnitId: { type: Schema.Types.ObjectId, ref: 'BusinessUnit', required: true, index: true },
+    businessUnitId: { type: String, ref: 'BusinessUnit', required: true, index: true },
 
     // Audit
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true }
+    createdBy: { type: String, ref: 'User', required: true },
+    updatedBy: { type: String, ref: 'User', required: true }
 }, {
     ...baseSchemaOptions,
     timestamps: true
@@ -327,7 +327,7 @@ const earnedBadgeSchema = new Schema<IEarnedBadge>({
 
     // Earning Details
     earnedDate: { type: Date, required: true, index: true },
-    earnedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    earnedBy: { type: String, ref: 'User', required: true },
     earnedByName: { type: String, required: true, trim: true },
 
     // Achievement Context
@@ -364,12 +364,12 @@ const earnedBadgeSchema = new Schema<IEarnedBadge>({
     },
 
     // Business Context
-    businessUnitId: { type: Schema.Types.ObjectId, ref: 'BusinessUnit', required: true, index: true },
-    locationId: { type: Schema.Types.ObjectId, ref: 'Location', required: true, index: true },
+    businessUnitId: { type: String, ref: 'BusinessUnit', required: true, index: true },
+    locationId: { type: String, ref: 'Location', required: true, index: true },
 
     // Audit
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true }
+    createdBy: { type: String, ref: 'User', required: true },
+    updatedBy: { type: String, ref: 'User', required: true }
 }, {
     ...baseSchemaOptions,
     timestamps: true

@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
 import { Db } from 'mongodb';
-import { BaseAuditLog } from '../interfaces';
+import { AuditLog } from '../interfaces';
 import logger from '../../../shared/utils/logger.util';
 
 /**
@@ -16,7 +16,7 @@ export class HashChainService {
     /**
      * Compute hash for an audit log entry
      */
-    computeLogHash(log: Partial<BaseAuditLog>, previousHash: string): string {
+    computeLogHash(log: Partial<AuditLog>, previousHash: string): string {
         const hashInput = [
             log.tenantId,
             log.logId,
@@ -104,7 +104,7 @@ export class HashChainService {
         let verifiedLogs = 0;
 
         for (const log of logs) {
-            const expectedHash = this.computeLogHash(log, previousHash);
+            const expectedHash = this.computeLogHash(log as any, previousHash);
 
             if (expectedHash === log.currentHash) {
                 verifiedLogs++;
@@ -141,7 +141,7 @@ export class HashChainService {
     /**
      * Verify a single log's hash
      */
-    verifyLogHash(log: BaseAuditLog, previousHash: string): boolean {
+    verifyLogHash(log: AuditLog, previousHash: string): boolean {
         const expectedHash = this.computeLogHash(log, previousHash);
         return expectedHash === log.currentHash;
     }
@@ -150,10 +150,10 @@ export class HashChainService {
      * Generate hash chain for a batch of logs
      */
     generateHashChain(
-        logs: Partial<BaseAuditLog>[],
+        logs: Partial<AuditLog>[],
         initialPreviousHash: string
-    ): Array<{ log: Partial<BaseAuditLog>; hash: string }> {
-        const result: Array<{ log: Partial<BaseAuditLog>; hash: string }> = [];
+    ): Array<{ log: Partial<AuditLog>; hash: string }> {
+        const result: Array<{ log: Partial<AuditLog>; hash: string }> = [];
         let previousHash = initialPreviousHash;
 
         for (const log of logs) {

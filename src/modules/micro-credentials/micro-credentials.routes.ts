@@ -5,8 +5,11 @@ import { authMiddleware } from '../iam/auth.middleware';
 const router = Router();
 const credentialController = new MicroCredentialController();
 
-// Apply authentication middleware to all routes
-router.use(authMiddleware);
+// Apply authentication middleware ONLY to /micro-credentials/* and /badges/* paths.
+// (This router is mounted at '/' in routes/index.ts, so a bare router.use(authMiddleware)
+//  would intercept every /api/v1/* request and break unrelated routes with 401s.)
+router.use('/micro-credentials', authMiddleware);
+router.use('/badges', authMiddleware);
 
 // Credential Definition Routes
 router.post('/micro-credentials', credentialController.createCredential);

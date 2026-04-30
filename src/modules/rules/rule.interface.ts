@@ -142,8 +142,8 @@ export interface IRule extends Document {
     };
 
     // Audit
-    createdBy: string;
-    updatedBy: string;
+    createdBy: any;
+    updatedBy: any;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -182,8 +182,8 @@ export interface IPolicy extends Document {
     };
 
     // Audit
-    createdBy: string;
-    updatedBy: string;
+    createdBy: any;
+    updatedBy: any;
     createdAt: Date;
     updatedAt: Date;
     version: number;
@@ -212,7 +212,7 @@ export interface IRuleTemplate extends Document {
     usageCount: number;
 
     // Audit
-    createdBy: string;
+    createdBy: any;
     createdAt: Date;
     updatedAt: Date;
 }

@@ -5,6 +5,7 @@ import { ResponseUtil } from '../../shared/utils/response.util';
 import { HTTP_STATUS, SUCCESS_MESSAGES } from '../../shared/constants';
 import { AppError } from '../../shared/utils/app-error.util';
 import { IProgramFilter, AgeGroupType, SkillLevel } from './program.interface';
+import { Program } from './program.model';
 
 export class ProgramController extends BaseController {
     private programService: ProgramService;
@@ -26,10 +27,7 @@ export class ProgramController extends BaseController {
 
             const program = await this.programService.createProgram(req.body, userId);
 
-            ResponseUtil.success(res, {
-                message: SUCCESS_MESSAGES.CREATED,
-                data: program
-            }, HTTP_STATUS.CREATED);
+            ResponseUtil.created(res, program, SUCCESS_MESSAGES.CREATED);
         } catch (error) {
             next(error);
         }
@@ -98,17 +96,7 @@ export class ProgramController extends BaseController {
                 sortOrder as 'asc' | 'desc'
             );
 
-            ResponseUtil.success(res, {
-                message: SUCCESS_MESSAGES.RETRIEVED,
-                data: result.programs,
-                meta: {
-                    totalCount: result.totalCount,
-                    page: parseInt(page as string),
-                    limit: parseInt(limit as string),
-                    totalPages: Math.ceil(result.totalCount / parseInt(limit as string))
-                },
-                filters: result.filters
-            });
+            ResponseUtil.success(res, result, SUCCESS_MESSAGES.RETRIEVED);
         } catch (error) {
             next(error);
         }
@@ -120,16 +108,13 @@ export class ProgramController extends BaseController {
     public getProgramById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const { id } = req.params;
-            const program = await this.programService.getById(id);
+            const program = await this.programService.findById(id);
 
             if (!program) {
                 throw new AppError('Program not found', HTTP_STATUS.NOT_FOUND);
             }
 
-            ResponseUtil.success(res, {
-                message: SUCCESS_MESSAGES.RETRIEVED,
-                data: program
-            });
+            ResponseUtil.success(res, program, SUCCESS_MESSAGES.RETRIEVED);
         } catch (error) {
             next(error);
         }
@@ -137,6 +122,9 @@ export class ProgramController extends BaseController {
 
     /**
      * Update program
+     *
+     * Adapter: admin Programs UI uses a flat shape (type, level, ageGroup, capacity,
+     * price, status). Map those onto the rich nested fields the service/model expect.
      */
     public updateProgram = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
@@ -147,16 +135,86 @@ export class ProgramController extends BaseController {
                 throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
             }
 
-            const program = await this.programService.updateProgram(id, req.body, userId);
+            const updates = this.adaptSimpleProgramFields(req.body);
+            const program = await this.programService.updateProgram(id, updates, userId);
 
-            ResponseUtil.success(res, {
-                message: SUCCESS_MESSAGES.UPDATED,
-                data: program
-            });
+            ResponseUtil.success(res, program, SUCCESS_MESSAGES.UPDATED);
         } catch (error) {
             next(error);
         }
     };
+
+    /**
+     * Translate the simplified Programs UI payload into the nested model shape.
+     * Pass-through any keys that are already in the rich form.
+     */
+    private adaptSimpleProgramFields(body: any): any {
+        const out: any = { ...body };
+
+        if (body.type && !body.programType) {
+            const map: Record<string, string> = {
+                gymnastics: 'regular',
+                ninja: 'regular',
+                tumbling: 'regular',
+                regular: 'regular',
+                camp: 'camp',
+                event: 'event',
+                party: 'party',
+                assessment: 'assessment',
+                private: 'private'
+            };
+            out.programType = map[String(body.type).toLowerCase()] || 'regular';
+            if (!body.category) out.category = body.type;
+            delete out.type;
+        }
+
+        if (body.level && !body.skillLevels) {
+            out.skillLevels = [String(body.level).toLowerCase()];
+            delete out.level;
+        }
+
+        if (body.ageGroup && !body.ageGroups) {
+            const [minStr, maxStr] = String(body.ageGroup).split('-');
+            const minAge = Number(minStr) || 5;
+            const maxAge = Number(maxStr) || 12;
+            out.ageGroups = [{
+                minAge,
+                maxAge,
+                ageType: 'years',
+                description: `Ages ${minAge}-${maxAge}`
+            }];
+            delete out.ageGroup;
+        }
+
+        if (typeof body.capacity === 'number' && !body.capacityRules) {
+            out.capacityRules = {
+                minParticipants: 1,
+                maxParticipants: body.capacity,
+                coachToParticipantRatio: 10,
+                waitlistCapacity: 5,
+                allowOverbooking: false
+            };
+            delete out.capacity;
+        }
+
+        if (typeof body.price === 'number' && !body.pricingModel) {
+            out.pricingModel = {
+                basePrice: body.price,
+                currency: 'USD',
+                pricingType: 'per_term'
+            };
+            delete out.price;
+        }
+
+        if (body.status && typeof body.isActive === 'undefined') {
+            const s = String(body.status).toLowerCase();
+            out.isActive = s === 'active';
+            if (s === 'draft') out.isPublic = false;
+            delete out.status;
+        }
+
+        return out;
+    }
 
     /**
      * Delete program (soft delete)
@@ -166,9 +224,7 @@ export class ProgramController extends BaseController {
             const { id } = req.params;
             await this.programService.delete(id);
 
-            ResponseUtil.success(res, {
-                message: SUCCESS_MESSAGES.DELETED
-            });
+            ResponseUtil.success(res, null, SUCCESS_MESSAGES.DELETED);
         } catch (error) {
             next(error);
         }
@@ -188,10 +244,7 @@ export class ProgramController extends BaseController {
                 locationId as string
             );
 
-            ResponseUtil.success(res, {
-                message: SUCCESS_MESSAGES.RETRIEVED,
-                data: programs
-            });
+            ResponseUtil.success(res, programs, SUCCESS_MESSAGES.RETRIEVED);
         } catch (error) {
             next(error);
         }
@@ -212,10 +265,7 @@ export class ProgramController extends BaseController {
                 locationId as string
             );
 
-            ResponseUtil.success(res, {
-                message: SUCCESS_MESSAGES.RETRIEVED,
-                data: programs
-            });
+            ResponseUtil.success(res, programs, SUCCESS_MESSAGES.RETRIEVED);
         } catch (error) {
             next(error);
         }
@@ -237,10 +287,7 @@ export class ProgramController extends BaseController {
                 prerequisitePrograms
             );
 
-            ResponseUtil.success(res, {
-                message: 'Eligibility check completed',
-                data: eligibility
-            });
+            ResponseUtil.success(res, eligibility, 'Eligibility check completed');
         } catch (error) {
             next(error);
         }
@@ -260,10 +307,7 @@ export class ProgramController extends BaseController {
                 siblingCount ? parseInt(siblingCount as string) : undefined
             );
 
-            ResponseUtil.success(res, {
-                message: 'Pricing calculated successfully',
-                data: pricing
-            });
+            ResponseUtil.success(res, pricing, 'Pricing calculated successfully');
         } catch (error) {
             next(error);
         }
@@ -271,19 +315,38 @@ export class ProgramController extends BaseController {
 
     /**
      * Get program statistics
+     *
+     * Returns both the rich service shape AND legacy aliases the admin
+     * Programs Catalog UI expects ({ totalPrograms, activePrograms, totalEnrolled, averageCapacity }).
      */
     public getProgramStatistics = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const { businessUnitId } = req.query;
 
-            const statistics = await this.programService.getProgramStatistics(
+            const statistics: any = await this.programService.getProgramStatistics(
                 businessUnitId as string
             );
 
-            ResponseUtil.success(res, {
-                message: 'Statistics retrieved successfully',
-                data: statistics
-            });
+            // Compute averageCapacity from the raw aggregation
+            let averageCapacity = 0;
+            try {
+                const agg = await Program.aggregate([
+                    ...(businessUnitId ? [{ $match: { businessUnitId } }] : []),
+                    { $group: { _id: null, avgCap: { $avg: '$capacityRules.maxParticipants' } } }
+                ]);
+                averageCapacity = Math.round(agg?.[0]?.avgCap || 0);
+            } catch {
+                averageCapacity = 0;
+            }
+
+            const payload = {
+                ...statistics,
+                // UI aliases
+                totalEnrolled: statistics.totalEnrollments ?? 0,
+                averageCapacity
+            };
+
+            ResponseUtil.success(res, payload, 'Statistics retrieved successfully');
         } catch (error) {
             next(error);
         }
@@ -291,11 +354,14 @@ export class ProgramController extends BaseController {
 
     /**
      * Duplicate program
+     *
+     * Admin UI sends an empty body — derive a default newName ("<Original> (Copy)")
+     * if the client doesn't supply one.
      */
     public duplicateProgram = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const { id } = req.params;
-            const { newName } = req.body;
+            let { newName } = req.body || {};
             const userId = req.user?.id;
 
             if (!userId) {
@@ -303,7 +369,11 @@ export class ProgramController extends BaseController {
             }
 
             if (!newName) {
-                throw new AppError('New program name is required', HTTP_STATUS.BAD_REQUEST);
+                const original = await this.programService.findById(id);
+                if (!original) {
+                    throw new AppError('Program not found', HTTP_STATUS.NOT_FOUND);
+                }
+                newName = `${original.name} (Copy)`;
             }
 
             const duplicatedProgram = await this.programService.duplicateProgram(
@@ -312,10 +382,7 @@ export class ProgramController extends BaseController {
                 userId
             );
 
-            ResponseUtil.success(res, {
-                message: 'Program duplicated successfully',
-                data: duplicatedProgram
-            }, HTTP_STATUS.CREATED);
+            ResponseUtil.created(res, duplicatedProgram, 'Program duplicated successfully');
         } catch (error) {
             next(error);
         }
@@ -333,22 +400,11 @@ export class ProgramController extends BaseController {
             }
 
             const programs = await this.programService.findWithPagination(
-                { $text: { $search: q as string } },
-                parseInt(page as string),
-                parseInt(limit as string),
-                { score: { $meta: 'textScore' } }
+                { $text: { $search: q as string } } as any,
+                { page: parseInt(page as string), limit: parseInt(limit as string) }
             );
 
-            ResponseUtil.success(res, {
-                message: SUCCESS_MESSAGES.RETRIEVED,
-                data: programs.data,
-                meta: {
-                    totalCount: programs.totalCount,
-                    page: parseInt(page as string),
-                    limit: parseInt(limit as string),
-                    totalPages: Math.ceil(programs.totalCount / parseInt(limit as string))
-                }
-            });
+            ResponseUtil.success(res, programs, SUCCESS_MESSAGES.RETRIEVED);
         } catch (error) {
             next(error);
         }
@@ -360,28 +416,10 @@ export class ProgramController extends BaseController {
     public getCategories = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const { businessUnitId } = req.query;
-            const matchStage: any = { isActive: true };
 
-            if (businessUnitId) {
-                matchStage.businessUnitId = businessUnitId;
-            }
+            const categories = await this.programService.getCategories(businessUnitId as string);
 
-            const categories = await this.programService.model.aggregate([
-                { $match: matchStage },
-                {
-                    $group: {
-                        _id: '$category',
-                        count: { $sum: 1 },
-                        subcategories: { $addToSet: '$subcategory' }
-                    }
-                },
-                { $sort: { _id: 1 } }
-            ]);
-
-            ResponseUtil.success(res, {
-                message: SUCCESS_MESSAGES.RETRIEVED,
-                data: categories
-            });
+            ResponseUtil.success(res, categories, SUCCESS_MESSAGES.RETRIEVED);
         } catch (error) {
             next(error);
         }
@@ -389,27 +427,36 @@ export class ProgramController extends BaseController {
 
     /**
      * Activate/Deactivate program
+     *
+     * Accepts either { isActive: boolean } (legacy) or { status: 'active'|'inactive'|'draft' }
+     * (admin Programs UI). Maps status → isActive/isPublic before delegating to service.
      */
     public toggleProgramStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const { id } = req.params;
-            const { isActive } = req.body;
+            const { isActive: rawIsActive, status } = req.body || {};
             const userId = req.user?.id;
 
             if (!userId) {
                 throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
             }
 
-            const program = await this.programService.updateProgram(
-                id,
-                { isActive },
-                userId
-            );
+            const updates: any = {};
+            if (typeof rawIsActive === 'boolean') {
+                updates.isActive = rawIsActive;
+            } else if (typeof status === 'string') {
+                const s = status.toLowerCase();
+                updates.isActive = s === 'active';
+                if (s === 'draft') {
+                    updates.isPublic = false;
+                }
+            } else {
+                throw new AppError('Either status or isActive is required', HTTP_STATUS.BAD_REQUEST);
+            }
 
-            ResponseUtil.success(res, {
-                message: `Program ${isActive ? 'activated' : 'deactivated'} successfully`,
-                data: program
-            });
+            const program = await this.programService.updateProgram(id, updates, userId);
+
+            ResponseUtil.success(res, program, `Program status updated successfully`);
         } catch (error) {
             next(error);
         }

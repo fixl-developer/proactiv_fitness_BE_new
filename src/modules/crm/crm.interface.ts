@@ -129,7 +129,7 @@ export interface IChildProfile extends Document {
     gender: 'male' | 'female' | 'other' | 'prefer_not_to_say';
 
     // Family Connection
-    familyId: string;
+    familyId: any;
     parentIds: string[];
 
     // Physical Information
@@ -170,7 +170,7 @@ export interface IChildProfile extends Document {
     behavioralNotes: {
         note: string;
         category: 'positive' | 'concern' | 'neutral';
-        createdBy: string;
+        createdBy: any;
         createdAt: Date;
         isPrivate: boolean;
     }[];
@@ -198,8 +198,8 @@ export interface IChildProfile extends Document {
     isActive: boolean;
 
     // Audit
-    createdBy: string;
-    updatedBy: string;
+    createdBy: any;
+    updatedBy: any;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -258,7 +258,7 @@ export interface IFamilyProfile extends Document {
         note: string;
         category: 'general' | 'billing' | 'medical' | 'behavioral' | 'administrative';
         isPrivate: boolean;
-        createdBy: string;
+        createdBy: any;
         createdAt: Date;
     }[];
 
@@ -280,8 +280,8 @@ export interface IFamilyProfile extends Document {
     lastActivityDate?: Date;
 
     // Audit
-    createdBy: string;
-    updatedBy: string;
+    createdBy: any;
+    updatedBy: any;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -330,8 +330,8 @@ export interface IInquiry extends Document {
     referrerUrl?: string;
 
     // Audit
-    createdBy: string;
-    updatedBy: string;
+    createdBy: any;
+    updatedBy: any;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -374,8 +374,8 @@ export interface ILeadManagement extends Document {
     conversionDate?: Date;
 
     // Audit
-    createdBy: string;
-    updatedBy: string;
+    createdBy: any;
+    updatedBy: any;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -445,7 +445,7 @@ export interface ICreateChildRequest {
     lastName: string;
     dateOfBirth: Date;
     gender: 'male' | 'female' | 'other' | 'prefer_not_to_say';
-    familyId: string;
+    familyId: any;
     parentIds: string[];
     emergencyContacts: IEmergencyContact[];
     medicalFlags?: IMedicalFlag[];

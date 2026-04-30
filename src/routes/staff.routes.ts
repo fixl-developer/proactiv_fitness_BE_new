@@ -9,12 +9,12 @@ const staffController = new StaffController();
 router.use(authMiddleware);
 
 // Staff CRUD routes
-router.post('/staff', staffController.createStaff);
-router.get('/staff', staffController.getStaffMembers);
-router.get('/staff/:staffId', staffController.getStaffById);
-router.put('/staff/:staffId', staffController.updateStaff);
+router.post('/', staffController.createStaff);
+router.get('/', staffController.getStaffMembers);
+router.get('/:staffId', staffController.getStaffById);
+router.put('/:staffId', staffController.updateStaff);
 
 // Statistics routes
-router.get('/staff/statistics/overview', staffController.getStaffStatistics);
+router.get('/statistics/overview', staffController.getStaffStatistics);
 
 export default router;

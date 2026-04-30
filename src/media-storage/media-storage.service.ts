@@ -6,7 +6,6 @@
  */
 
 import { MongoClient } from 'mongodb';
-import { S3Client } from '@aws-sdk/client-s3';
 import { StorageProvider } from './providers/storage-provider.interface';
 import { S3StorageProvider } from './providers/s3-storage.provider';
 import { LocalStorageProvider } from './providers/local-storage.provider';
@@ -15,6 +14,16 @@ import { StorageService } from './services/storage.service';
 import { StorageProvider as StorageProviderEnum } from './interfaces';
 import { Logger } from '../shared/utils/logger.util';
 import { AppError } from '../shared/utils/app-error.util';
+
+// Optional import for AWS SDK
+let S3Client: any;
+try {
+    const awsSdk = require('@aws-sdk/client-s3');
+    S3Client = awsSdk.S3Client;
+} catch (error) {
+    Logger.warn('AWS SDK not available, S3 storage provider will not work');
+    S3Client = null;
+}
 
 export class MediaStorageService {
     private logger = Logger.getInstance();
@@ -78,6 +87,9 @@ export class MediaStorageService {
     private createStorageProvider(): StorageProvider {
         switch (this.config.provider) {
             case StorageProviderEnum.S3:
+                if (!S3Client) {
+                    throw new AppError('AWS SDK is not available. Install @aws-sdk/client-s3 to use S3 provider', 500);
+                }
                 if (!this.config.s3) {
                     throw new AppError('S3 configuration is required for S3 provider', 500);
                 }

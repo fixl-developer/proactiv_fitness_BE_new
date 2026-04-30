@@ -101,6 +101,9 @@ export interface FlagEvaluation {
     sourceTenantId: string;
     variant?: string;
     evaluatedAt: Date;
+    reason?: string;
+    ruleId?: string;
+    evaluationTime?: number;
     metadata: {
         rolloutMatched: boolean;
         prerequisitesPassed: boolean;

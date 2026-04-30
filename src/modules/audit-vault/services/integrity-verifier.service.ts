@@ -241,7 +241,7 @@ export class IntegrityVerifierService {
             }
 
             // Verify current hash
-            const expectedHash = this.hashChainService.computeLogHash(log, log.previousHash);
+            const expectedHash = this.hashChainService.computeLogHash(log as any, log.previousHash);
             if (log.currentHash !== expectedHash) {
                 violations.push({
                     logId: log.logId,
@@ -391,7 +391,7 @@ export class IntegrityVerifierService {
 
         const result = await this.verificationJobsCollection.aggregate(pipeline).toArray();
 
-        return result.length > 0 ? result[0] : {
+        return result.length > 0 ? (result[0] as any) : {
             totalVerifications: 0,
             successfulVerifications: 0,
             failedVerifications: 0

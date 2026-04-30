@@ -108,7 +108,7 @@ export class QueryService {
                 .sort({ timestamp: -1 })
                 .skip(skip)
                 .limit(pageSize)
-                .toArray(),
+                .toArray() as Promise<T[]>,
             collection.countDocuments(mongoFilter),
         ]);
 
@@ -154,7 +154,7 @@ export class QueryService {
             filter = this.applyTenantFilter(filter, tenantContext);
         }
 
-        return collection.find(filter).sort({ timestamp: -1 }).toArray();
+        return collection.find(filter).sort({ timestamp: -1 }).toArray() as Promise<T[]>;
     }
 
     /**
@@ -274,7 +274,7 @@ export class QueryService {
             filter = this.applyTenantFilter(filter, tenantContext);
         }
 
-        return collection.find(filter, options).toArray();
+        return collection.find(filter, options).toArray() as Promise<T[]>;
     }
 
     /**
@@ -303,11 +303,11 @@ export class QueryService {
 
         const [data, total] = await Promise.all([
             collection
-                .find(filter, { score: { $meta: 'textScore' } })
+                .find(filter, { projection: { score: { $meta: 'textScore' } } } as any)
                 .sort({ score: { $meta: 'textScore' } })
                 .skip(skip)
                 .limit(pageSize)
-                .toArray(),
+                .toArray() as Promise<T[]>,
             collection.countDocuments(filter),
         ]);
 
@@ -335,6 +335,6 @@ export class QueryService {
             filter,
         });
 
-        return collection.find(filter, options).toArray();
+        return collection.find(filter, options).toArray() as Promise<T[]>;
     }
 }

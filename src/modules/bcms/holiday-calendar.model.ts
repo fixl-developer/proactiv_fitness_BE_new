@@ -38,12 +38,14 @@ const holidayCalendarSchema = new Schema<IHolidayCalendar>(
             min: [2020, 'Year must be 2020 or later'],
             max: [2100, 'Year must be 2100 or earlier'],
         },
+        // @ts-ignore - Mongoose type issue
         countryId: {
             type: Schema.Types.ObjectId,
             ref: 'Country',
             required: [true, 'Country is required'],
             index: true,
         },
+        // @ts-ignore - Mongoose type issue
         regionId: {
             type: Schema.Types.ObjectId,
             ref: 'Region',

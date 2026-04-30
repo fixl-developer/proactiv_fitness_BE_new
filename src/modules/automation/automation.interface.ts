@@ -133,14 +133,13 @@ export interface IActionConfig {
         phoneNumbers?: string[];
         message?: string;
 
-        // Push notification action
+        // Push notification / Task action (shared fields)
         userIds?: string[];
         title?: string;
-        body?: string;
+        body?: any; // Also used by Webhook/API action
         data?: Record<string, any>;
 
         // Task action
-        title?: string;
         description?: string;
         assignedTo?: string;
         dueDate?: Date;
@@ -149,13 +148,11 @@ export interface IActionConfig {
         // Record actions
         collection?: string;
         recordId?: string;
-        data?: Record<string, any>;
 
         // Webhook/API actions
         url?: string;
         method?: string;
         headers?: Record<string, string>;
-        body?: any;
         timeout?: number;
 
         // Function action
@@ -206,7 +203,7 @@ export interface IActionConfig {
 
 export interface IWorkflow extends Document {
     // Basic Information
-    workflowId: string;
+    workflowId: any;
     name: string;
     description?: string;
     version: string;
@@ -268,8 +265,8 @@ export interface IWorkflow extends Document {
     tags: string[];
 
     // Audit
-    createdBy: string;
-    updatedBy: string;
+    createdBy: any;
+    updatedBy: any;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -277,7 +274,7 @@ export interface IWorkflow extends Document {
 export interface IWorkflowExecution extends Document {
     // Basic Information
     executionId: string;
-    workflowId: string;
+    workflowId: any;
     workflowVersion: string;
 
     // Trigger Information
@@ -344,7 +341,7 @@ export interface IExecutionStep {
 
 export interface IAutomationRule extends Document {
     // Basic Information
-    ruleId: string;
+    ruleId: any;
     name: string;
     description?: string;
 
@@ -374,15 +371,15 @@ export interface IAutomationRule extends Document {
     };
 
     // Audit
-    createdBy: string;
-    updatedBy: string;
+    createdBy: any;
+    updatedBy: any;
     createdAt: Date;
     updatedAt: Date;
 }
 
 export interface IWorkflowTemplate extends Document {
     // Basic Information
-    templateId: string;
+    templateId: any;
     name: string;
     description?: string;
     category: string;
@@ -401,7 +398,7 @@ export interface IWorkflowTemplate extends Document {
     defaultValues: Record<string, any>;
 
     // Audit
-    createdBy: string;
+    createdBy: any;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -422,7 +419,7 @@ export interface ICreateWorkflowRequest {
 }
 
 export interface IExecuteWorkflowRequest {
-    workflowId: string;
+    workflowId: any;
     triggerData?: any;
     context?: Record<string, any>;
     variables?: Record<string, any>;
@@ -460,7 +457,7 @@ export interface IWorkflowStatistics {
     workflowsByStatus: Record<WorkflowStatus, number>;
     executionsByStatus: Record<ExecutionStatus, number>;
     topWorkflows: {
-        workflowId: string;
+        workflowId: any;
         workflowName: string;
         executionCount: number;
         successRate: number;
@@ -504,7 +501,7 @@ export interface IIntegrationConfig {
 // Simulation Interfaces
 export interface IWorkflowSimulation {
     simulationId: string;
-    workflowId: string;
+    workflowId: any;
     simulationData: any;
     results: {
         stepResults: {
@@ -517,7 +514,6 @@ export interface IWorkflowSimulation {
         }[];
         finalResult: any;
         executionTime: number;
-        success: boolean;
         error?: string;
     };
     createdAt: Date;

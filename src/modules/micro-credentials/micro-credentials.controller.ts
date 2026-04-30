@@ -254,11 +254,12 @@ export class MicroCredentialController extends BaseController {
             throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
         }
 
-        const earnedBadge = await this.badgeService.findOne({ earnedBadgeId });
+        const earnedBadge = await this.badgeService.findOne({ earnedBadgeId } as any) as any;
         if (!earnedBadge) {
             throw new AppError('Earned badge not found', HTTP_STATUS.NOT_FOUND);
         }
 
+        earnedBadge.displaySettings = earnedBadge.displaySettings || {};
         if (isPinned !== undefined) earnedBadge.displaySettings.isPinned = isPinned;
         if (displayOrder !== undefined) earnedBadge.displaySettings.displayOrder = displayOrder;
         if (showOnProfile !== undefined) earnedBadge.displaySettings.showOnProfile = showOnProfile;

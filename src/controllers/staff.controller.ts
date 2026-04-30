@@ -62,7 +62,7 @@ export class StaffController extends BaseController {
         };
 
         const staffMembers = await this.staffService.getStaffMembers(
-            filter,
+            filter as any,
             Number(page),
             Number(limit)
         );

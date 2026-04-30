@@ -104,3 +104,7 @@ export const migration002: Migration = {
         console.log('✅ Migration 002: Indexes dropped successfully');
     },
 };
+
+
+// Export alias for backward compatibility
+export const createIndexesMigration = migration002;

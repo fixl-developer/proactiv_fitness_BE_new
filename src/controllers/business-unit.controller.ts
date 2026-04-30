@@ -14,9 +14,12 @@ export class BusinessUnitController extends BaseController {
         const query: IBusinessUnitQuery = {
             regionId: req.query.regionId as string,
             type: req.query.type as any,
-            isActive: req.query.isActive === 'true',
             search: req.query.search as string,
         };
+        // Only filter by isActive if explicitly provided — otherwise list all.
+        if (req.query.isActive !== undefined && req.query.isActive !== '') {
+            query.isActive = req.query.isActive === 'true';
+        }
 
         const businessUnits = await businessUnitService.getBusinessUnits(query);
         return this.sendSuccess(res, businessUnits);
