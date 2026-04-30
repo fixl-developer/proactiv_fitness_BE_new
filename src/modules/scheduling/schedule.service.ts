@@ -158,6 +158,36 @@ export class ScheduleService extends BaseService<ISchedule> {
      */
     async generateSchedule(request: IScheduleGenerationRequest, createdBy: string): Promise<IScheduleGenerationResult> {
         try {
+            // Pre-flight: if admin picked specific weekdays AND the requested
+            // date range doesn't contain ANY of those weekdays, fail fast with
+            // a useful message — otherwise the loop in generateSessionsForProgram
+            // silently produces 0 sessions and admin gets the generic
+            // "produced 0 sessions" error with no idea why.
+            const reqAny = request as any;
+            const prefDays: number[] = Array.isArray(reqAny.preferredDays)
+                ? reqAny.preferredDays.filter((d: any) => Number.isInteger(d) && d >= 0 && d <= 6)
+                : [];
+            if (prefDays.length > 0 && request.startDate && request.endDate) {
+                const start = new Date(request.startDate);
+                const end = new Date(request.endDate);
+                const daysInRange = new Set<number>();
+                const cur = new Date(start);
+                while (cur <= end && daysInRange.size < 7) {
+                    daysInRange.add(cur.getDay());
+                    cur.setDate(cur.getDate() + 1);
+                }
+                const intersects = prefDays.some((d) => daysInRange.has(d));
+                if (!intersects) {
+                    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                    const picked = prefDays.map((d) => dayNames[d]).join(', ');
+                    const range = Array.from(daysInRange).sort().map((d) => dayNames[d]).join(', ');
+                    throw new AppError(
+                        `Selected weekdays (${picked}) don't fall within the date range (which only covers ${range}). Either widen the date range or pick weekdays inside it.`,
+                        HTTP_STATUS.BAD_REQUEST
+                    );
+                }
+            }
+
             // Resolve businessUnitId from the first program (was a bug: code used
             // programIds[0] AS the businessUnitId, which fails the ObjectId cast).
             const { Program } = require('../programs/program.model');
@@ -314,6 +344,11 @@ export class ScheduleService extends BaseService<ISchedule> {
                 statistics
             };
         } catch (error: any) {
+            // Preserve AppErrors (like the 400 from "weekdays don't intersect
+            // range" or "produced 0 sessions") so the controller surfaces the
+            // real cause + correct status code instead of always returning a
+            // generic 500.
+            if (error instanceof AppError) throw error;
             throw new AppError(
                 error.message || 'Failed to generate schedule',
                 HTTP_STATUS.INTERNAL_SERVER_ERROR
@@ -598,19 +633,42 @@ export class ScheduleService extends BaseService<ISchedule> {
             return { sessions, conflicts, successful, failed, errorReasons } as any;
         }
 
+        // Form-level overrides — admin's Generate Schedule UI lets the user
+        // pick preferred weekdays + start/end time, but those fields aren't on
+        // IScheduleGenerationRequest yet, so read them through `as any`. They
+        // shape both the synthesised fallback template AND any pre-existing
+        // template (otherwise admin selections were silently discarded and the
+        // service would generate 0 sessions when the chosen weekdays didn't
+        // overlap the template's hard-coded ones).
+        const reqAny = request as any;
+        const adminPreferredDays: number[] = Array.isArray(reqAny.preferredDays)
+            ? reqAny.preferredDays.filter((d: any) => Number.isInteger(d) && d >= 0 && d <= 6)
+            : [];
+        const adminStartTime: string | undefined = reqAny?.settings?.preferredStartTime;
+        const adminEndTime: string | undefined = reqAny?.settings?.preferredEndTime;
+
         // Fallback: if no roster template exists, synthesise a minimal one
         // from the program's sessionDuration / sessionsPerWeek so admin's
         // "Generate Schedule" actually creates Sessions even when nobody has
-        // set up a recurring template yet. Default slot: weekdays 10am for
-        // sessionsPerWeek (or 1) days starting Monday.
+        // set up a recurring template yet.
         if (!template) {
             const minutes = (program as any).sessionDuration || 60;
             const perWeek = Math.max(1, Math.min(7, (program as any).sessionsPerWeek || 1));
-            const startTime = '10:00';
-            const endHr = 10 + Math.floor(minutes / 60);
-            const endMin = minutes % 60;
-            const endTime = `${String(endHr).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
-            const days = [1, 3, 5, 2, 4, 6, 0].slice(0, perWeek); // Mon, Wed, Fri, Tue, Thu, Sat, Sun
+            const startTime = adminStartTime && /^\d{2}:\d{2}$/.test(adminStartTime) ? adminStartTime : '10:00';
+            // Honour admin's preferred end time if it's a valid HH:MM AND comes
+            // after the start time; otherwise compute one from session duration.
+            let endTime: string;
+            if (adminEndTime && /^\d{2}:\d{2}$/.test(adminEndTime) && adminEndTime > startTime) {
+                endTime = adminEndTime;
+            } else {
+                const [sh, sm] = startTime.split(':').map(Number);
+                const endTotal = sh * 60 + sm + minutes;
+                endTime = `${String(Math.floor(endTotal / 60) % 24).padStart(2, '0')}:${String(endTotal % 60).padStart(2, '0')}`;
+            }
+            // Day source: admin's preferredDays beats the program's default rotation.
+            const days = adminPreferredDays.length > 0
+                ? adminPreferredDays
+                : [1, 3, 5, 2, 4, 6, 0].slice(0, perWeek); // Mon, Wed, Fri, Tue, Thu, Sat, Sun
             template = {
                 timeSlots: days.map((dow) => ({
                     dayOfWeek: dow,
@@ -620,6 +678,21 @@ export class ScheduleService extends BaseService<ISchedule> {
                 })),
                 coachAssignments: [],
                 rooms: [],
+            } as any;
+        } else if (adminPreferredDays.length > 0 && Array.isArray(template.timeSlots) && template.timeSlots.length > 0) {
+            // Existing template: rebuild its timeSlots so each admin-picked
+            // weekday gets one slot (preserving the template's start/end/
+            // duration on the first slot). Without this, the admin form's day
+            // picker had no effect on already-templated programs.
+            const proto = template.timeSlots[0];
+            template = {
+                ...template,
+                timeSlots: adminPreferredDays.map((dow) => ({
+                    dayOfWeek: dow,
+                    startTime: adminStartTime && /^\d{2}:\d{2}$/.test(adminStartTime) ? adminStartTime : proto.startTime,
+                    endTime: adminEndTime && /^\d{2}:\d{2}$/.test(adminEndTime) ? adminEndTime : proto.endTime,
+                    duration: (proto as any).duration,
+                })),
             } as any;
         }
 
