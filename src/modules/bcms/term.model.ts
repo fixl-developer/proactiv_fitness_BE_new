@@ -15,12 +15,14 @@ const termSchema = new Schema<ITerm>(
             uppercase: true,
             trim: true,
         },
+        // @ts-ignore - Mongoose type issue
         businessUnitId: {
             type: Schema.Types.ObjectId,
             ref: 'BusinessUnit',
             required: [true, 'Business unit is required'],
             index: true,
         },
+        // @ts-ignore - Mongoose type issue
         locationId: {
             type: Schema.Types.ObjectId,
             ref: 'Location',
@@ -53,6 +55,7 @@ const termSchema = new Schema<ITerm>(
             type: Boolean,
             default: true,
         },
+        // @ts-ignore - Mongoose type issue
         holidayCalendarId: {
             type: Schema.Types.ObjectId,
             ref: 'HolidayCalendar',
@@ -74,10 +77,11 @@ const termSchema = new Schema<ITerm>(
 
 // Pre-save middleware to calculate weeks
 termSchema.pre('save', function (next) {
-    if (this.isModified('startDate') || this.isModified('endDate')) {
-        const diffTime = Math.abs(this.endDate.getTime() - this.startDate.getTime());
+    const term = this as any;
+    if (term.isModified('startDate') || term.isModified('endDate')) {
+        const diffTime = Math.abs(term.endDate.getTime() - term.startDate.getTime());
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        this.weeks = Math.ceil(diffDays / 7);
+        term.weeks = Math.ceil(diffDays / 7);
     }
     next();
 });

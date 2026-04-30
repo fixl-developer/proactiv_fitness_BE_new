@@ -11,34 +11,34 @@ router.use(authenticate);
 
 router.post(
     '/',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+    authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN),
     validate(createRegionValidation),
-    regionController.wrap(regionController.create)
+    regionController.create.bind(regionController)
 );
 
 router.get(
     '/',
-    regionController.wrap(regionController.getAll)
+    regionController.getAll.bind(regionController)
 );
 
 router.get(
     '/:id',
     validate(idParamValidation),
-    regionController.wrap(regionController.getById)
+    regionController.getById.bind(regionController)
 );
 
 router.put(
     '/:id',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+    authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN),
     validate(updateRegionValidation),
-    regionController.wrap(regionController.update)
+    regionController.update.bind(regionController)
 );
 
 router.delete(
     '/:id',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN),
+    authorize(UserRole.ADMIN),
     validate(idParamValidation),
-    regionController.wrap(regionController.delete)
+    regionController.delete.bind(regionController)
 );
 
 export default router;

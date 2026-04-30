@@ -1,5 +1,5 @@
 import { Db } from 'mongodb';
-import { BaseAuditLog } from '../interfaces';
+import { AuditLog } from '../interfaces';
 import logger from '../../../shared/utils/logger.util';
 
 export interface AuditLogFilter {
@@ -37,8 +37,8 @@ export class AuditQueryService {
     /**
      * Query audit logs with filters and pagination
      */
-    async queryLogs(filter: AuditLogFilter): Promise<PaginatedAuditResult<BaseAuditLog>> {
-        const collection = this.db.collection<BaseAuditLog>('audit_logs');
+    async queryLogs(filter: AuditLogFilter): Promise<PaginatedAuditResult<AuditLog>> {
+        const collection = this.db.collection<AuditLog>('audit_logs');
 
         // Build MongoDB filter
         const mongoFilter: any = { tenantId: filter.tenantId };
@@ -90,8 +90,8 @@ export class AuditQueryService {
     /**
      * Get audit log by ID
      */
-    async getLogById(logId: string, tenantId: string): Promise<BaseAuditLog | null> {
-        const collection = this.db.collection<BaseAuditLog>('audit_logs');
+    async getLogById(logId: string, tenantId: string): Promise<AuditLog | null> {
+        const collection = this.db.collection<AuditLog>('audit_logs');
         return collection.findOne({ logId, tenantId });
     }
 
@@ -102,8 +102,8 @@ export class AuditQueryService {
         resourceType: string,
         resourceId: string,
         tenantId: string
-    ): Promise<BaseAuditLog[]> {
-        const collection = this.db.collection<BaseAuditLog>('audit_logs');
+    ): Promise<AuditLog[]> {
+        const collection = this.db.collection<AuditLog>('audit_logs');
         return collection
             .find({ resourceType, resourceId, tenantId })
             .sort({ timestamp: -1 })
@@ -113,8 +113,8 @@ export class AuditQueryService {
     /**
      * Get consent history for a user
      */
-    async getConsentHistory(userId: string, tenantId: string): Promise<BaseAuditLog[]> {
-        const collection = this.db.collection<BaseAuditLog>('audit_logs');
+    async getConsentHistory(userId: string, tenantId: string): Promise<AuditLog[]> {
+        const collection = this.db.collection<AuditLog>('audit_logs');
         return collection
             .find({
                 tenantId,
@@ -128,8 +128,8 @@ export class AuditQueryService {
     /**
      * Get custody history for a minor
      */
-    async getCustodyHistory(minorId: string, tenantId: string): Promise<BaseAuditLog[]> {
-        const collection = this.db.collection<BaseAuditLog>('audit_logs');
+    async getCustodyHistory(minorId: string, tenantId: string): Promise<AuditLog[]> {
+        const collection = this.db.collection<AuditLog>('audit_logs');
         return collection
             .find({
                 tenantId,
@@ -147,8 +147,8 @@ export class AuditQueryService {
         tenantId: string,
         startDate?: Date,
         endDate?: Date
-    ): Promise<BaseAuditLog[]> {
-        const collection = this.db.collection<BaseAuditLog>('audit_logs');
+    ): Promise<AuditLog[]> {
+        const collection = this.db.collection<AuditLog>('audit_logs');
 
         const filter: any = {
             tenantId,
@@ -167,8 +167,8 @@ export class AuditQueryService {
     /**
      * Get certification history for a trainer
      */
-    async getCertificationHistory(trainerId: string, tenantId: string): Promise<BaseAuditLog[]> {
-        const collection = this.db.collection<BaseAuditLog>('audit_logs');
+    async getCertificationHistory(trainerId: string, tenantId: string): Promise<AuditLog[]> {
+        const collection = this.db.collection<AuditLog>('audit_logs');
         return collection
             .find({
                 tenantId,
@@ -182,8 +182,8 @@ export class AuditQueryService {
     /**
      * Get automation rule history
      */
-    async getAutomationHistory(ruleId: string, tenantId: string): Promise<BaseAuditLog[]> {
-        const collection = this.db.collection<BaseAuditLog>('audit_logs');
+    async getAutomationHistory(ruleId: string, tenantId: string): Promise<AuditLog[]> {
+        const collection = this.db.collection<AuditLog>('audit_logs');
         return collection
             .find({
                 tenantId,
@@ -202,8 +202,8 @@ export class AuditQueryService {
         tenantId: string,
         startDate?: Date,
         endDate?: Date
-    ): Promise<BaseAuditLog[]> {
-        const collection = this.db.collection<BaseAuditLog>('audit_logs');
+    ): Promise<AuditLog[]> {
+        const collection = this.db.collection<AuditLog>('audit_logs');
 
         const filter: any = {
             tenantId,
@@ -223,8 +223,8 @@ export class AuditQueryService {
     /**
      * Cross-tenant query (admin only)
      */
-    async crossTenantQuery(filter: any): Promise<BaseAuditLog[]> {
-        const collection = this.db.collection<BaseAuditLog>('audit_logs');
+    async crossTenantQuery(filter: any): Promise<AuditLog[]> {
+        const collection = this.db.collection<AuditLog>('audit_logs');
 
         logger.warn('Cross-tenant audit query executed', { filter });
 
@@ -239,8 +239,8 @@ export class AuditQueryService {
         tenantId: string,
         page: number = 1,
         pageSize: number = 50
-    ): Promise<PaginatedAuditResult<BaseAuditLog>> {
-        const collection = this.db.collection<BaseAuditLog>('audit_logs');
+    ): Promise<PaginatedAuditResult<AuditLog>> {
+        const collection = this.db.collection<AuditLog>('audit_logs');
 
         const filter = {
             tenantId,
@@ -251,7 +251,7 @@ export class AuditQueryService {
 
         const [data, total] = await Promise.all([
             collection
-                .find(filter, { score: { $meta: 'textScore' } })
+                .find(filter, { projection: { score: { $meta: 'textScore' } } } as any)
                 .sort({ score: { $meta: 'textScore' } })
                 .skip(skip)
                 .limit(pageSize)

@@ -5,6 +5,7 @@ import { HTTP_STATUS } from '@shared/constants';
 import { UserRole } from '@shared/enums';
 import envConfig from '@config/env.config';
 import userService from './user.service';
+import logger from '@shared/utils/logger.util';
 
 // Extend Express Request type
 declare global {
@@ -18,6 +19,7 @@ declare global {
                 organizationId?: string;
                 locationId?: string;
             };
+            scopeFilter?: Record<string, any>;
         }
     }
 }
@@ -25,7 +27,7 @@ declare global {
 /**
  * Authenticate user using JWT token
  */
-export const authenticate = async (req: Request, res: Response, next: NextFunction) => {
+export const authenticate = async (req: Request, _res: Response, next: NextFunction) => {
     try {
         // Get token from header
         const authHeader = req.headers.authorization;
@@ -76,13 +78,31 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
 /**
  * Authorize user based on roles
  */
-export const authorize = (...roles: UserRole[]) => {
-    return (req: Request, res: Response, next: NextFunction) => {
+export const authorize = (...roles: Array<UserRole | UserRole[] | string | string[]>) => {
+    return (req: Request, _res: Response, next: NextFunction) => {
         if (!req.user) {
             return next(new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED));
         }
 
-        if (!roles.includes(req.user.role)) {
+        // Flatten — supports both authorize('ADMIN', 'PARENT') and authorize(['ADMIN', 'PARENT'])
+        const flatRoles: string[] = [];
+        for (const r of roles) {
+            if (Array.isArray(r)) flatRoles.push(...(r as string[]));
+            else flatRoles.push(r as string);
+        }
+
+        // Normalize role comparison — handle case where DB role might differ in casing
+        const userRole = (req.user.role as string)?.toUpperCase?.() || '';
+        const allowedRoles = flatRoles.map(r => String(r).toUpperCase());
+
+        if (!allowedRoles.includes(userRole)) {
+            logger.warn('Authorization failed', {
+                userRole: req.user.role,
+                normalizedRole: userRole,
+                allowedRoles: flatRoles,
+                userId: req.user.id,
+                path: req.originalUrl
+            });
             return next(
                 new AppError('You do not have permission to perform this action', HTTP_STATUS.FORBIDDEN)
             );
@@ -95,7 +115,7 @@ export const authorize = (...roles: UserRole[]) => {
 /**
  * Optional authentication - doesn't fail if no token
  */
-export const optionalAuth = async (req: Request, res: Response, next: NextFunction) => {
+export const optionalAuth = async (req: Request, _res: Response, next: NextFunction) => {
     try {
         const authHeader = req.headers.authorization;
 
@@ -127,18 +147,15 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
  * Check if user owns the resource
  */
 export const checkOwnership = (userIdParam: string = 'id') => {
-    return (req: Request, res: Response, next: NextFunction) => {
+    return (req: Request, _res: Response, next: NextFunction) => {
         if (!req.user) {
             return next(new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED));
         }
 
         const resourceUserId = req.params[userIdParam];
 
-        // Super admin and HQ admin can access any resource
-        if (
-            req.user.role === UserRole.SUPER_ADMIN ||
-            req.user.role === UserRole.HQ_ADMIN
-        ) {
+        // Admin can access any resource
+        if (req.user.role === UserRole.ADMIN) {
             return next();
         }
 
@@ -156,15 +173,15 @@ export const checkOwnership = (userIdParam: string = 'id') => {
 /**
  * Check tenant access
  */
-export const checkTenantAccess = (req: Request, res: Response, next: NextFunction) => {
+export const checkTenantAccess = (req: Request, _res: Response, next: NextFunction) => {
     if (!req.user) {
         return next(new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED));
     }
 
     const tenantId = req.params.tenantId || req.body.tenantId || req.query.tenantId;
 
-    // Super admin can access all tenants
-    if (req.user.role === UserRole.SUPER_ADMIN) {
+    // Admin can access all tenants
+    if (req.user.role === UserRole.ADMIN) {
         return next();
     }
 
@@ -181,8 +198,66 @@ export const checkTenantAccess = (req: Request, res: Response, next: NextFunctio
 /**
  * Rate limit for authentication endpoints
  */
-export const authRateLimit = (req: Request, res: Response, next: NextFunction) => {
+export const authRateLimit = (_req: Request, _res: Response, next: NextFunction) => {
     // This is a placeholder - actual rate limiting is handled by express-rate-limit
     // You can add custom logic here if needed
     next();
 };
+
+/**
+ * Scope-based filter middleware.
+ * Attaches a scopeFilter to req based on the user's role:
+ * - ADMIN: no filter (sees everything)
+ * - REGIONAL_ADMIN: { organizationId: req.user.organizationId }
+ * - FRANCHISE_OWNER: { organizationId: req.user.organizationId }
+ * - LOCATION_MANAGER: { locationId: req.user.locationId }
+ * - Others: { _id: req.user.id } (can only see themselves)
+ */
+export const scopeFilter = () => {
+    return (req: Request, _res: Response, next: NextFunction) => {
+        if (!req.user) {
+            return next(new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED));
+        }
+
+        let filter: Record<string, any> = {};
+
+        switch (req.user.role) {
+            case UserRole.ADMIN:
+                // No filter - sees everything
+                filter = {};
+                break;
+
+            case UserRole.REGIONAL_ADMIN:
+                // Sees only users in their organization/region
+                if (req.user.organizationId) {
+                    filter = { organizationId: req.user.organizationId };
+                }
+                break;
+
+            case UserRole.FRANCHISE_OWNER:
+                // Sees only users in their organization (franchise locations)
+                if (req.user.organizationId) {
+                    filter = { organizationId: req.user.organizationId };
+                }
+                break;
+
+            case UserRole.LOCATION_MANAGER:
+                // Sees only users in their location
+                if (req.user.locationId) {
+                    filter = { locationId: req.user.locationId };
+                }
+                break;
+
+            default:
+                // Other roles can only see themselves
+                filter = { _id: req.user.id };
+                break;
+        }
+
+        req.scopeFilter = filter;
+        next();
+    };
+};
+
+// Alias for backward compatibility
+export const authMiddleware = authenticate;

@@ -188,8 +188,8 @@ export class ReportingService {
 
         // Simulate fetching real-time data for each widget
         const widgetsWithData = await Promise.all(
-            dashboard.widgets.map(async (widget) => ({
-                ...widget.toObject(),
+            dashboard.widgets.map(async (widget: any) => ({
+                ...((widget as any).toObject ? (widget as any).toObject() : widget),
                 data: await this.fetchWidgetData(widget.dataSource, widget.config)
             }))
         );

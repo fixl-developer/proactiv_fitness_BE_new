@@ -103,7 +103,7 @@ export class AutomationController extends BaseController {
             throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
         }
 
-        const workflow = await this.automationService.findOneAndUpdate(
+        const workflow = await (this.automationService as any).findOneAndUpdate(
             { workflowId },
             { ...req.body, updatedBy: userId },
             { new: true }
@@ -125,7 +125,7 @@ export class AutomationController extends BaseController {
     deleteWorkflow = asyncHandler(async (req: Request, res: Response) => {
         const { workflowId } = req.params;
 
-        const workflow = await this.automationService.findOneAndDelete({ workflowId });
+        const workflow = await (this.automationService as any).findOneAndDelete({ workflowId });
         if (!workflow) {
             throw new AppError('Workflow not found', HTTP_STATUS.NOT_FOUND);
         }

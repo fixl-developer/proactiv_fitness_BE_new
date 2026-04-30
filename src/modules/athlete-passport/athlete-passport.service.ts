@@ -232,7 +232,7 @@ export class AthletePassportService extends BaseService<IAthletePassport> {
             const ageGroupRanking = await this.calculateAgeGroupRanking(
                 benchmarkRequest.benchmarkId,
                 benchmarkRequest.value,
-                passport.age
+                (passport as any).age
             );
 
             passport.benchmarks.push({
@@ -416,17 +416,18 @@ export class AthletePassportService extends BaseService<IAthletePassport> {
                 throw new AppError('Athlete passport not found', HTTP_STATUS.NOT_FOUND);
             }
 
+            const p = passport as any;
             return {
                 passportId: passport.passportId,
                 childName: passport.childName,
                 currentLevel: passport.currentSkillLevel,
                 totalSkills: passport.skillsProgress.length,
-                masteredSkills: passport.masteredSkills,
-                certifications: passport.totalCertifications,
-                milestones: passport.totalMilestones,
+                masteredSkills: p.masteredSkills ?? (passport.skillsProgress || []).filter((s: any) => s.currentLevel >= (s.targetLevel || 0)).length,
+                certifications: p.totalCertifications ?? (passport.certifications || []).length,
+                milestones: p.totalMilestones ?? (passport.milestones || []).length,
                 attendanceRate: passport.attendanceStats.attendanceRate,
-                lastActivity: passport.lastActivityDate || passport.updatedAt,
-                progressScore: passport.progressScore
+                lastActivity: passport.lastActivityDate || (passport as any).updatedAt,
+                progressScore: p.progressScore ?? 0
             };
         } catch (error: any) {
             throw new AppError(
@@ -644,6 +645,10 @@ export class AthletePassportService extends BaseService<IAthletePassport> {
     private generateExportId(): string {
         return `export_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
+
+    async aggregate(pipeline: any[]): Promise<any[]> {
+        return (this.model as any).aggregate(pipeline);
+    }
 }
 
 export class SkillTaxonomyService extends BaseService<ISkillTaxonomy> {
@@ -677,6 +682,10 @@ export class SkillTaxonomyService extends BaseService<ISkillTaxonomy> {
 
     private generateSkillId(): string {
         return `skill_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
+
+    async aggregate(pipeline: any[]): Promise<any[]> {
+        return (this.model as any).aggregate(pipeline);
     }
 }
 

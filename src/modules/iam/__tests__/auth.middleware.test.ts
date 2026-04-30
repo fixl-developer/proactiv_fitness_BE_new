@@ -119,10 +119,10 @@ describe('Auth Middleware', () => {
             mockRequest.user = {
                 id: 'user123',
                 email: 'admin@example.com',
-                role: UserRole.SUPER_ADMIN,
+                role: UserRole.ADMIN,
             };
 
-            const middleware = authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN);
+            const middleware = authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN);
             middleware(mockRequest as Request, mockResponse as Response, nextFunction);
 
             expect(nextFunction).toHaveBeenCalledWith();
@@ -135,7 +135,7 @@ describe('Auth Middleware', () => {
                 role: UserRole.PARENT,
             };
 
-            const middleware = authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN);
+            const middleware = authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN);
             middleware(mockRequest as Request, mockResponse as Response, nextFunction);
 
             expect(nextFunction).toHaveBeenCalledWith(expect.any(Error));
@@ -144,7 +144,7 @@ describe('Auth Middleware', () => {
         it('should deny access if user not authenticated', () => {
             mockRequest.user = undefined;
 
-            const middleware = authorize(UserRole.SUPER_ADMIN);
+            const middleware = authorize(UserRole.ADMIN);
             middleware(mockRequest as Request, mockResponse as Response, nextFunction);
 
             expect(nextFunction).toHaveBeenCalledWith(expect.any(Error));
@@ -168,11 +168,11 @@ describe('Auth Middleware', () => {
             expect(nextFunction).toHaveBeenCalledWith();
         });
 
-        it('should allow access for super admin', () => {
+        it('should allow access for admin', () => {
             mockRequest.user = {
                 id: 'admin123',
                 email: 'admin@example.com',
-                role: UserRole.SUPER_ADMIN,
+                role: UserRole.ADMIN,
             };
             mockRequest.params = {
                 id: 'user123',

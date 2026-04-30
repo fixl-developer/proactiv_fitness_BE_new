@@ -3,6 +3,7 @@ import regionController from './region.controller';
 import { authenticate, authorize } from '@modules/iam/auth.middleware';
 import { validate } from '@middleware/validation.middleware';
 import { UserRole } from '@shared/enums';
+import { asyncHandler } from '@shared/utils/async-handler.util';
 import { createRegionValidation, updateRegionValidation, idParamValidation } from './bcms.validation';
 
 const router = Router();
@@ -11,34 +12,34 @@ router.use(authenticate);
 
 router.post(
     '/',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+    authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN),
     validate(createRegionValidation),
-    regionController.wrap(regionController.create)
+    asyncHandler((req, res) => regionController.create(req, res))
 );
 
 router.get(
     '/',
-    regionController.wrap(regionController.getAll)
+    asyncHandler((req, res) => regionController.getAll(req, res))
 );
 
 router.get(
     '/:id',
     validate(idParamValidation),
-    regionController.wrap(regionController.getById)
+    asyncHandler((req, res) => regionController.getById(req, res))
 );
 
 router.put(
     '/:id',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN, UserRole.REGIONAL_ADMIN),
+    authorize(UserRole.ADMIN, UserRole.REGIONAL_ADMIN),
     validate(updateRegionValidation),
-    regionController.wrap(regionController.update)
+    asyncHandler((req, res) => regionController.update(req, res))
 );
 
 router.delete(
     '/:id',
-    authorize(UserRole.SUPER_ADMIN, UserRole.HQ_ADMIN),
+    authorize(UserRole.ADMIN),
     validate(idParamValidation),
-    regionController.wrap(regionController.delete)
+    asyncHandler((req, res) => regionController.delete(req, res))
 );
 
 export default router;

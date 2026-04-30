@@ -187,6 +187,9 @@ export const createProgramValidation = Joi.object({
     maxEnrollments: Joi.number().min(1).optional()
 });
 
+// Update validation accepts the rich nested schema OR the simplified UI payload
+// (type, level, ageGroup, capacity, price, status). Controller normalises both.
+// .unknown(true) lets the simpler keys through; stripping/coercion happens in controller.
 export const updateProgramValidation = Joi.object({
     name: Joi.string().trim().max(100).optional(),
     description: Joi.string().trim().max(2000).optional(),
@@ -217,8 +220,15 @@ export const updateProgramValidation = Joi.object({
     videoUrl: Joi.string().uri().optional(),
     brochureUrl: Joi.string().uri().optional(),
     tags: Joi.array().items(Joi.string().trim().lowercase()).optional(),
-    maxEnrollments: Joi.number().min(1).optional()
-});
+    maxEnrollments: Joi.number().min(1).optional(),
+    // Simplified UI fields (controller-level adapter):
+    type: Joi.string().optional(),
+    level: Joi.string().optional(),
+    ageGroup: Joi.string().optional(),
+    capacity: Joi.number().min(1).optional(),
+    price: Joi.number().min(0).optional(),
+    status: Joi.string().valid('active', 'inactive', 'draft').optional()
+}).unknown(true);
 
 export const programEligibilityValidation = Joi.object({
     childAge: Joi.number().min(0).required(),
@@ -227,10 +237,10 @@ export const programEligibilityValidation = Joi.object({
     prerequisitePrograms: Joi.array().items(Joi.string().hex().length(24)).optional()
 });
 
+// newName is optional — controller defaults to "<Original> (Copy)" when missing.
 export const duplicateProgramValidation = Joi.object({
-    newName: Joi.string().trim().max(100).required().messages({
-        'string.max': 'Program name cannot exceed 100 characters',
-        'any.required': 'New program name is required'
+    newName: Joi.string().trim().max(100).optional().messages({
+        'string.max': 'Program name cannot exceed 100 characters'
     })
 });
 

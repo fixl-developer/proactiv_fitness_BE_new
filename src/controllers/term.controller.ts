@@ -11,12 +11,14 @@ export class TermController extends BaseController {
     }
 
     async getAll(req: Request, res: Response) {
-        const query: ITermQuery = {
+        const query: ITermQuery & { search?: string } = {
             locationId: req.query.locationId as string,
             year: req.query.year ? parseInt(req.query.year as string) : undefined,
-            isActive: req.query.isActive === 'true',
             search: req.query.search as string,
         };
+        if (req.query.isActive !== undefined && req.query.isActive !== '') {
+            query.isActive = req.query.isActive === 'true';
+        }
 
         const terms = await termService.getTerms(query);
         return this.sendSuccess(res, terms);

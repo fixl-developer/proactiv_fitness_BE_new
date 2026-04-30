@@ -31,11 +31,11 @@ export class PaginationUtil {
         };
     }
 
-    static getSortOptions(sortBy?: string, sortOrder?: 'asc' | 'desc') {
-        if (!sortBy) return { createdAt: -1 };
+    static getSortOptions(sortBy?: string, sortOrder?: 'asc' | 'desc'): Record<string, 1 | -1> {
+        if (!sortBy) return { createdAt: -1 as const };
 
         return {
-            [sortBy]: sortOrder === 'asc' ? 1 : -1,
+            [sortBy]: sortOrder === 'asc' ? 1 as const : -1 as const,
         };
     }
 }

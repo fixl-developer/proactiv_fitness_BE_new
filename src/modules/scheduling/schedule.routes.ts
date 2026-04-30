@@ -1,41 +1,68 @@
 import { Router } from 'express';
 import { ScheduleController } from './schedule.controller';
-import { authMiddleware } from '../iam/auth.middleware';
-import { validateRequest } from '../../shared/utils/validation.util';
+import { authenticate } from '../iam/auth.middleware';
+import { validate } from '../../middleware/validation.middleware';
 import { body, param, query } from 'express-validator';
 
 const router = Router();
 const scheduleController = new ScheduleController();
 
+// Public routes (no auth required)
+
+/**
+ * @route   GET /api/v1/scheduling/available
+ * @desc    Get available sessions/time slots for booking
+ * @access  Public
+ */
+router.get('/available',
+    scheduleController.getAvailableSessions
+);
+
+// Apply authentication to all routes below
+router.use(authenticate);
+
+/**
+ * @route   GET /api/v1/scheduling/all-sessions
+ * @desc    Admin calendar feed — flat list of every Session with date+time+program+coach+location
+ * @access  Private
+ */
+router.get('/all-sessions',
+    scheduleController.getAllSessions
+);
+
 // Validation rules
 const generateScheduleValidation = [
-    body('termId').isMongoId().withMessage('Valid term ID is required'),
+    body('termId').optional({ nullable: true }).isMongoId().withMessage('Valid term ID is required'),
     body('programIds').isArray({ min: 1 }).withMessage('At least one program ID is required'),
     body('locationIds').isArray({ min: 1 }).withMessage('At least one location ID is required'),
+    // coachIds is optional. When supplied, every entry must be a Mongo ObjectId
+    // (User._id). When omitted/empty, the service auto-picks any active coach.
+    body('coachIds').optional({ nullable: true }).isArray().withMessage('coachIds must be an array'),
+    body('coachIds.*').optional().isMongoId().withMessage('Each coach ID must be a valid Mongo ID'),
     body('startDate').isISO8601().withMessage('Valid start date is required'),
     body('endDate').isISO8601().withMessage('Valid end date is required'),
-    body('settings').isObject().withMessage('Settings object is required'),
-    validateRequest
+    body('settings').optional().isObject().withMessage('Settings must be an object'),
+    validate
 ];
 
 const updateScheduleValidation = [
     param('id').isMongoId().withMessage('Valid schedule ID is required'),
     body('name').optional().isString().trim().isLength({ min: 1, max: 100 }),
     body('description').optional().isString().trim().isLength({ max: 500 }),
-    validateRequest
+    validate
 ];
 
 const conflictResolutionValidation = [
     param('conflictId').isMongoId().withMessage('Valid conflict ID is required'),
     body('resolutionType').isIn(['reschedule', 'reassign_coach', 'change_room', 'split_session', 'cancel']),
     body('reason').isString().trim().isLength({ min: 1, max: 200 }),
-    validateRequest
+    validate
 ];
 
 const dateRangeValidation = [
     query('startDate').isISO8601().withMessage('Valid start date is required'),
     query('endDate').isISO8601().withMessage('Valid end date is required'),
-    validateRequest
+    validate
 ];
 
 // Routes
@@ -46,7 +73,7 @@ const dateRangeValidation = [
  * @access  Private (Admin, Manager)
  */
 router.post('/generate',
-    authMiddleware,
+    authenticate,
     generateScheduleValidation,
     scheduleController.generateSchedule
 );
@@ -57,7 +84,7 @@ router.post('/generate',
  * @access  Private
  */
 router.get('/',
-    authMiddleware,
+    authenticate,
     scheduleController.getSchedules
 );
 
@@ -67,9 +94,9 @@ router.get('/',
  * @access  Private
  */
 router.get('/:id',
-    authMiddleware,
+    authenticate,
     param('id').isMongoId().withMessage('Valid schedule ID is required'),
-    validateRequest,
+    validate,
     scheduleController.getScheduleById
 );
 
@@ -79,7 +106,7 @@ router.get('/:id',
  * @access  Private (Admin, Manager)
  */
 router.put('/:id',
-    authMiddleware,
+    authenticate,
     updateScheduleValidation,
     scheduleController.updateSchedule
 );
@@ -90,9 +117,9 @@ router.put('/:id',
  * @access  Private (Admin, Manager)
  */
 router.delete('/:id',
-    authMiddleware,
+    authenticate,
     param('id').isMongoId().withMessage('Valid schedule ID is required'),
-    validateRequest,
+    validate,
     scheduleController.deleteSchedule
 );
 
@@ -102,9 +129,9 @@ router.delete('/:id',
  * @access  Private (Admin, Manager)
  */
 router.post('/:id/publish',
-    authMiddleware,
+    authenticate,
     param('id').isMongoId().withMessage('Valid schedule ID is required'),
-    validateRequest,
+    validate,
     scheduleController.publishSchedule
 );
 
@@ -114,9 +141,9 @@ router.post('/:id/publish',
  * @access  Private (Admin, Manager)
  */
 router.post('/:id/detect-conflicts',
-    authMiddleware,
+    authenticate,
     param('id').isMongoId().withMessage('Valid schedule ID is required'),
-    validateRequest,
+    validate,
     scheduleController.detectConflicts
 );
 
@@ -126,7 +153,7 @@ router.post('/:id/detect-conflicts',
  * @access  Private (Admin, Manager)
  */
 router.post('/conflicts/:conflictId/resolve',
-    authMiddleware,
+    authenticate,
     conflictResolutionValidation,
     scheduleController.resolveConflict
 );
@@ -137,7 +164,7 @@ router.post('/conflicts/:conflictId/resolve',
  * @access  Private
  */
 router.get('/coaches/:coachId/schedule',
-    authMiddleware,
+    authenticate,
     param('coachId').isMongoId().withMessage('Valid coach ID is required'),
     dateRangeValidation,
     scheduleController.getCoachSchedule
@@ -149,7 +176,7 @@ router.get('/coaches/:coachId/schedule',
  * @access  Private
  */
 router.get('/rooms/:roomId/schedule',
-    authMiddleware,
+    authenticate,
     param('roomId').isMongoId().withMessage('Valid room ID is required'),
     dateRangeValidation,
     scheduleController.getRoomSchedule
@@ -161,11 +188,11 @@ router.get('/rooms/:roomId/schedule',
  * @access  Private (Admin, Manager)
  */
 router.post('/sessions/:sessionId/find-substitutes',
-    authMiddleware,
+    authenticate,
     param('sessionId').isMongoId().withMessage('Valid session ID is required'),
     body('requiredSkills').optional().isArray(),
     body('maxTravelTime').optional().isNumeric(),
-    validateRequest,
+    validate,
     scheduleController.findSubstituteCoaches
 );
 

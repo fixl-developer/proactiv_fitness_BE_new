@@ -112,4 +112,10 @@ export class WalletService {
             creditBuckets: wallet.creditBuckets
         };
     }
+
+    async getWallet(userId: string): Promise<IWallet | null> {
+        return await Wallet.findOne({ userId }).lean();
+    }
 }
+
+export const walletService = new WalletService();

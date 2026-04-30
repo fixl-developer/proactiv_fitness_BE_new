@@ -1,0 +1,122 @@
+import VirtualClass, { VirtualMessage } from './virtual-training.model';
+import logger from '@/shared/utils/logger.util';
+
+class VirtualTrainingService {
+    async getVirtualClasses(filters: any) {
+        const query: any = {};
+        if (filters.status) query.status = filters.status;
+        const classes = await VirtualClass.find(query).limit(filters.limit || 20).skip(filters.skip || 0).lean();
+        const total = await VirtualClass.countDocuments(query);
+        return { data: classes, total };
+    }
+
+    async getVirtualClassById(classId: string) {
+        const virtualClass = await VirtualClass.findById(classId).lean();
+        if (!virtualClass) throw new Error('Virtual class not found');
+        return virtualClass;
+    }
+
+    async createVirtualClass(data: any) {
+        const virtualClass = new VirtualClass(data);
+        await virtualClass.save();
+        logger.info(`Virtual class created: ${virtualClass._id}`);
+        return virtualClass;
+    }
+
+    async updateVirtualClass(classId: string, data: any) {
+        const virtualClass = await VirtualClass.findByIdAndUpdate(classId, data, { new: true });
+        if (!virtualClass) throw new Error('Virtual class not found');
+        logger.info(`Virtual class updated: ${classId}`);
+        return virtualClass;
+    }
+
+    async cancelVirtualClass(classId: string) {
+        const virtualClass = await VirtualClass.findByIdAndUpdate(classId, { status: 'cancelled' }, { new: true });
+        if (!virtualClass) throw new Error('Virtual class not found');
+        logger.info(`Virtual class cancelled: ${classId}`);
+        return virtualClass;
+    }
+
+    async joinVirtualClass(classId: string, userId: string) {
+        try {
+            const virtualClass = await VirtualClass.findById(classId);
+            if (!virtualClass) throw new Error('Virtual class not found');
+            if (virtualClass.status === 'cancelled') throw new Error('Virtual class has been cancelled');
+            if (virtualClass.participants.includes(userId as any)) {
+                return { joinUrl: virtualClass.streamUrl, sessionId: classId };
+            }
+            if (virtualClass.maxParticipants && virtualClass.currentParticipants >= virtualClass.maxParticipants) {
+                throw new Error('Virtual class is full');
+            }
+            const updated = await VirtualClass.findByIdAndUpdate(
+                classId,
+                { $inc: { currentParticipants: 1 }, $addToSet: { participants: userId } },
+                { new: true }
+            );
+            logger.info(`User ${userId} joined class ${classId}`);
+            return { joinUrl: updated!.streamUrl, sessionId: classId };
+        } catch (error) {
+            logger.error(`Error joining virtual class ${classId}: ${error}`);
+            throw error;
+        }
+    }
+
+    async leaveVirtualClass(classId: string, userId: string) {
+        await VirtualClass.findByIdAndUpdate(
+            classId,
+            { $inc: { currentParticipants: -1 }, $pull: { participants: userId } }
+        );
+        logger.info(`User ${userId} left class ${classId}`);
+    }
+
+    async getRecordings(filters: any) {
+        const query = { status: 'completed', recordingUrl: { $exists: true } };
+        const recordings = await VirtualClass.find(query).limit(filters.limit || 20).skip(filters.skip || 0).lean();
+        return recordings;
+    }
+
+    async getRecordingById(recordingId: string) {
+        const recording = await VirtualClass.findById(recordingId).lean();
+        if (!recording) throw new Error('Recording not found');
+        return recording;
+    }
+
+    async sendMessage(classId: string, userId: string, message: string) {
+        try {
+            const virtualClass = await VirtualClass.findById(classId);
+            if (!virtualClass) throw new Error('Virtual class not found');
+            const virtualMessage = new VirtualMessage({
+                sessionId: classId,
+                userId,
+                content: message,
+                type: 'text',
+            });
+            await virtualMessage.save();
+            logger.info(`Message sent in class ${classId} by user ${userId}`);
+            return virtualMessage;
+        } catch (error) {
+            logger.error(`Error sending message in class ${classId}: ${error}`);
+            throw error;
+        }
+    }
+
+    async getMessages(classId: string) {
+        try {
+            const messages = await VirtualMessage.find({ sessionId: classId })
+                .sort({ createdAt: 1 })
+                .populate('userId', 'firstName lastName avatar')
+                .lean();
+            return messages;
+        } catch (error) {
+            logger.error(`Error fetching messages for class ${classId}: ${error}`);
+            throw error;
+        }
+    }
+
+    async getAttendance(classId: string) {
+        const virtualClass = await VirtualClass.findById(classId).lean();
+        return virtualClass?.participants || [];
+    }
+}
+
+export default new VirtualTrainingService();

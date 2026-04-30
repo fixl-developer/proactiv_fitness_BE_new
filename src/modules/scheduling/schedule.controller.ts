@@ -14,6 +14,24 @@ export class ScheduleController {
     }
 
     /**
+     * Get available sessions for booking (public)
+     */
+    getAvailableSessions = asyncHandler(async (req: Request, res: Response) => {
+        const filters: any = {};
+
+        if (req.query.location) filters.location = req.query.location;
+        if (req.query.programType) filters.programType = req.query.programType;
+        if (req.query.ageGroup) filters.ageGroup = req.query.ageGroup;
+        if (req.query.coach) filters.coach = req.query.coach;
+        if (req.query.startDate) filters.startDate = new Date(req.query.startDate as string);
+        if (req.query.endDate) filters.endDate = new Date(req.query.endDate as string);
+
+        const sessions = await this.scheduleService.getAvailableSessions(filters);
+
+        ResponseUtil.success(res, sessions, 'Available sessions retrieved successfully');
+    });
+
+    /**
      * Generate new schedule
      */
     generateSchedule = asyncHandler(async (req: Request, res: Response) => {
@@ -26,34 +44,242 @@ export class ScheduleController {
     });
 
     /**
-     * Get all schedules
+     * Get all schedules. The base list endpoint returns Schedule containers
+     * (no per-session data), but the admin list view wants to show "what
+     * programs / coaches / locations / dates does this schedule cover" — those
+     * facts live on the Sessions, not the Schedule. So after pagination we do
+     * one batched aggregation over the Sessions that belong to the returned
+     * schedules and merge the resulting names into each row.
+     *
+     * Without this enrichment, the admin list-view rendered "Day 0, 09:00-10:00,
+     * (blank instructor)" placeholders for every row regardless of what the
+     * schedule actually contained.
      */
     getSchedules = asyncHandler(async (req: Request, res: Response) => {
-        const { page, limit, skip } = PaginationUtil.getPaginationParams(req.query);
         const filters = this.buildScheduleFilters(req.query);
 
-        const { data, total } = await this.scheduleService.getAll(filters, {
-            page,
-            limit,
-            skip,
-            sort: { createdAt: -1 }
-        });
+        const result: any = await this.scheduleService.findWithPagination(filters, req.query);
 
-        const meta = PaginationUtil.buildMeta(total, page, limit);
+        // The pagination wrapper might be `{data: [...], pagination}` or
+        // `{docs: [...], totalDocs, ...}` depending on which BaseService
+        // variant runs. Find the array regardless of shape.
+        const rows: any[] = Array.isArray(result?.data)
+            ? result.data
+            : Array.isArray(result?.docs)
+                ? result.docs
+                : Array.isArray(result)
+                    ? result
+                    : [];
 
-        ResponseUtil.success(res, data, 'Schedules retrieved successfully', HTTP_STATUS.OK, meta);
+        if (rows.length > 0) {
+            const { Schedule, Session } = require('./schedule.model');
+            const scheduleIds = rows.map((s: any) => s._id).filter(Boolean);
+
+            // Group every session of the listed schedules by its scheduleId,
+            // pulling enough fields to derive program/coach/location names plus
+            // the schedule's overall day/time signature for the table row.
+            const sessionAgg: any[] = await Session.find({
+                scheduleId: { $in: scheduleIds },
+                isDeleted: { $ne: true },
+            })
+                .populate({ path: 'programId', select: 'name' })
+                .populate({ path: 'locationId', select: 'name' })
+                .populate({ path: 'coachAssignments.coachId', select: 'firstName lastName name email' })
+                .select('scheduleId programId locationId coachAssignments timeSlot date')
+                .lean();
+
+            const byScheduleId = new Map<string, any[]>();
+            for (const sess of sessionAgg) {
+                const key = String(sess.scheduleId);
+                if (!byScheduleId.has(key)) byScheduleId.set(key, []);
+                byScheduleId.get(key)!.push(sess);
+            }
+
+            const enriched = rows.map((rawRow: any) => {
+                // findWithPagination returns hydrated Mongoose documents; spreading
+                // them copies internal state (`$__`, `$isNew`) instead of the
+                // actual fields, so _id/name/status disappear from the JSON. Flatten
+                // to a plain object first.
+                const row: any = typeof rawRow?.toObject === 'function'
+                    ? rawRow.toObject({ virtuals: true })
+                    : rawRow;
+                const sList = byScheduleId.get(String(row._id)) || [];
+                const first = sList[0] || {};
+
+                const programNames = Array.from(new Set(
+                    sList.map((s: any) => s.programId?.name).filter(Boolean)
+                ));
+                const locationNames = Array.from(new Set(
+                    sList.map((s: any) => s.locationId?.name).filter(Boolean)
+                ));
+                const coachNames = Array.from(new Set(
+                    sList.flatMap((s: any) => (s.coachAssignments || [])
+                        .map((c: any) => c.coachId)
+                        .filter((c: any) => c && typeof c === 'object')
+                        .map((c: any) => c.name || `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.email || '')
+                    ).filter(Boolean)
+                ));
+
+                // Pick a representative day/time for the row (first session's slot).
+                const startTime = first?.timeSlot?.startTime || '';
+                const endTime = first?.timeSlot?.endTime || '';
+                const dayOfWeek = first?.date
+                    ? new Date(first.date).getDay()
+                    : (first?.timeSlot?.dayOfWeek ?? 0);
+
+                return {
+                    ...row,
+                    programName: programNames.join(', ') || row.name || '',
+                    programNames,
+                    locationNames,
+                    coachNames,
+                    instructor: coachNames.join(', '),
+                    locationName: locationNames.join(', '),
+                    dayOfWeek,
+                    startTime,
+                    endTime,
+                    sessionCount: sList.length,
+                };
+            });
+
+            // Re-pack into whichever shape we received.
+            if (Array.isArray(result?.data)) result.data = enriched;
+            else if (Array.isArray(result?.docs)) result.docs = enriched;
+            else if (Array.isArray(result)) {
+                ResponseUtil.success(res, enriched, 'Schedules retrieved successfully');
+                return;
+            }
+        }
+
+        ResponseUtil.success(res, result, 'Schedules retrieved successfully');
     });
 
     /**
      * Get schedule by ID
      */
     getScheduleById = asyncHandler(async (req: Request, res: Response) => {
-        const schedule = await this.scheduleService.getById(req.params.id);
+        // Hand-rolled query so we can populate sessions + their programs/locations
+        // — admin "view schedule" drawer needs the full session list with names
+        // and times, not just session IDs.
+        const { Schedule, Session } = require('./schedule.model');
+        const schedule = await Schedule.findOne({ _id: req.params.id, isDeleted: { $ne: true } })
+            .populate({ path: 'locationIds', select: 'name code' })
+            .populate({ path: 'termId', select: 'name termName' })
+            .lean();
         if (!schedule) {
             throw new AppError('Schedule not found', HTTP_STATUS.NOT_FOUND);
         }
 
-        ResponseUtil.success(res, schedule, 'Schedule retrieved successfully');
+        // Pull all sessions belonging to this schedule, sorted chronologically
+        const sessions = await Session.find({
+            scheduleId: schedule._id,
+            isDeleted: { $ne: true },
+        })
+            .populate({ path: 'programId', select: 'name title programType' })
+            .populate({ path: 'locationId', select: 'name code' })
+            .populate({ path: 'coachAssignments.coachId', select: 'firstName lastName name email' })
+            .sort({ date: 1, 'timeSlot.startTime': 1 })
+            .lean();
+
+        // Project a compact, frontend-friendly shape for each session
+        const sessionsList = sessions.map((s: any) => {
+            const program: any = s.programId && typeof s.programId === 'object' ? s.programId : null;
+            const location: any = s.locationId && typeof s.locationId === 'object' ? s.locationId : null;
+            const primary = (s.coachAssignments || []).find((c: any) => c.role === 'primary') || (s.coachAssignments || [])[0];
+            const coach: any = primary?.coachId && typeof primary.coachId === 'object' ? primary.coachId : null;
+            return {
+                id: s._id?.toString?.() || s._id,
+                date: s.date,
+                startTime: s.timeSlot?.startTime || '',
+                endTime: s.timeSlot?.endTime || '',
+                programName: program ? (program.name || program.title) : '',
+                programType: program?.programType || '',
+                locationName: location ? location.name : '',
+                coachName: coach ? (coach.name || `${coach.firstName || ''} ${coach.lastName || ''}`.trim() || coach.email) : 'Unassigned',
+                status: s.status,
+                enrolled: Array.isArray(s.enrolledParticipants) ? s.enrolledParticipants.length : 0,
+                capacity: s.maxCapacity || 0,
+            };
+        });
+
+        const term: any = schedule.termId && typeof schedule.termId === 'object' ? schedule.termId : null;
+        const locations: any[] = Array.isArray(schedule.locationIds) ? schedule.locationIds : [];
+
+        ResponseUtil.success(res, {
+            ...schedule,
+            id: schedule._id?.toString?.() || schedule._id,
+            termName: term ? (term.name || term.termName) : '',
+            locationNames: locations.map((l: any) => (l && typeof l === 'object' ? l.name : '')).filter(Boolean),
+            sessionsList,
+        }, 'Schedule retrieved successfully');
+    });
+
+    /**
+     * Admin "all sessions" — flat list of every Session across every schedule,
+     * populated for calendar rendering. The list endpoint returns SCHEDULE
+     * containers; this returns the underlying SESSIONS so the calendar can
+     * place each session in its real day/time cell instead of falling back to
+     * the schedule's container defaults.
+     */
+    getAllSessions = asyncHandler(async (req: Request, res: Response) => {
+        const { Schedule, Session } = require('./schedule.model');
+
+        const filter: any = { isDeleted: { $ne: true } };
+        if (req.query.scheduleId) filter.scheduleId = req.query.scheduleId;
+        if (req.query.status) filter.status = req.query.status;
+        if (req.query.startDate || req.query.endDate) {
+            filter.date = {} as any;
+            if (req.query.startDate) filter.date.$gte = new Date(req.query.startDate as string);
+            if (req.query.endDate) filter.date.$lt = new Date(req.query.endDate as string);
+        }
+
+        const sessions = await Session.find(filter)
+            .populate({ path: 'programId', select: 'name programType' })
+            .populate({ path: 'locationId', select: 'name code' })
+            .populate({ path: 'coachAssignments.coachId', select: 'firstName lastName name email' })
+            .sort({ date: 1, 'timeSlot.startTime': 1 })
+            .limit(500)
+            .lean();
+
+        // Pull schedule names in one batch so each session can carry its parent's name.
+        const scheduleIds = Array.from(new Set(sessions.map((s: any) => String(s.scheduleId)).filter(Boolean)));
+        const schedules = await Schedule.find({ _id: { $in: scheduleIds } })
+            .select('name status')
+            .lean();
+        const scheduleMap = new Map<string, any>();
+        schedules.forEach((sc: any) => scheduleMap.set(String(sc._id), sc));
+
+        const result = sessions.map((s: any) => {
+            const program: any = s.programId && typeof s.programId === 'object' ? s.programId : null;
+            const location: any = s.locationId && typeof s.locationId === 'object' ? s.locationId : null;
+            const primary = (s.coachAssignments || []).find((c: any) => c.role === 'primary') || (s.coachAssignments || [])[0];
+            const coach: any = primary?.coachId && typeof primary.coachId === 'object' ? primary.coachId : null;
+            const parent = scheduleMap.get(String(s.scheduleId));
+
+            const date = s.date ? new Date(s.date) : null;
+            return {
+                id: String(s._id),
+                scheduleId: String(s.scheduleId || ''),
+                scheduleName: parent?.name || '',
+                scheduleStatus: parent?.status || '',
+                date: date,
+                dayOfWeek: date ? date.getDay() : (s.timeSlot?.dayOfWeek ?? 0),
+                startTime: s.timeSlot?.startTime || '',
+                endTime: s.timeSlot?.endTime || '',
+                duration: s.duration || 0,
+                programName: program ? program.name : '',
+                programType: program?.programType || '',
+                locationName: location ? location.name : '',
+                coachName: coach
+                    ? (coach.name || `${coach.firstName || ''} ${coach.lastName || ''}`.trim() || coach.email)
+                    : 'Unassigned',
+                status: s.status || 'scheduled',
+                enrolled: Array.isArray(s.enrolledParticipants) ? s.enrolledParticipants.length : 0,
+                capacity: s.maxCapacity || 0,
+            };
+        });
+
+        ResponseUtil.success(res, result, 'Sessions retrieved successfully');
     });
 
     /**
@@ -70,9 +296,29 @@ export class ScheduleController {
 
     /**
      * Delete schedule
+     *
+     * BaseService.delete() soft-deletes by setting `isDeleted: true`, but the
+     * Schedule schema does not declare that field — so under default Mongoose
+     * strict mode the update is silently dropped and the row stays visible in
+     * the admin list (it returns success though, so the client can't tell).
+     * Hard-delete the schedule and cascade-remove its child sessions instead.
      */
     deleteSchedule = asyncHandler(async (req: Request, res: Response) => {
-        await this.scheduleService.delete(req.params.id);
+        const { Schedule, Session } = require('./schedule.model');
+        const id = req.params.id;
+
+        const existing = await Schedule.findById(id).lean().catch(() => null);
+        if (!existing) {
+            throw new AppError('Schedule not found', HTTP_STATUS.NOT_FOUND);
+        }
+
+        await Session.deleteMany({ scheduleId: id }).catch(() => null);
+        const result = await Schedule.deleteOne({ _id: id });
+
+        if (!result.deletedCount) {
+            throw new AppError('Failed to delete schedule', HTTP_STATUS.INTERNAL_SERVER_ERROR);
+        }
+
         ResponseUtil.success(res, null, 'Schedule deleted successfully');
     });
 

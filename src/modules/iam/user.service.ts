@@ -1,4 +1,5 @@
 import { FilterQuery } from 'mongoose';
+import bcrypt from 'bcryptjs';
 import { BaseService } from '@shared/base/base.service';
 import { User } from './user.model';
 import {
@@ -12,18 +13,37 @@ import { AppError } from '@middleware/error.middleware';
 import { HTTP_STATUS } from '@shared/constants';
 import { UserStatus } from '@shared/enums';
 import crypto from 'crypto';
+import logger from '@shared/utils/logger.util';
+
+const MAX_CONCURRENT_SESSIONS = 3;
+const PASSWORD_HISTORY_SIZE = 5;
 
 export class UserService extends BaseService<IUser> {
     constructor() {
-        super(User);
+        super(User, 'user');
+    }
+
+    /**
+     * Provide context for realtime event routing
+     */
+    protected getEntityContext(doc: IUser): any {
+        return {
+            userId: doc._id?.toString(),
+            organizationId: doc.organizationId?.toString(),
+            locationId: doc.locationId?.toString(),
+        };
     }
 
     /**
      * Create a new user
      */
     async createUser(data: IUserCreate): Promise<IUser> {
-        // Check if user already exists
-        const existingUser = await User.findOne({ email: data.email.toLowerCase() });
+        // Only block on *active* duplicates — soft-deleted accounts (isDeleted: true)
+        // free up the email so admins can re-create a user with the same address.
+        const existingUser = await User.findOne({
+            email: data.email.toLowerCase(),
+            isDeleted: { $ne: true },
+        });
         if (existingUser) {
             throw new AppError('User with this email already exists', HTTP_STATUS.CONFLICT);
         }
@@ -53,7 +73,7 @@ export class UserService extends BaseService<IUser> {
     async getUserByEmailWithPassword(email: string): Promise<IUser | null> {
         return await User.findOne({ email: email.toLowerCase(), isDeleted: false }).select(
             '+password +refreshToken +refreshTokenExpires'
-        );
+        ) as IUser | null;
     }
 
     /**
@@ -166,7 +186,7 @@ export class UserService extends BaseService<IUser> {
     }
 
     /**
-     * Reset password using token
+     * Reset password using token — includes password-history check
      */
     async resetPassword(token: string, newPassword: string): Promise<void> {
         const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
@@ -175,11 +195,14 @@ export class UserService extends BaseService<IUser> {
             passwordResetToken: hashedToken,
             passwordResetExpires: { $gt: new Date() },
             isDeleted: false,
-        }).select('+passwordResetToken +passwordResetExpires');
+        }).select('+password +passwordResetToken +passwordResetExpires +passwordHistory');
 
         if (!user) {
             throw new AppError('Invalid or expired reset token', HTTP_STATUS.BAD_REQUEST);
         }
+
+        // Check the new password against history
+        await this.checkPasswordHistory(user, newPassword);
 
         // Update password
         user.password = newPassword;
@@ -190,14 +213,14 @@ export class UserService extends BaseService<IUser> {
     }
 
     /**
-     * Change password
+     * Change password — includes password-history check
      */
     async changePassword(
         userId: string,
         currentPassword: string,
         newPassword: string
     ): Promise<void> {
-        const user = await User.findById(userId).select('+password');
+        const user = await User.findById(userId).select('+password +passwordHistory');
         if (!user) {
             throw new AppError('User not found', HTTP_STATUS.NOT_FOUND);
         }
@@ -208,10 +231,41 @@ export class UserService extends BaseService<IUser> {
             throw new AppError('Current password is incorrect', HTTP_STATUS.BAD_REQUEST);
         }
 
-        // Update password
+        // Check the new password against password history
+        await this.checkPasswordHistory(user, newPassword);
+
+        // Update password (pre-save hook hashes and stores old hash in history)
         user.password = newPassword;
         user.lastPasswordChange = new Date();
         await user.save();
+    }
+
+    /**
+     * Verify that `plaintext` has not been used in the user's recent
+     * password history.  Compares against both the current hash and the
+     * stored history array.
+     */
+    async checkPasswordHistory(user: IUser, plaintext: string): Promise<void> {
+        // Check against current password
+        const matchesCurrent = await bcrypt.compare(plaintext, user.password);
+        if (matchesCurrent) {
+            throw new AppError(
+                'New password must be different from your current password',
+                HTTP_STATUS.BAD_REQUEST
+            );
+        }
+
+        // Check against historical passwords
+        const history = (user as any).passwordHistory || [];
+        for (const oldHash of history) {
+            const matchesOld = await bcrypt.compare(plaintext, oldHash);
+            if (matchesOld) {
+                throw new AppError(
+                    `New password cannot be any of your last ${PASSWORD_HISTORY_SIZE} passwords`,
+                    HTTP_STATUS.BAD_REQUEST
+                );
+            }
+        }
     }
 
     /**
@@ -299,13 +353,98 @@ export class UserService extends BaseService<IUser> {
         );
     }
 
+    // ─────────────────────────────────────────────────────────────────────
+    // Session Management
+    // ─────────────────────────────────────────────────────────────────────
+
+    /**
+     * Add a new session for the user.
+     * If the user already has MAX_CONCURRENT_SESSIONS active sessions, the
+     * oldest one is removed automatically.
+     */
+    async addSession(
+        userId: string,
+        token: string,
+        device: string,
+        ip: string
+    ): Promise<void> {
+        try {
+            // Use findByIdAndUpdate to avoid triggering pre-save hooks (which re-hash password)
+            await User.findByIdAndUpdate(
+                userId,
+                {
+                    $push: {
+                        activeSessions: {
+                            $each: [{ token, device, ip, createdAt: new Date() }],
+                            $slice: -MAX_CONCURRENT_SESSIONS // keep only latest N sessions
+                        }
+                    }
+                }
+            );
+        } catch (error) {
+            // Non-critical — don't block login if session tracking fails
+            logger.warn('Failed to track session', { userId, error });
+        }
+    }
+
+    /**
+     * Remove a specific session (logout).
+     */
+    async removeSession(userId: string, token: string): Promise<void> {
+        await User.updateOne(
+            { _id: userId },
+            { $pull: { activeSessions: { token } } }
+        );
+    }
+
+    /**
+     * Remove all sessions (force logout everywhere).
+     */
+    async removeAllSessions(userId: string): Promise<void> {
+        await User.updateOne(
+            { _id: userId },
+            { $set: { activeSessions: [] } }
+        );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Email Verification Enforcement
+    // ─────────────────────────────────────────────────────────────────────
+
+    /**
+     * Check whether the user is allowed to log in.
+     * - Users who have not verified their email are blocked (unless they
+     *   were created by an admin, which grants automatic verification skip).
+     */
+    async enforceEmailVerification(user: IUser): Promise<void> {
+        if (user.isEmailVerified) {
+            return; // all good
+        }
+
+        // Admin-created users may skip verification
+        if ((user as any).createdByAdmin === true) {
+            return;
+        }
+
+        // ACTIVE users (e.g. seeded demo accounts) skip verification
+        if (user.status === 'ACTIVE') {
+            return;
+        }
+
+        throw new AppError(
+            'Please verify your email address before logging in. Check your inbox for the verification link.',
+            HTTP_STATUS.FORBIDDEN
+        );
+    }
+
     /**
      * Format user response (remove sensitive data)
      */
-    formatUserResponse(user: IUser): IUserResponse {
+    formatUserResponse(user: IUser): any {
         return {
             id: user._id.toString(),
             email: user.email,
+            name: user.fullName || `${user.firstName} ${user.lastName}`,
             firstName: user.firstName,
             lastName: user.lastName,
             fullName: user.fullName,
@@ -317,6 +456,11 @@ export class UserService extends BaseService<IUser> {
             isEmailVerified: user.isEmailVerified,
             isPhoneVerified: user.isPhoneVerified,
             lastLogin: user.lastLogin,
+            // Hierarchy scope fields
+            organizationId: user.organizationId,
+            regionId: (user as any).regionId,
+            locationId: user.locationId,
+            partnerType: user.partnerType,
             createdAt: user.createdAt,
             updatedAt: user.updatedAt,
         };

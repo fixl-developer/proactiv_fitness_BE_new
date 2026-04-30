@@ -153,7 +153,7 @@ export class PartitionUtil {
             try {
                 const collection = this.db.collection<T>(partitionName);
                 const partitionResults = await collection.find(filter, options).toArray();
-                results.push(...partitionResults);
+                results.push(...(partitionResults as T[]));
             } catch (error) {
                 logger.warn(`Failed to query partition: ${partitionName}`, error);
                 // Continue with other partitions

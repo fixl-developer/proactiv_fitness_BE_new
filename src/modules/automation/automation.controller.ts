@@ -1,10 +1,12 @@
 import { Request, Response } from 'express';
 import { AutomationService } from './automation.service';
+import { WorkflowExecution, WorkflowTemplate, AutomationRule } from './automation.model';
 import { BaseController } from '../../shared/base/base.controller';
 import { asyncHandler } from '../../shared/utils/async-handler.util';
 import { AppError } from '../../shared/utils/app-error.util';
 import { HTTP_STATUS } from '../../shared/constants';
 import { successResponse } from '../../shared/utils/response.util';
+import { PaginationUtil } from '../../shared/utils/pagination.util';
 
 export class AutomationController extends BaseController {
     private automationService: AutomationService;
@@ -103,7 +105,7 @@ export class AutomationController extends BaseController {
             throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
         }
 
-        const workflow = await this.automationService.findOneAndUpdate(
+        const workflow = await (this.automationService as any).findOneAndUpdate(
             { workflowId },
             { ...req.body, updatedBy: userId },
             { new: true }
@@ -125,7 +127,7 @@ export class AutomationController extends BaseController {
     deleteWorkflow = asyncHandler(async (req: Request, res: Response) => {
         const { workflowId } = req.params;
 
-        const workflow = await this.automationService.findOneAndDelete({ workflowId });
+        const workflow = await (this.automationService as any).findOneAndDelete({ workflowId });
         if (!workflow) {
             throw new AppError('Workflow not found', HTTP_STATUS.NOT_FOUND);
         }
@@ -204,19 +206,24 @@ export class AutomationController extends BaseController {
             if (endDate) filter.startedAt.$lte = new Date(endDate as string);
         }
 
-        // Note: This would need WorkflowExecutionService
-        // For now, returning placeholder response
+        const { page: pageNum, limit: limitNum, skip } = PaginationUtil.getPaginationParams({
+            page: Number(page),
+            limit: Number(limit)
+        });
+
+        const [data, total] = await Promise.all([
+            WorkflowExecution.find({ ...filter, isDeleted: { $ne: true } })
+                .sort({ startedAt: -1 })
+                .skip(skip)
+                .limit(limitNum),
+            WorkflowExecution.countDocuments({ ...filter, isDeleted: { $ne: true } })
+        ]);
+
+        const result = PaginationUtil.buildPaginationResult(data, total, pageNum, limitNum);
+
         return successResponse(res, {
             message: 'Workflow executions retrieved successfully',
-            data: {
-                items: [],
-                pagination: {
-                    page: Number(page),
-                    limit: Number(limit),
-                    total: 0,
-                    pages: 0
-                }
-            }
+            data: result
         });
     });
 
@@ -312,19 +319,24 @@ export class AutomationController extends BaseController {
         if (category) filter.category = category;
         if (isPublic !== undefined) filter.isPublic = isPublic === 'true';
 
-        // Note: This would need WorkflowTemplateService
-        // For now, returning placeholder response
+        const { page: pageNum, limit: limitNum, skip } = PaginationUtil.getPaginationParams({
+            page: Number(page),
+            limit: Number(limit)
+        });
+
+        const [data, total] = await Promise.all([
+            WorkflowTemplate.find({ ...filter, isDeleted: { $ne: true } })
+                .sort({ usageCount: -1, createdAt: -1 })
+                .skip(skip)
+                .limit(limitNum),
+            WorkflowTemplate.countDocuments({ ...filter, isDeleted: { $ne: true } })
+        ]);
+
+        const result = PaginationUtil.buildPaginationResult(data, total, pageNum, limitNum);
+
         return successResponse(res, {
             message: 'Workflow templates retrieved successfully',
-            data: {
-                items: [],
-                pagination: {
-                    page: Number(page),
-                    limit: Number(limit),
-                    total: 0,
-                    pages: 0
-                }
-            }
+            data: result
         });
     });
 
@@ -344,19 +356,24 @@ export class AutomationController extends BaseController {
         if (businessUnitId) filter.businessUnitId = businessUnitId;
         if (isActive !== undefined) filter.isActive = isActive === 'true';
 
-        // Note: This would need AutomationRuleService
-        // For now, returning placeholder response
+        const { page: pageNum, limit: limitNum, skip } = PaginationUtil.getPaginationParams({
+            page: Number(page),
+            limit: Number(limit)
+        });
+
+        const [data, total] = await Promise.all([
+            AutomationRule.find({ ...filter, isDeleted: { $ne: true } })
+                .sort({ priority: -1, createdAt: -1 })
+                .skip(skip)
+                .limit(limitNum),
+            AutomationRule.countDocuments({ ...filter, isDeleted: { $ne: true } })
+        ]);
+
+        const result = PaginationUtil.buildPaginationResult(data, total, pageNum, limitNum);
+
         return successResponse(res, {
             message: 'Automation rules retrieved successfully',
-            data: {
-                items: [],
-                pagination: {
-                    page: Number(page),
-                    limit: Number(limit),
-                    total: 0,
-                    pages: 0
-                }
-            }
+            data: result
         });
     });
 }

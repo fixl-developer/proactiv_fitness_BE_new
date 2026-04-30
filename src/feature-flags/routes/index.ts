@@ -7,8 +7,7 @@
 import { Router } from 'express';
 import { FeatureFlagsController } from '../controllers/feature-flags.controller';
 import { authenticate } from '../../modules/iam/auth.middleware';
-import { rateLimitMiddleware } from '../../middleware/rate-limit.middleware';
-import { validationMiddleware } from '../../middleware/validation.middleware';
+import { createRateLimitMiddleware } from '../../middleware/rate-limit.middleware';
 
 export function createFeatureFlagsRoutes(controller: FeatureFlagsController): Router {
     const router = Router();
@@ -17,10 +16,9 @@ export function createFeatureFlagsRoutes(controller: FeatureFlagsController): Ro
     router.use(authenticate);
 
     // Apply rate limiting
-    router.use(rateLimitMiddleware({
+    router.use(createRateLimitMiddleware({
         windowMs: 15 * 60 * 1000, // 15 minutes
         max: 1000, // 1000 requests per window
-        message: 'Too many feature flag requests'
     }));
 
     // Flag evaluation endpoints

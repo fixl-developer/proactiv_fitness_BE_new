@@ -1,6 +1,6 @@
 import { Db } from 'mongodb';
 import { FlagEvaluation, Environment } from '../interfaces';
-import logger from '../../../shared/utils/logger.util';
+import logger from '../../shared/utils/logger.util';
 
 export interface FlagAnalytics {
     flagKey: string;
@@ -264,7 +264,7 @@ export class AnalyticsService {
             activeFlags: flagStatsResult.activeFlags,
             totalEvaluations: evaluationStatsResult.totalEvaluations,
             uniqueUsers: evaluationStatsResult.uniqueUsers.filter((u: any) => u != null).length,
-            topFlags,
+            topFlags: topFlags as Array<{ flagKey: string; evaluations: number }>,
             evaluationTrends
         };
     }
