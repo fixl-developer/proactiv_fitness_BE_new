@@ -95,7 +95,14 @@ export class ScheduleController {
                 byScheduleId.get(key)!.push(sess);
             }
 
-            const enriched = rows.map((row: any) => {
+            const enriched = rows.map((rawRow: any) => {
+                // findWithPagination returns hydrated Mongoose documents; spreading
+                // them copies internal state (`$__`, `$isNew`) instead of the
+                // actual fields, so _id/name/status disappear from the JSON. Flatten
+                // to a plain object first.
+                const row: any = typeof rawRow?.toObject === 'function'
+                    ? rawRow.toObject({ virtuals: true })
+                    : rawRow;
                 const sList = byScheduleId.get(String(row._id)) || [];
                 const first = sList[0] || {};
 
@@ -289,9 +296,29 @@ export class ScheduleController {
 
     /**
      * Delete schedule
+     *
+     * BaseService.delete() soft-deletes by setting `isDeleted: true`, but the
+     * Schedule schema does not declare that field — so under default Mongoose
+     * strict mode the update is silently dropped and the row stays visible in
+     * the admin list (it returns success though, so the client can't tell).
+     * Hard-delete the schedule and cascade-remove its child sessions instead.
      */
     deleteSchedule = asyncHandler(async (req: Request, res: Response) => {
-        await this.scheduleService.delete(req.params.id);
+        const { Schedule, Session } = require('./schedule.model');
+        const id = req.params.id;
+
+        const existing = await Schedule.findById(id).lean().catch(() => null);
+        if (!existing) {
+            throw new AppError('Schedule not found', HTTP_STATUS.NOT_FOUND);
+        }
+
+        await Session.deleteMany({ scheduleId: id }).catch(() => null);
+        const result = await Schedule.deleteOne({ _id: id });
+
+        if (!result.deletedCount) {
+            throw new AppError('Failed to delete schedule', HTTP_STATUS.INTERNAL_SERVER_ERROR);
+        }
+
         ResponseUtil.success(res, null, 'Schedule deleted successfully');
     });
 
