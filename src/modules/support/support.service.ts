@@ -290,6 +290,24 @@ export class SupportService extends BaseService<ISupportTicket> {
     }
 
     /**
+     * Delete support ticket (by ticketId or _id)
+     */
+    async deleteTicket(ticketId: string): Promise<void> {
+        try {
+            let result = await SupportTicket.deleteOne({ ticketId });
+            if (result.deletedCount === 0 && /^[0-9a-fA-F]{24}$/.test(ticketId)) {
+                result = await SupportTicket.deleteOne({ _id: ticketId });
+            }
+            if (result.deletedCount === 0) {
+                throw new AppError('Ticket not found', HTTP_STATUS.NOT_FOUND);
+            }
+        } catch (error: any) {
+            if (error instanceof AppError) throw error;
+            throw new AppError(error.message || 'Failed to delete ticket', HTTP_STATUS.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
      * Add comment to ticket
      */
     async addTicketComment(
@@ -869,6 +887,7 @@ export class KnowledgeBaseService extends BaseService<IKnowledgeBaseArticle> {
 
             const article = new KnowledgeBaseArticle({
                 articleId,
+                author: (articleData as any).author || createdBy,
                 ...articleData,
                 createdBy,
                 updatedBy: createdBy

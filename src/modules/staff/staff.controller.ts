@@ -708,6 +708,28 @@ export class StaffController extends BaseController {
     });
 
     /**
+     * Delete support ticket
+     */
+    deleteSupportTicket = asyncHandler(async (req: Request, res: Response) => {
+        const { ticketId } = req.params;
+        const userId = req.user?.id;
+        if (!userId) throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        await this.supportService.deleteTicket(ticketId);
+        return this.sendSuccess(res, { message: 'Support ticket deleted successfully' });
+    });
+
+    /**
+     * Update inquiry (status, etc.)
+     */
+    updateInquiry = asyncHandler(async (req: Request, res: Response) => {
+        const { inquiryId } = req.params;
+        const userId = req.user?.id;
+        if (!userId) throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        const inquiry = await this.inquiryService.updateInquiry(inquiryId, req.body);
+        return this.sendSuccess(res, { message: 'Inquiry updated successfully', data: inquiry });
+    });
+
+    /**
      * Respond to customer inquiry
      */
     respondToInquiry = asyncHandler(async (req: Request, res: Response) => {
