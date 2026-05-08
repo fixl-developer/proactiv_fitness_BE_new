@@ -69,7 +69,7 @@ export class DynamicPricingService {
                 demandMultiplier: aiPricing.demandMultiplier,
                 seasonalAdjustment: aiPricing.seasonalAdjustment,
                 peakPricing: aiPricing.peakPricing,
-                effectiveDate: data.date,
+                effectiveDate: data.date || new Date(),
                 aiAnalysis: {
                     reasoning: aiPricing.reasoning,
                     confidenceBand: aiPricing.confidenceBand,
@@ -100,7 +100,7 @@ export class DynamicPricingService {
                 demandMultiplier: 1.0,
                 seasonalAdjustment: 0,
                 peakPricing: false,
-                effectiveDate: data.date,
+                effectiveDate: data.date || new Date(),
                 aiAnalysis: { aiPowered: false, reasoning: 'AI pricing unavailable — using base price' },
                 businessUnitId: 'bu-001',
                 createdBy: userId,

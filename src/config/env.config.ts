@@ -78,7 +78,7 @@ interface IEnvConfig {
     cloudinaryApiKey: string;
     cloudinaryApiSecret: string;
 
-    // AI / OpenAI
+    // AI / OpenAI (legacy fields kept for backward compatibility)
     openaiApiKey: string;
     openaiModel: string;
     openaiTemperature: number;
@@ -86,6 +86,13 @@ interface IEnvConfig {
     openaiRateLimitPerMinute: number;
     enableAi: boolean;
     aiCacheTtl: number;
+
+    // AI multi-provider (Gemini primary, Groq fallback, OpenAI legacy)
+    aiProvider: 'gemini' | 'groq' | 'openai' | 'auto';
+    geminiApiKey: string;
+    geminiModel: string;
+    groqApiKey: string;
+    groqModel: string;
 }
 
 class EnvConfig {
@@ -168,7 +175,7 @@ class EnvConfig {
             cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || '',
             cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || '',
 
-            // AI / OpenAI
+            // AI / OpenAI (legacy)
             openaiApiKey: process.env.OPENAI_API_KEY || '',
             openaiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
             openaiTemperature: parseFloat(process.env.OPENAI_TEMPERATURE || '0.7'),
@@ -176,6 +183,13 @@ class EnvConfig {
             openaiRateLimitPerMinute: parseInt(process.env.OPENAI_RATE_LIMIT_PER_MINUTE || '60', 10),
             enableAi: process.env.ENABLE_AI !== 'false',
             aiCacheTtl: parseInt(process.env.AI_CACHE_TTL || '300', 10),
+
+            // AI multi-provider — `auto` picks first provider with a key
+            aiProvider: (process.env.AI_PROVIDER as IEnvConfig['aiProvider']) || 'auto',
+            geminiApiKey: process.env.GEMINI_API_KEY || '',
+            geminiModel: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
+            groqApiKey: process.env.GROQ_API_KEY || '',
+            groqModel: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
         };
 
         this.validate();

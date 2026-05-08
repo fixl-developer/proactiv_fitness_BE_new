@@ -1045,6 +1045,46 @@ export class LiveChatService extends BaseService<ILiveChatSession> {
     }
 
     /**
+     * Create new chat session (real persistence)
+     */
+    async createSession(data: {
+        customerName: string;
+        customerEmail?: string;
+        initialMessage?: string;
+        department?: string;
+        priority?: 'low' | 'medium' | 'high';
+        assignedAgent?: string;
+    }): Promise<any> {
+        try {
+            const sessionId = `CHAT-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+            const initialMessages = data.initialMessage
+                ? [{
+                    messageId: `MSG-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+                    sender: 'customer' as const,
+                    message: data.initialMessage,
+                    timestamp: new Date(),
+                    type: 'text' as const,
+                    status: 'sent' as const,
+                }]
+                : [];
+            const session = await LiveChatSession.create({
+                sessionId,
+                customerName: data.customerName,
+                customerEmail: data.customerEmail || '',
+                status: data.assignedAgent ? 'active' : 'waiting',
+                priority: data.priority || 'medium',
+                department: data.department || 'support',
+                assignedAgent: data.assignedAgent,
+                assignedAt: data.assignedAgent ? new Date() : undefined,
+                messages: initialMessages,
+            });
+            return session;
+        } catch (error: any) {
+            throw new AppError(error.message || 'Failed to create chat session', HTTP_STATUS.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
      * Send chat message
      */
     async sendMessage(sessionId: string, message: string, sender: 'customer' | 'agent'): Promise<any> {

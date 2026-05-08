@@ -65,9 +65,14 @@ router.post('/live-chat/:chatId/messages', staffController.sendChatMessage);
 // Escalations
 router.get('/escalations', staffController.getEscalations);
 router.post('/escalations', staffController.createEscalation);
+router.put('/escalations/:escalationId', staffController.updateEscalation);
+router.delete('/escalations/:escalationId', staffController.deleteEscalation);
 
-// Schedules (Advanced)
+// Schedules (Advanced) - Support Staff Schedules
 router.get('/schedules-advanced', staffController.getStaffSchedulesAdvanced);
+router.post('/schedules-advanced', staffController.createSupportSchedule);
+router.put('/schedules-advanced/:scheduleId', staffController.updateSupportSchedule);
+router.delete('/schedules-advanced/:scheduleId', staffController.deleteSupportSchedule);
 
 // Training
 router.get('/training/modules', staffController.getTrainingModules);
@@ -75,10 +80,15 @@ router.get('/training/paths', staffController.getTrainingPaths);
 router.get('/training/progress', staffController.getUserTrainingProgress);
 
 // Reports
+router.post('/reports/generate', staffController.generateReport);
+router.delete('/reports/:reportId', staffController.deleteReport);
 router.get('/reports/:type', staffController.getReports);
 
 // Automation
 router.get('/automation/rules', staffController.getAutomationRules);
+router.post('/automation/rules', staffController.createAutomationRule);
+router.put('/automation/rules/:ruleId', staffController.updateAutomationRule);
+router.delete('/automation/rules/:ruleId', staffController.deleteAutomationRule);
 
 // Quality Assurance
 router.get('/quality/metrics', staffController.getQualityMetrics);
@@ -86,6 +96,11 @@ router.get('/quality/reviews', staffController.getQualityReviews);
 
 // Communication
 router.get('/communication/announcements', staffController.getAnnouncements);
+router.post('/communication/announcements', staffController.createAnnouncement);
+router.delete('/communication/announcements/:announcementId', staffController.deleteAnnouncement);
+router.get('/communication/messages', staffController.getTeamMessages);
+router.post('/communication/messages', staffController.sendTeamMessage);
+router.delete('/communication/messages/:messageId', staffController.deleteTeamMessage);
 
 // Parameterized staff routes MUST come last (/:staffId catches everything)
 router.get('/:staffId', staffController.getStaffById);

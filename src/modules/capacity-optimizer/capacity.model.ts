@@ -33,7 +33,7 @@ const CapacityMonitorSchema = new Schema<ICapacityMonitor>(
             estimatedImpact: {
                 utilizationImprovement: Number,
                 revenueImpact: Number,
-                customerSatisfaction: Number
+                customerSatisfaction: String  // 'positive' | 'neutral' | 'negative'
             },
             suggestedActions: [String],
             affectedStudents: Number

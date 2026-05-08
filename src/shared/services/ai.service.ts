@@ -163,24 +163,87 @@ const FALLBACK_RESPONSES: Record<string, any> = {
     },
 };
 
+// ─── Provider Resolution ───────────────────────────────────────
+
+type ProviderName = 'gemini' | 'groq' | 'openai';
+
+interface ResolvedProvider {
+    name: ProviderName;
+    apiKey: string;
+    baseURL?: string;
+    model: string;
+}
+
 // ─── AI Service Singleton ──────────────────────────────────────
 
 class AIService {
     private static instance: AIService;
     private client: OpenAI | null = null;
+    private provider: ResolvedProvider | null = null;
     private config = EnvConfig.get();
     private requestCount = 0;
     private requestWindowStart = Date.now();
 
     private constructor() {
-        if (this.config.enableAi && this.config.openaiApiKey) {
-            this.client = new OpenAI({
-                apiKey: this.config.openaiApiKey,
-            });
-            logger.info('🤖 AI Service initialized with OpenAI');
-        } else {
-            logger.warn('⚠️ AI Service running in fallback mode (ENABLE_AI=false or no API key)');
+        if (!this.config.enableAi) {
+            logger.warn('⚠️ AI Service running in fallback mode (ENABLE_AI=false)');
+            return;
         }
+
+        this.provider = this.resolveProvider();
+
+        if (!this.provider) {
+            logger.warn('⚠️ AI Service running in fallback mode (no provider key found — set GEMINI_API_KEY, GROQ_API_KEY, or OPENAI_API_KEY)');
+            return;
+        }
+
+        this.client = new OpenAI({
+            apiKey: this.provider.apiKey,
+            baseURL: this.provider.baseURL,
+        });
+
+        logger.info(`🤖 AI Service initialized with provider="${this.provider.name}" model="${this.provider.model}"`);
+    }
+
+    private resolveProvider(): ResolvedProvider | null {
+        const requested = this.config.aiProvider;
+        const candidates: ProviderName[] =
+            requested === 'auto' || !requested
+                ? ['gemini', 'groq', 'openai']
+                : [requested];
+
+        for (const name of candidates) {
+            const built = this.buildProvider(name);
+            if (built) return built;
+        }
+        return null;
+    }
+
+    private buildProvider(name: ProviderName): ResolvedProvider | null {
+        if (name === 'gemini' && this.config.geminiApiKey) {
+            return {
+                name: 'gemini',
+                apiKey: this.config.geminiApiKey,
+                baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+                model: this.config.geminiModel,
+            };
+        }
+        if (name === 'groq' && this.config.groqApiKey) {
+            return {
+                name: 'groq',
+                apiKey: this.config.groqApiKey,
+                baseURL: 'https://api.groq.com/openai/v1',
+                model: this.config.groqModel,
+            };
+        }
+        if (name === 'openai' && this.config.openaiApiKey) {
+            return {
+                name: 'openai',
+                apiKey: this.config.openaiApiKey,
+                model: this.config.openaiModel,
+            };
+        }
+        return null;
     }
 
     static getInstance(): AIService {
@@ -188,6 +251,30 @@ class AIService {
             AIService.instance = new AIService();
         }
         return AIService.instance;
+    }
+
+    // ─── Retry on transient errors (429, 503) ──────────────────
+
+    private async callWithRetry(
+        params: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming,
+        moduleId: string,
+        maxAttempts = 3
+    ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
+        let lastError: any;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                return await this.client!.chat.completions.create(params);
+            } catch (err: any) {
+                lastError = err;
+                const status = err?.status;
+                const isTransient = status === 429 || status === 503;
+                if (!isTransient || attempt === maxAttempts) throw err;
+                const delayMs = 1000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 500);
+                logger.warn(`🤖 AI [${moduleId}] transient error ${status} (attempt ${attempt}/${maxAttempts}) — retrying in ${delayMs}ms`);
+                await new Promise(r => setTimeout(r, delayMs));
+            }
+        }
+        throw lastError;
     }
 
     // ─── Rate Limiting ─────────────────────────────────────────
@@ -211,14 +298,14 @@ class AIService {
     // ─── Core: Chat Completion ─────────────────────────────────
 
     async chatCompletion(options: AIChatOptions): Promise<AIChatResponse> {
-        if (!this.client || !this.config.enableAi) {
+        if (!this.client || !this.config.enableAi || !this.provider) {
             return this.getFallbackResponse(options);
         }
 
         this.checkRateLimit();
 
         const startTime = Date.now();
-        const model = options.model || this.config.openaiModel;
+        const model = options.model || this.provider.model;
         const temperature = options.temperature ?? this.config.openaiTemperature;
         const maxTokens = options.maxTokens || this.config.openaiMaxTokens;
 
@@ -246,7 +333,10 @@ class AIService {
                 params.response_format = { type: 'json_object' };
             }
 
-            const response = await this.client.chat.completions.create(params);
+            // Retry on 429 (rate limit) and 503 (service unavailable) with
+            // exponential backoff. Gemini 2.5 free tier is 10 RPM, so a brief
+            // wait recovers without falling back to canned data.
+            const response = await this.callWithRetry(params, options.module);
             const latencyMs = Date.now() - startTime;
 
             const result: AIChatResponse = {
@@ -272,7 +362,9 @@ class AIService {
             });
 
             if (error.status === 401) {
-                throw new AppError('AI service authentication failed. Check OPENAI_API_KEY.', HTTP_STATUS.SERVICE_UNAVAILABLE);
+                const providerName = this.provider?.name ?? 'unknown';
+                logger.error(`🤖 AI [${options.module}] authentication failed for provider="${providerName}" — check API key in .env`);
+                return this.getFallbackResponse(options);
             }
             if (error.status === 400) {
                 throw new AppError(`AI service bad request: ${error.message}`, HTTP_STATUS.BAD_REQUEST);
@@ -292,25 +384,82 @@ class AIService {
             responseFormat: 'json_object',
         });
 
+        const cleaned = this.extractJson(response.content);
+
         try {
-            return JSON.parse(response.content) as T;
+            return JSON.parse(cleaned) as T;
         } catch {
-            logger.error(`🤖 AI [${options.module}] JSON parse failed, content: ${response.content.substring(0, 200)}`);
+            logger.error(`🤖 AI [${options.module}] JSON parse failed, raw content: ${response.content.substring(0, 300)}`);
+            // Fall back to the canned response for this module rather than 500-ing the request,
+            // so callers still receive a structured payload they can persist/render.
+            const fallback = FALLBACK_RESPONSES[options.module];
+            if (fallback) return fallback as T;
             throw new AppError('AI returned invalid JSON response', HTTP_STATUS.INTERNAL_SERVER_ERROR);
         }
     }
 
+    // Strips markdown code fences and prose around JSON (Gemini sometimes
+    // wraps `json_object` mode output in ```json ... ``` despite the request).
+    private extractJson(raw: string): string {
+        if (!raw) return '{}';
+        let s = raw.trim();
+        // Remove ```json ... ``` or ``` ... ``` fences
+        const fence = s.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+        if (fence) s = fence[1].trim();
+        // If still not valid, find first { ... last } — anything between is the JSON body
+        if (!(s.startsWith('{') || s.startsWith('['))) {
+            const firstBrace = s.search(/[\{\[]/);
+            const lastBrace = Math.max(s.lastIndexOf('}'), s.lastIndexOf(']'));
+            if (firstBrace !== -1 && lastBrace > firstBrace) {
+                s = s.slice(firstBrace, lastBrace + 1);
+            }
+        }
+        return s;
+    }
+
     // ─── Fallback Response ─────────────────────────────────────
+    // jsonCompletion / responseFormat='json_object' callers parse `content`
+    // back into an object → must be a JSON string. Plain chatCompletion
+    // callers render `content` directly to the UI → must be readable text.
 
     private getFallbackResponse(options: AIChatOptions): AIChatResponse {
         const fallback = FALLBACK_RESPONSES[options.module] || { message: 'AI service is not available' };
+        const wantsJson = options.responseFormat === 'json_object';
 
         return {
-            content: JSON.stringify(fallback),
+            content: wantsJson ? JSON.stringify(fallback) : this.fallbackToReadableText(fallback),
             usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
             model: 'fallback',
             latencyMs: 0,
         };
+    }
+
+    private fallbackToReadableText(data: any): string {
+        if (data == null) return 'AI service is currently unavailable.';
+        if (typeof data === 'string') return data;
+
+        const textFields = ['response', 'message', 'summary', 'answer', 'reasoning', 'overallAssessment', 'insights'];
+        for (const field of textFields) {
+            if (typeof data[field] === 'string' && data[field].trim()) return data[field];
+        }
+
+        const skip = new Set(['_id', '__v', 'createdAt', 'updatedAt']);
+        const lines: string[] = [];
+        for (const [key, val] of Object.entries(data)) {
+            if (skip.has(key) || val == null || val === '') continue;
+            const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase());
+            if (Array.isArray(val)) {
+                if (!val.length) continue;
+                const items = val.slice(0, 3).map(v => typeof v === 'object' ? (v as any).title || (v as any).name || (v as any).suggestion || '' : String(v)).filter(Boolean);
+                if (items.length) lines.push(`${label}: ${items.join(', ')}`);
+            } else if (typeof val === 'object') {
+                const inner = this.fallbackToReadableText(val);
+                if (inner) lines.push(`${label}: ${inner}`);
+            } else {
+                lines.push(`${label}: ${val}`);
+            }
+        }
+        return lines.length ? lines.join('\n') : 'AI service is currently unavailable.';
     }
 
     // ─── Utility ───────────────────────────────────────────────
