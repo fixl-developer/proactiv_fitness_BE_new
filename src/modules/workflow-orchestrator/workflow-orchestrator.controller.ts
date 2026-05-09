@@ -8,7 +8,7 @@ const workflowOrchestratorService = new WorkflowOrchestratorService();
 // Create workflow chain
 router.post('/chains/create', authenticate, async (req: Request, res: Response) => {
     try {
-        const tenantId = req.user?.tenantId;
+        const tenantId = req.user?.tenantId || process.env.DEFAULT_TENANT || 'proactiv-hq';
         const { name, description, steps, useAI } = req.body;
         const createdBy = req.user?.id;
 
@@ -30,7 +30,7 @@ router.post('/chains/create', authenticate, async (req: Request, res: Response) 
 // Execute workflow chain
 router.post('/chains/execute', authenticate, async (req: Request, res: Response) => {
     try {
-        const tenantId = req.user?.tenantId;
+        const tenantId = req.user?.tenantId || process.env.DEFAULT_TENANT || 'proactiv-hq';
         const { chainId } = req.body;
 
         const result = await workflowOrchestratorService.executeChain(chainId, tenantId);
@@ -57,7 +57,7 @@ router.get('/chains/:chainId', authenticate, async (req: Request, res: Response)
 // Schedule report
 router.post('/schedule-report', authenticate, async (req: Request, res: Response) => {
     try {
-        const tenantId = req.user?.tenantId;
+        const tenantId = req.user?.tenantId || process.env.DEFAULT_TENANT || 'proactiv-hq';
         const { chainId, cron, description } = req.body;
 
         const result = await workflowOrchestratorService.scheduleReport({

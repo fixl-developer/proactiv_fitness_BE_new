@@ -16,6 +16,11 @@ import userService from '../iam/user.service';
 import { UserRole } from '../../shared/enums';
 import { Staff } from './staff.model';
 import { StaffType, StaffStatus } from './staff.interface';
+import { EscalationService } from '../escalations/escalation.service';
+import { SupportScheduleService } from '../support-schedules/support-schedule.service';
+import { SupportReportService } from '../support-reports/support-report.service';
+import { AutomationRuleService } from '../support-automation/automation-rule.service';
+import { SupportCommunicationService } from '../support-communication/support-communication.service';
 
 export class StaffController extends BaseController {
     private staffService: StaffService;
@@ -27,6 +32,11 @@ export class StaffController extends BaseController {
     private liveChatService: LiveChatService;
     private staffSettingsService: StaffSettingsService;
     private analyticsService: SupportAnalyticsService;
+    private escalationService: EscalationService;
+    private supportScheduleService: SupportScheduleService;
+    private supportReportService: SupportReportService;
+    private automationRuleService: AutomationRuleService;
+    private supportCommunicationService: SupportCommunicationService;
 
     constructor() {
         super();
@@ -39,6 +49,11 @@ export class StaffController extends BaseController {
         this.liveChatService = new LiveChatService();
         this.staffSettingsService = new StaffSettingsService();
         this.analyticsService = new SupportAnalyticsService();
+        this.escalationService = new EscalationService();
+        this.supportScheduleService = new SupportScheduleService();
+        this.supportReportService = new SupportReportService();
+        this.automationRuleService = new AutomationRuleService();
+        this.supportCommunicationService = new SupportCommunicationService();
     }
 
     /**
@@ -900,86 +915,93 @@ export class StaffController extends BaseController {
         });
     });
 
-    // Escalations
-    /**
-     * Get escalations
-     */
+    // Escalations - REAL implementation
     getEscalations = asyncHandler(async (req: Request, res: Response) => {
         const userId = req.user?.id;
-        if (!userId) {
-            throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
-        }
-
-        // Mock data - replace with actual implementation
-        const escalations = [
-            {
-                id: 'ESC-001',
-                ticketId: 'TKT-001',
-                title: 'Payment Processing Failure - Urgent Resolution Needed',
-                customer: 'Sarah Johnson',
-                priority: 'critical',
-                status: 'pending',
-                escalatedAt: '2024-03-15T09:30:00Z'
-            }
-        ];
-
-        return this.sendSuccess(res, {
-            message: 'Escalations retrieved successfully',
-            data: { escalations }
-        });
+        if (!userId) throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        const list = await this.escalationService.list(req.query);
+        // Normalize id field for frontend
+        const escalations = list.map((e: any) => ({
+            id: e.escalationId || e._id,
+            escalationId: e.escalationId,
+            ticketId: e.ticketId,
+            title: e.title,
+            customer: e.customer,
+            customerEmail: e.customerEmail,
+            priority: e.priority,
+            status: e.status,
+            reason: e.reason,
+            escalatedAt: e.escalatedAt,
+            acknowledgedAt: e.acknowledgedAt,
+            resolvedAt: e.resolvedAt,
+        }));
+        return this.sendSuccess(res, { message: 'Escalations retrieved successfully', data: { escalations } });
     });
 
-    /**
-     * Create escalation
-     */
     createEscalation = asyncHandler(async (req: Request, res: Response) => {
         const userId = req.user?.id;
-        if (!userId) {
-            throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
-        }
-
-        // Mock creation - replace with actual implementation
-        const escalation = {
-            id: `ESC-${Date.now()}`,
-            ...req.body,
-            createdAt: new Date().toISOString(),
-            createdBy: userId
-        };
-
-        return this.sendSuccess(res, {
-            message: 'Escalation created successfully',
-            data: escalation
-        });
+        if (!userId) throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        const escalation = await this.escalationService.create(req.body, userId);
+        return this.sendSuccess(res, { message: 'Escalation created successfully', data: escalation });
     });
 
-    // Schedules
-    /**
-     * Get staff schedules
-     */
+    updateEscalation = asyncHandler(async (req: Request, res: Response) => {
+        const { escalationId } = req.params;
+        const userId = req.user?.id;
+        if (!userId) throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        const escalation = await this.escalationService.update(escalationId, req.body, userId);
+        return this.sendSuccess(res, { message: 'Escalation updated successfully', data: escalation });
+    });
+
+    deleteEscalation = asyncHandler(async (req: Request, res: Response) => {
+        const { escalationId } = req.params;
+        const userId = req.user?.id;
+        if (!userId) throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        await this.escalationService.delete(escalationId);
+        return this.sendSuccess(res, { message: 'Escalation deleted successfully' });
+    });
+
+    // Support Schedules - REAL implementation
     getStaffSchedulesAdvanced = asyncHandler(async (req: Request, res: Response) => {
         const userId = req.user?.id;
-        if (!userId) {
-            throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
-        }
+        if (!userId) throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        const list = await this.supportScheduleService.list(req.query);
+        const schedules = list.map((s: any) => ({
+            id: s.scheduleId || s._id,
+            scheduleId: s.scheduleId,
+            staffName: s.staffName,
+            date: s.date,
+            startTime: s.startTime,
+            endTime: s.endTime,
+            shiftType: s.shiftType,
+            status: s.status,
+            location: s.location,
+            notes: s.notes,
+        }));
+        return this.sendSuccess(res, { message: 'Staff schedules retrieved successfully', data: { schedules } });
+    });
 
-        // Mock data - replace with actual implementation
-        const schedules = [
-            {
-                id: 'SCH-001',
-                staffName: 'John Doe',
-                date: '2024-03-15',
-                startTime: '09:00',
-                endTime: '17:00',
-                shiftType: 'full-day',
-                status: 'confirmed',
-                location: 'Main Office'
-            }
-        ];
+    createSupportSchedule = asyncHandler(async (req: Request, res: Response) => {
+        const userId = req.user?.id;
+        if (!userId) throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        const schedule = await this.supportScheduleService.create(req.body, userId);
+        return this.sendSuccess(res, { message: 'Schedule created successfully', data: schedule });
+    });
 
-        return this.sendSuccess(res, {
-            message: 'Staff schedules retrieved successfully',
-            data: { schedules }
-        });
+    updateSupportSchedule = asyncHandler(async (req: Request, res: Response) => {
+        const { scheduleId } = req.params;
+        const userId = req.user?.id;
+        if (!userId) throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        const schedule = await this.supportScheduleService.update(scheduleId, req.body, userId);
+        return this.sendSuccess(res, { message: 'Schedule updated successfully', data: schedule });
+    });
+
+    deleteSupportSchedule = asyncHandler(async (req: Request, res: Response) => {
+        const { scheduleId } = req.params;
+        const userId = req.user?.id;
+        if (!userId) throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        await this.supportScheduleService.delete(scheduleId);
+        return this.sendSuccess(res, { message: 'Schedule deleted successfully' });
     });
 
     // Training
@@ -1066,62 +1088,83 @@ export class StaffController extends BaseController {
         });
     });
 
-    // Reports
-    /**
-     * Get reports
-     */
+    // Reports - REAL implementation
     getReports = asyncHandler(async (req: Request, res: Response) => {
         const { type } = req.params;
         const userId = req.user?.id;
-
-        if (!userId) {
-            throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
-        }
-
-        // Mock data - replace with actual implementation
-        const reports = [
-            {
-                id: 'RPT-001',
-                name: 'Weekly Performance Report',
-                type: type,
-                generatedAt: new Date().toISOString(),
-                status: 'completed'
-            }
-        ];
-
-        return this.sendSuccess(res, {
-            message: 'Reports retrieved successfully',
-            data: { reports }
-        });
+        if (!userId) throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        const list = await this.supportReportService.list({ type });
+        const reports = list.map((r: any) => ({
+            id: r.reportId || r._id,
+            reportId: r.reportId,
+            name: r.name,
+            type: r.type,
+            startDate: r.startDate,
+            endDate: r.endDate,
+            format: r.format,
+            status: r.status,
+            generatedAt: r.completedAt || r.createdAt,
+            createdAt: r.createdAt,
+            summary: r.summary,
+        }));
+        return this.sendSuccess(res, { message: 'Reports retrieved successfully', data: { reports } });
     });
 
-    // Automation
-    /**
-     * Get automation rules
-     */
+    generateReport = asyncHandler(async (req: Request, res: Response) => {
+        const userId = req.user?.id;
+        if (!userId) throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        const report = await this.supportReportService.generate(req.body, userId);
+        return this.sendSuccess(res, { message: 'Report generated successfully', data: report });
+    });
+
+    deleteReport = asyncHandler(async (req: Request, res: Response) => {
+        const { reportId } = req.params;
+        const userId = req.user?.id;
+        if (!userId) throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        await this.supportReportService.delete(reportId);
+        return this.sendSuccess(res, { message: 'Report deleted successfully' });
+    });
+
+    // Automation - REAL implementation
     getAutomationRules = asyncHandler(async (req: Request, res: Response) => {
         const userId = req.user?.id;
-        if (!userId) {
-            throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
-        }
+        if (!userId) throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        const list = await this.automationRuleService.list(req.query);
+        const rules = list.map((r: any) => ({
+            id: r.ruleId || r._id,
+            ruleId: r.ruleId,
+            name: r.name,
+            description: r.description,
+            trigger: r.trigger,
+            conditions: r.conditions || [],
+            actions: r.actions || [],
+            isActive: r.isActive,
+            createdAt: r.createdAt,
+        }));
+        return this.sendSuccess(res, { message: 'Automation rules retrieved successfully', data: { rules } });
+    });
 
-        // Mock data - replace with actual implementation
-        const rules = [
-            {
-                id: 'AR-001',
-                name: 'Auto-assign high priority tickets',
-                description: 'Automatically assign high priority tickets to senior staff',
-                status: 'active',
-                trigger: 'ticket_created',
-                conditions: [{ field: 'priority', operator: 'equals', value: 'high' }],
-                actions: [{ type: 'assign', value: 'senior_staff' }]
-            }
-        ];
+    createAutomationRule = asyncHandler(async (req: Request, res: Response) => {
+        const userId = req.user?.id;
+        if (!userId) throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        const rule = await this.automationRuleService.create(req.body, userId);
+        return this.sendSuccess(res, { message: 'Automation rule created', data: rule });
+    });
 
-        return this.sendSuccess(res, {
-            message: 'Automation rules retrieved successfully',
-            data: { rules }
-        });
+    updateAutomationRule = asyncHandler(async (req: Request, res: Response) => {
+        const { ruleId } = req.params;
+        const userId = req.user?.id;
+        if (!userId) throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        const rule = await this.automationRuleService.update(ruleId, req.body, userId);
+        return this.sendSuccess(res, { message: 'Automation rule updated', data: rule });
+    });
+
+    deleteAutomationRule = asyncHandler(async (req: Request, res: Response) => {
+        const { ruleId } = req.params;
+        const userId = req.user?.id;
+        if (!userId) throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        await this.automationRuleService.delete(ruleId);
+        return this.sendSuccess(res, { message: 'Automation rule deleted' });
     });
 
     // Quality Assurance
@@ -1150,38 +1193,54 @@ export class StaffController extends BaseController {
         });
     });
 
-    // Communication
-    /**
-     * Get announcements
-     */
+    // Communication - REAL implementation
     getAnnouncements = asyncHandler(async (req: Request, res: Response) => {
         const userId = req.user?.id;
-        if (!userId) {
-            throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
-        }
+        if (!userId) throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        const list = await this.supportCommunicationService.listAnnouncements();
+        const announcements = list.map((a: any) => ({
+            id: a.announcementId || a._id,
+            announcementId: a.announcementId,
+            title: a.title,
+            content: a.content,
+            priority: a.priority,
+            author: a.author,
+            publishedAt: a.publishedAt,
+            createdAt: a.createdAt,
+        }));
+        return this.sendSuccess(res, { message: 'Announcements retrieved successfully', data: { announcements } });
+    });
 
-        // Mock data - replace with actual implementation
-        const announcements = [
-            {
-                id: 'ANN-001',
-                title: 'New Training Module Available',
-                content: 'A new customer service training module has been added to the platform.',
-                priority: 'medium',
-                publishedAt: '2024-03-15T09:00:00Z',
-                author: 'HR Team'
-            }
-        ];
+    createAnnouncement = asyncHandler(async (req: Request, res: Response) => {
+        const userId = req.user?.id;
+        if (!userId) throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        const author = (req.user as any)?.email || 'Staff';
+        const announcement = await this.supportCommunicationService.createAnnouncement(req.body, author, userId);
+        return this.sendSuccess(res, { message: 'Announcement created', data: announcement });
+    });
 
-        return this.sendSuccess(res, {
-            message: 'Announcements retrieved successfully',
-            data: { announcements }
-        });
+    deleteAnnouncement = asyncHandler(async (req: Request, res: Response) => {
+        const { announcementId } = req.params;
+        const userId = req.user?.id;
+        if (!userId) throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        await this.supportCommunicationService.deleteAnnouncement(announcementId);
+        return this.sendSuccess(res, { message: 'Announcement deleted' });
     });
 
     createChatSession = asyncHandler(async (req: Request, res: Response) => {
+        const userId = req.user?.id;
+        if (!userId) throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        const session = await this.liveChatService.createSession({
+            customerName: req.body.customerName,
+            customerEmail: req.body.customerEmail,
+            initialMessage: req.body.initialMessage,
+            department: req.body.department,
+            priority: req.body.priority,
+            assignedAgent: req.body.assignedAgent || userId,
+        });
         return this.sendSuccess(res, {
             message: 'Chat session created',
-            data: { sessionId: `chat-${Date.now()}`, status: 'open', ...req.body }
+            data: session
         });
     });
 
@@ -1190,6 +1249,44 @@ export class StaffController extends BaseController {
             message: 'Quality reviews retrieved',
             data: { reviews: [] }
         });
+    });
+
+    /**
+     * Get team messages — REAL persistence
+     */
+    getTeamMessages = asyncHandler(async (req: Request, res: Response) => {
+        const userId = req.user?.id;
+        if (!userId) throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        const list = await this.supportCommunicationService.listMessages();
+        const messages = list.map((m: any) => ({
+            id: m.messageId || m._id,
+            messageId: m.messageId,
+            subject: m.subject,
+            content: m.content,
+            message: m.content,
+            sender: m.sender,
+            recipients: m.recipients,
+            priority: m.priority,
+            read: m.read,
+            timestamp: m.timestamp,
+        }));
+        return this.sendSuccess(res, { message: 'Team messages retrieved', data: { messages } });
+    });
+
+    sendTeamMessage = asyncHandler(async (req: Request, res: Response) => {
+        const userId = req.user?.id;
+        if (!userId) throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        const sender = (req.user as any)?.email || 'Staff';
+        const message = await this.supportCommunicationService.sendMessage(req.body, sender, userId);
+        return this.sendSuccess(res, { message: 'Team message sent', data: message });
+    });
+
+    deleteTeamMessage = asyncHandler(async (req: Request, res: Response) => {
+        const { messageId } = req.params;
+        const userId = req.user?.id;
+        if (!userId) throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        await this.supportCommunicationService.deleteMessage(messageId);
+        return this.sendSuccess(res, { message: 'Message deleted' });
     });
 
     // ==================== COACH MANAGEMENT ====================
