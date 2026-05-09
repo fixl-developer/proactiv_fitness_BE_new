@@ -43,6 +43,8 @@ export class PartnerRoutes {
             { method: 'PATCH', path: '/api/partners/notifications/:notificationId/read', handler: (req: any, res: any) => c.markNotificationRead(req, res) },
             { method: 'GET', path: '/api/partners/:partnerId/documents', handler: (req: any, res: any) => c.getPartnerDocuments(req, res) },
             { method: 'POST', path: '/api/partners/:partnerId/documents', handler: (req: any, res: any) => c.uploadDocument(req, res) },
+            { method: 'GET', path: '/api/partners/:partnerId/documents/:documentId/download', handler: (req: any, res: any) => c.downloadPartnerDocument(req, res) },
+            { method: 'POST', path: '/api/partners/:partnerId/resources/request', handler: (req: any, res: any) => c.requestResource(req, res) },
             { method: 'GET', path: '/api/partners/:partnerId/contacts', handler: (req: any, res: any) => c.getPartnerContacts(req, res) },
             { method: 'PATCH', path: '/api/partners/:partnerId/contacts', handler: (req: any, res: any) => c.updatePartnerContacts(req, res) },
             { method: 'GET', path: '/api/partners/:partnerId/agreements', handler: (req: any, res: any) => c.getPartnerAgreements(req, res) },
@@ -67,10 +69,16 @@ export class PartnerRoutes {
 
             // Marketing
             { method: 'GET', path: '/api/partners/:partnerId/marketing/campaigns', handler: (req: any, res: any) => c.getMarketingCampaigns(req, res) },
+            { method: 'POST', path: '/api/partners/:partnerId/marketing/campaigns', handler: (req: any, res: any) => c.createMarketingCampaign(req, res) },
             { method: 'GET', path: '/api/partners/:partnerId/marketing/leads', handler: (req: any, res: any) => c.getMarketingLeads(req, res) },
 
             // Integrations
             { method: 'GET', path: '/api/partners/:partnerId/integrations', handler: (req: any, res: any) => c.getIntegrations(req, res) },
+            { method: 'POST', path: '/api/partners/:partnerId/integrations', handler: (req: any, res: any) => c.createIntegration(req, res) },
+            { method: 'PUT', path: '/api/partners/:partnerId/integrations/:integrationId', handler: (req: any, res: any) => c.updateIntegration(req, res) },
+            { method: 'PATCH', path: '/api/partners/:partnerId/integrations/:integrationId', handler: (req: any, res: any) => c.updateIntegration(req, res) },
+            { method: 'DELETE', path: '/api/partners/:partnerId/integrations/:integrationId', handler: (req: any, res: any) => c.deleteIntegration(req, res) },
+            { method: 'POST', path: '/api/partners/:partnerId/integrations/:integrationId/test', handler: (req: any, res: any) => c.testIntegration(req, res) },
             { method: 'PATCH', path: '/api/partners/integrations/:integrationId/toggle', handler: (req: any, res: any) => c.toggleIntegration(req, res) },
 
             // Support Tickets
@@ -81,7 +89,11 @@ export class PartnerRoutes {
             // Messages & Communication
             { method: 'GET', path: '/api/partners/:partnerId/messages', handler: (req: any, res: any) => c.getMessagesHandler(req, res) },
             { method: 'POST', path: '/api/partners/:partnerId/messages', handler: (req: any, res: any) => c.sendMessageHandler(req, res) },
+            { method: 'POST', path: '/api/partners/:partnerId/messages/:messageId/reply', handler: (req: any, res: any) => c.replyToMessage(req, res) },
             { method: 'POST', path: '/api/partners/messages/:messageId/reply', handler: (req: any, res: any) => c.replyToMessage(req, res) },
+            { method: 'PATCH', path: '/api/partners/:partnerId/messages/:messageId/read', handler: (req: any, res: any) => c.markMessageRead(req, res) },
+            { method: 'PATCH', path: '/api/partners/:partnerId/messages/:messageId/archive', handler: (req: any, res: any) => c.archiveMessage(req, res) },
+            { method: 'PATCH', path: '/api/partners/:partnerId/notifications/:notificationId/read', handler: (req: any, res: any) => c.markNotificationRead(req, res) },
 
             // Settings
             { method: 'GET', path: '/api/partners/:partnerId/settings', handler: (req: any, res: any) => c.getPartnerSettings(req, res) },

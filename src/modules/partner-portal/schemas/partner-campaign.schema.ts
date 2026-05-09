@@ -4,6 +4,7 @@ import { baseSchemaFields, baseSchemaOptions } from '@shared/base/base.model';
 export interface IPartnerCampaignDoc extends Document {
     partnerId: string;
     name: string;
+    description?: string;
     type: string;
     status: string;
     budget: number;
@@ -14,14 +15,16 @@ export interface IPartnerCampaignDoc extends Document {
     roi: number;
     startDate?: Date;
     endDate?: Date;
+    targetAudience?: string;
 }
 
 const partnerCampaignSchema = new Schema<IPartnerCampaignDoc>(
     {
         partnerId: { type: String, required: true, index: true },
         name: { type: String, required: true, trim: true },
-        type: { type: String, enum: ['email', 'social', 'display', 'sms'], default: 'email' },
-        status: { type: String, enum: ['active', 'paused', 'completed', 'draft'], default: 'draft' },
+        description: { type: String, trim: true },
+        type: { type: String, default: 'Email' },
+        status: { type: String, default: 'ACTIVE' },
         budget: { type: Number, default: 0 },
         spent: { type: Number, default: 0 },
         impressions: { type: Number, default: 0 },
@@ -30,6 +33,7 @@ const partnerCampaignSchema = new Schema<IPartnerCampaignDoc>(
         roi: { type: Number, default: 0 },
         startDate: { type: Date },
         endDate: { type: Date },
+        targetAudience: { type: String, trim: true },
         ...baseSchemaFields,
     },
     { ...baseSchemaOptions, timestamps: true, collection: 'partner_campaigns' }
