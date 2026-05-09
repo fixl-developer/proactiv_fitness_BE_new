@@ -10,7 +10,8 @@ export class UserDashboardController {
                 return;
             }
 
-            const dashboardData = await userDashboardService.getDashboardData(userId);
+            const { from, to } = req.query as { from?: string; to?: string };
+            const dashboardData = await userDashboardService.getDashboardData(userId, { from, to });
             res.status(200).json({ success: true, data: dashboardData });
         } catch (error: any) {
             res.status(500).json({ success: false, message: error.message });

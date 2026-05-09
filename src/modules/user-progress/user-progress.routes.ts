@@ -9,5 +9,7 @@ router.get('/timeline', authMiddleware, (req, res) => userProgressController.get
 router.get('/skills', authMiddleware, (req, res) => userProgressController.getSkillLevels(req, res));
 router.get('/metrics', authMiddleware, (req, res) => userProgressController.getPerformanceMetrics(req, res));
 router.post('/milestone', authMiddleware, (req, res) => userProgressController.addMilestone(req, res));
+router.get('/goals', authMiddleware, (req, res) => userProgressController.getGoals(req, res));
+router.post('/goals', authMiddleware, (req, res) => userProgressController.addGoal(req, res));
 
 export default router;

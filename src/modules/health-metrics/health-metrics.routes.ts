@@ -35,27 +35,35 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
 router.post('/', authenticate, async (req: Request, res: Response) => {
     try {
         const userId = req.user?.id;
-        const { type, value, unit, notes } = req.body;
+        // Frontend sends `metricType` + `measuredAt`; legacy clients may send `type` + no date.
+        const { type, metricType, value, unit, notes, measuredAt } = req.body;
+        const resolvedType = metricType || type;
 
         if (!userId) {
             res.status(401).json({ success: false, message: 'Unauthorized' });
             return;
         }
 
-        if (!type || value === undefined) {
-            res.status(400).json({ success: false, message: 'Type and value are required' });
+        if (!resolvedType || value === undefined || value === null) {
+            res.status(400).json({ success: false, message: 'metricType and value are required' });
             return;
         }
 
+        const measured = measuredAt ? new Date(measuredAt) : new Date();
+        const id = uuidv4();
         const metric = {
-            id: uuidv4(),
+            id,
+            _id: id, // expose _id alongside id so frontend (which keys by _id) lines up
             userId,
-            type, // weight, height, bmi, heartRate, bloodPressure, etc.
-            value,
+            // Keep both for forward/backward compatibility
+            type: resolvedType,
+            metricType: resolvedType,
+            value: Number(value),
             unit: unit || 'kg',
             notes: notes || '',
-            recordedAt: new Date(),
-            createdAt: new Date()
+            measuredAt: measured,
+            recordedAt: measured,
+            createdAt: new Date(),
         };
 
         healthMetrics.push(metric);
@@ -102,7 +110,7 @@ router.delete('/:metricId', authenticate, async (req: Request, res: Response) =>
             return;
         }
 
-        const index = healthMetrics.findIndex(m => m.id === metricId && m.userId === userId);
+        const index = healthMetrics.findIndex(m => (m.id === metricId || m._id === metricId) && m.userId === userId);
         if (index === -1) {
             res.status(404).json({ success: false, message: 'Metric not found' });
             return;

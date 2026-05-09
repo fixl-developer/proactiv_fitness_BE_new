@@ -39,12 +39,19 @@ router.get('/transactions', authenticate, async (req: Request, res: Response) =>
         }
 
         const wallet = await walletService.getWallet(userId);
-        if (!wallet) {
-            res.status(404).json({ success: false, message: 'Wallet not found' });
-            return;
-        }
-
-        res.json({ success: true, data: wallet.transactions || [] });
+        // Don't 404 a missing wallet — UI just shows an empty transaction list.
+        const txs = wallet?.transactions || [];
+        // Normalise transaction shape so the wallet page (which expects {_id,type,amount,description,date,status})
+        // can render historical entries without rewriting the schema.
+        const normalised = (txs as any[]).map((t: any) => ({
+            _id: t.transactionId || t._id || `${t.date}-${t.amount}`,
+            type: typeof t.type === 'string' ? t.type.toLowerCase() : (t.amount >= 0 ? 'credit' : 'debit'),
+            amount: Math.abs(Number(t.amount) || 0),
+            description: t.description || '',
+            date: t.date ? new Date(t.date).toLocaleDateString() : '',
+            status: 'completed',
+        }));
+        res.json({ success: true, data: normalised });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }

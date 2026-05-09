@@ -82,6 +82,44 @@ export class UserProgressController {
             res.status(500).json({ success: false, message: error.message });
         }
     }
+
+    async addGoal(req: Request, res: Response): Promise<void> {
+        try {
+            const userId = req.user?.id;
+            if (!userId) {
+                res.status(401).json({ success: false, message: 'Unauthorized' });
+                return;
+            }
+
+            const { goalType, target, deadline } = req.body || {};
+            if (!goalType || !String(target ?? '').trim() || !deadline) {
+                res.status(400).json({
+                    success: false,
+                    message: 'goalType, target and deadline are required',
+                });
+                return;
+            }
+
+            const goal = await userProgressService.addGoal(userId, req.body);
+            res.status(201).json({ success: true, data: goal, message: 'Goal saved' });
+        } catch (error: any) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    async getGoals(req: Request, res: Response): Promise<void> {
+        try {
+            const userId = req.user?.id;
+            if (!userId) {
+                res.status(401).json({ success: false, message: 'Unauthorized' });
+                return;
+            }
+            const goals = await userProgressService.getGoals(userId);
+            res.status(200).json({ success: true, data: goals });
+        } catch (error: any) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
 }
 
 export const userProgressController = new UserProgressController();

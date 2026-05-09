@@ -232,17 +232,42 @@ router.get('/dashboard', async (req: Request, res: Response) => {
                 }
             ]),
             // Upcoming bookings — sessionDate is the canonical field set by the
-            // simplified booking service.
-            Booking.find({
-                $or: [
-                    { bookedBy: parentId },
-                    { familyId: parentId },
-                    { userId: parentId },
-                    { parentId: parentId }
-                ],
-                status: { $in: ['confirmed', 'pending', 'CONFIRMED', 'PENDING'] },
-                $and: [{ $or: [{ sessionDate: { $gte: now } }, { 'session.date': { $gte: now } }] }],
-            }).sort({ sessionDate: 1 }).limit(5).lean(),
+            // simplified booking service. Optional ?childId filters to a single
+            // child so the dashboard can show per-child upcoming classes after
+            // "View Details". Populates program/location/coach so the cards
+            // render real names instead of "Class"/"TBA".
+            (() => {
+                const childIdParam = req.query.childId as string | undefined;
+                const upcomingFilter: any = {
+                    $or: [
+                        { bookedBy: parentId },
+                        { familyId: parentId },
+                        { userId: parentId },
+                        { parentId: parentId }
+                    ],
+                    status: { $in: ['confirmed', 'pending', 'CONFIRMED', 'PENDING'] },
+                    $and: [{ $or: [{ sessionDate: { $gte: now } }, { 'session.date': { $gte: now } }] }],
+                };
+                if (childIdParam && /^[a-f\d]{24}$/i.test(childIdParam)) {
+                    upcomingFilter.$and.push({
+                        $or: [
+                            { childId: childIdParam },
+                            { 'participants.childId': childIdParam },
+                        ],
+                    });
+                }
+                return Booking.find(upcomingFilter)
+                    .populate({ path: 'programId', select: 'name' })
+                    .populate({ path: 'locationId', select: 'name' })
+                    .populate({
+                        path: 'sessionId',
+                        select: 'date timeSlot coachAssignments',
+                        populate: { path: 'coachAssignments.coachId', select: 'firstName lastName name' },
+                    })
+                    .sort({ sessionDate: 1 })
+                    .limit(10)
+                    .lean();
+            })(),
             // Recent payments
             Booking.find({
                 $or: [
@@ -297,9 +322,25 @@ router.get('/dashboard', async (req: Request, res: Response) => {
         // Pending payments — bookings whose payment.status is still pending.
         // (totalSpent already includes these; this is the "still owed" subset.)
         const pendingBookings = bookings.filter((b: any) =>
-            ['pending', 'PENDING'].includes(b.payment?.status)
+            ['pending', 'PENDING', 'unpaid', 'UNPAID'].includes(b.payment?.status)
         );
         const pendingAmount = pendingBookings.reduce((sum: number, b: any) => sum + (b.payment?.amount || 0), 0);
+
+        // Account Balance — meaningful value the parent can act on:
+        //   available makeup credits (cancelled+paid bookings, not yet used,
+        //   within 90-day expiry window). Hardcoded 0 was the prior bug.
+        const cancelledPaidBookings = bookings.filter((b: any) =>
+            ['cancelled', 'CANCELLED'].includes(b.status)
+            && ['paid', 'COMPLETED', 'completed'].includes(b.payment?.status)
+        );
+        const accountBalance = cancelledPaidBookings.reduce((sum: number, b: any) => {
+            const cancelDate = new Date(b.cancelledAt || b.updatedAt || b.createdAt);
+            const expiryDate = new Date(cancelDate.getTime() + 90 * 24 * 60 * 60 * 1000);
+            const isExpired = expiryDate < now;
+            const isUsed = b.creditUsed === true;
+            if (isExpired || isUsed) return sum;
+            return sum + (b.payment?.amount || 0);
+        }, 0);
 
         // Range-scoped stats (driven by timeRange query param)
         const rangeBookings = bookings.filter((b: any) => new Date(b.createdAt) >= rangeStart);
@@ -513,7 +554,7 @@ router.get('/dashboard', async (req: Request, res: Response) => {
                     totalSpent,
                     monthlySpent,
                     pendingPayments: pendingAmount,
-                    accountBalance: 0,
+                    accountBalance,
                     upcomingClasses: upcomingBookings,
                     completedClasses: completedBookings,
                     totalBookings: bookings.length,
@@ -535,14 +576,23 @@ router.get('/dashboard', async (req: Request, res: Response) => {
                         const [k, ...v] = r.split(':');
                         if (k) sp[k] = v.join(':');
                     });
+                    const programDoc: any = b.programId && typeof b.programId === 'object' ? b.programId : null;
+                    const locationDoc: any = b.locationId && typeof b.locationId === 'object' ? b.locationId : null;
+                    const sessionDoc: any = b.sessionId && typeof b.sessionId === 'object' ? b.sessionId : null;
+                    const assignments: any[] = Array.isArray(sessionDoc?.coachAssignments) ? sessionDoc.coachAssignments : [];
+                    const primary = assignments.find((a: any) => a?.role === 'primary') || assignments[0] || {};
+                    const c = primary.coachId || {};
+                    const coachName = (c.firstName || c.lastName)
+                        ? `${c.firstName || ''} ${c.lastName || ''}`.trim()
+                        : (c.name || b.coachName || b.session?.coach || '');
                     return {
                         id: b._id,
                         child: sp.childName || b.childName || b.customer?.name || 'Student',
-                        program: sp.program || sp.className || b.programName || b.session?.className || 'Class',
-                        coach: b.coachName || b.session?.coach || '',
-                        date: b.sessionDate || b.session?.date || b.date || '',
-                        time: b.sessionTime?.startTime || b.session?.startTime || sp.timeSlot || b.time || '',
-                        location: sp.location || b.session?.location || b.location || '',
+                        program: programDoc?.name || sp.program || sp.className || b.programName || b.session?.className || 'Class',
+                        coach: coachName,
+                        date: b.sessionDate || sessionDoc?.date || b.session?.date || b.date || '',
+                        time: b.sessionTime?.startTime || sessionDoc?.timeSlot?.startTime || b.session?.startTime || sp.timeSlot || b.time || '',
+                        location: locationDoc?.name || sp.location || b.session?.location || b.location || '',
                         status: (b.status || 'pending').toLowerCase(),
                         duration: b.bookingType === 'assessment'
                             ? '30 min'
@@ -615,7 +665,7 @@ router.get('/children', async (req: Request, res: Response) => {
                         { childId: child._id },
                         { 'participants.childId': child._id }
                     ]
-                }).lean(),
+                }).sort({ createdAt: -1 }).lean(),
                 AttendanceRecord.find({
                     $or: [
                         { userId: child._id },
@@ -631,6 +681,16 @@ router.get('/children', async (req: Request, res: Response) => {
                 ['checked_in', 'checked_out', 'present'].includes(a.status)
             ).length;
 
+            // Derive program/coach/level from the most recent booking so the
+            // page reflects what the child is actually enrolled in. Falls
+            // back to user-doc fields only if absolutely nothing exists.
+            const latest = childBookings[0] || {};
+            const sp: Record<string, string> = {};
+            (latest.specialRequests || []).forEach((r: string) => {
+                const [k, ...v] = r.split(':');
+                if (k) sp[k] = v.join(':');
+            });
+
             return {
                 id: child._id,
                 firstName: child.firstName || '',
@@ -639,9 +699,9 @@ router.get('/children', async (req: Request, res: Response) => {
                 age: child.dateOfBirth ? Math.floor((Date.now() - new Date(child.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 0,
                 dateOfBirth: child.dateOfBirth || '',
                 gender: child.gender || '',
-                program: child.currentProgram || 'Enrolled',
-                level: child.level || 'Beginner',
-                coach: child.assignedCoach || '',
+                program: sp.program || sp.className || latest.programName || child.currentProgram || '',
+                level: child.level || latest.level || '',
+                coach: latest.coachName || child.assignedCoach || '',
                 totalClasses,
                 attendedClasses,
                 progress: totalClasses > 0 ? Math.round((attendedClasses / totalClasses) * 100) : 0,
@@ -692,7 +752,19 @@ router.get('/bookings', async (req: Request, res: Response) => {
             }
         }
 
-        const bookings = await Booking.find(filter).sort({ createdAt: -1 }).limit(50).lean();
+        // Populate session+program+location+coach refs so we can return
+        // real coach/program/location names instead of "TBD" placeholders.
+        const bookings = await Booking.find(filter)
+            .populate({ path: 'programId', select: 'name' })
+            .populate({ path: 'locationId', select: 'name' })
+            .populate({
+                path: 'sessionId',
+                select: 'date timeSlot coachAssignments',
+                populate: { path: 'coachAssignments.coachId', select: 'firstName lastName name' },
+            })
+            .sort({ createdAt: -1 })
+            .limit(50)
+            .lean();
 
         // Helper: extract values stuffed into specialRequests by the simplified
         // booking service (e.g. "childName:Test Kid"). Keeps the dashboard rich
@@ -704,6 +776,20 @@ router.get('/bookings', async (req: Request, res: Response) => {
                 if (k) out[k] = v.join(':');
             });
             return out;
+        };
+
+        // Pull coach name out of populated session.coachAssignments — falls
+        // back through specialRequests and the booking-doc field so legacy
+        // bookings still surface a name.
+        const resolveCoach = (b: any): string => {
+            const session: any = b.sessionId && typeof b.sessionId === 'object' ? b.sessionId : null;
+            const assignments: any[] = Array.isArray(session?.coachAssignments) ? session.coachAssignments : [];
+            const primary = assignments.find((a: any) => a?.role === 'primary') || assignments[0] || {};
+            const c = primary.coachId || {};
+            const populated = (c.firstName || c.lastName)
+                ? `${c.firstName || ''} ${c.lastName || ''}`.trim()
+                : (c.name || '');
+            return populated || b.coachName || b.session?.coach || '';
         };
 
         const stats = {
@@ -720,31 +806,36 @@ router.get('/bookings', async (req: Request, res: Response) => {
                 bookings: bookings.map((b: any) => {
                     const sp = parseSpecial(b);
                     const mainParticipant = Array.isArray(b.participants) ? b.participants[0] : null;
+                    const programDoc: any = b.programId && typeof b.programId === 'object' ? b.programId : null;
+                    const locationDoc: any = b.locationId && typeof b.locationId === 'object' ? b.locationId : null;
+                    const sessionDoc: any = b.sessionId && typeof b.sessionId === 'object' ? b.sessionId : null;
+                    const sessionIdRaw = sessionDoc?._id || (typeof b.sessionId === 'string' ? b.sessionId : null);
                     return {
                         id: b._id || b.bookingId,
                         bookingId: b.bookingId,
                         childId: mainParticipant?.childId || b.childId || null,
                         child: mainParticipant?.name || sp.childName || b.childName || b.customer?.name || 'Student',
-                        program: sp.program || sp.className || b.programName || b.session?.className
+                        program: programDoc?.name
+                            || sp.program || sp.className || b.programName || b.session?.className
                             || (b.bookingType === 'assessment'
                                 ? 'Assessment'
                                 : b.bookingType === 'trial'
                                     ? 'Trial Class'
                                     : 'Class'),
-                        coach: b.coachName || b.session?.coach || '',
-                        date: b.sessionDate || b.session?.date || b.date || b.createdAt,
-                        time: b.sessionTime?.startTime || b.session?.startTime || sp.timeSlot || b.time || '',
+                        coach: resolveCoach(b),
+                        date: b.sessionDate || sessionDoc?.date || b.session?.date || b.date || b.createdAt,
+                        time: b.sessionTime?.startTime || sessionDoc?.timeSlot?.startTime || b.session?.startTime || sp.timeSlot || b.time || '',
                         duration: b.bookingType === 'assessment'
                             ? '30 min'
                             : b.bookingType === 'trial'
                                 ? '1 hour'
                                 : (b.session?.duration || '1 hour'),
-                        location: sp.location || b.session?.location || b.location || '',
+                        location: locationDoc?.name || sp.location || b.session?.location || b.location || '',
                         status: (b.status || 'pending').toLowerCase(),
                         price: b.payment?.amount || 0,
                         currency: b.payment?.currency || 'HKD',
                         type: b.bookingType || b.type || 'regular',
-                        sessionId: b.sessionId || null,
+                        sessionId: sessionIdRaw,
                     };
                 }),
             }
@@ -766,8 +857,10 @@ router.get('/payments', async (req: Request, res: Response) => {
 
         const filter: any = {
             $or: [
+                { bookedBy: parentId },
+                { familyId: parentId },
                 { userId: parentId },
-                { parentId: parentId }
+                { parentId: parentId },
             ],
             'payment.amount': { $gt: 0 }
         };
@@ -780,10 +873,19 @@ router.get('/payments', async (req: Request, res: Response) => {
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
         const yearStart = new Date(now.getFullYear(), 0, 1);
 
-        const bookings = await Booking.find(filter).sort({ createdAt: -1 }).limit(50).lean();
+        const bookings = await Booking.find(filter)
+            .populate({ path: 'programId', select: 'name' })
+            .sort({ createdAt: -1 })
+            .limit(50)
+            .lean();
 
         const allPaymentBookings = await Booking.find({
-            $or: [{ userId: parentId }, { parentId: parentId }],
+            $or: [
+                { bookedBy: parentId },
+                { familyId: parentId },
+                { userId: parentId },
+                { parentId: parentId },
+            ],
             'payment.amount': { $gt: 0 }
         }).lean();
 
@@ -802,6 +904,19 @@ router.get('/payments', async (req: Request, res: Response) => {
             .filter((b: any) => ['pending', 'PENDING'].includes(b.payment?.status))
             .reduce((sum: number, b: any) => sum + (b.payment?.amount || 0), 0);
 
+        // Account balance = available makeup credits (same logic as
+        // /parent/dashboard) so the Payments page agrees with the dashboard.
+        const cancelledPaidBookings = allPaymentBookings.filter((b: any) =>
+            ['cancelled', 'CANCELLED'].includes(b.status)
+            && ['paid', 'COMPLETED', 'completed'].includes(b.payment?.status)
+        );
+        const accountBalance = cancelledPaidBookings.reduce((sum: number, b: any) => {
+            const cancelDate = new Date(b.cancelledAt || b.updatedAt || b.createdAt);
+            const expiryDate = new Date(cancelDate.getTime() + 90 * 24 * 60 * 60 * 1000);
+            if (expiryDate < now || b.creditUsed === true) return sum;
+            return sum + (b.payment?.amount || 0);
+        }, 0);
+
         res.json({
             success: true,
             data: {
@@ -809,19 +924,30 @@ router.get('/payments', async (req: Request, res: Response) => {
                     totalSpent,
                     monthlySpent,
                     pendingPayments: pendingAmount,
-                    accountBalance: 0,
+                    accountBalance,
                 },
-                payments: bookings.map((b: any) => ({
-                    id: b._id || b.bookingId,
-                    child: b.childName || b.customer?.name || 'Student',
-                    program: b.programName || b.session?.className || 'Program',
-                    amount: b.payment?.amount || 0,
-                    date: b.createdAt,
-                    status: (b.payment?.status || 'pending').toLowerCase(),
-                    method: b.payment?.method || 'Card',
-                    invoice: b.invoiceNumber || `INV-${b._id?.toString().slice(-6).toUpperCase() || '000000'}`,
-                    description: b.description || b.programName || 'Payment',
-                })),
+                payments: bookings.map((b: any) => {
+                    const sp: Record<string, string> = {};
+                    (b.specialRequests || []).forEach((r: string) => {
+                        if (typeof r !== 'string') return;
+                        const [k, ...v] = r.split(':');
+                        if (k) sp[k] = v.join(':');
+                    });
+                    const programDoc: any = b.programId && typeof b.programId === 'object' ? b.programId : null;
+                    const programName = programDoc?.name || sp.program || sp.className || b.programName || 'Program';
+                    return {
+                        id: b._id || b.bookingId,
+                        child: sp.childName || b.childName || b.customer?.name || 'Student',
+                        program: programName,
+                        amount: b.payment?.amount || 0,
+                        currency: b.payment?.currency || 'HKD',
+                        date: b.createdAt,
+                        status: (b.payment?.status || 'pending').toLowerCase(),
+                        method: b.payment?.method || 'Card',
+                        invoice: b.invoiceNumber || `INV-${b._id?.toString().slice(-6).toUpperCase() || '000000'}`,
+                        description: b.description || programName,
+                    };
+                }),
             }
         });
     } catch (error: any) {
@@ -853,7 +979,12 @@ router.post('/payments', async (req: Request, res: Response) => {
 
         const booking = await Booking.findOne({
             _id: bookingId,
-            $or: [{ userId: parentId }, { parentId: parentId }],
+            $or: [
+                { bookedBy: parentId },
+                { familyId: parentId },
+                { userId: parentId },
+                { parentId: parentId },
+            ],
         });
         if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
 
@@ -880,19 +1011,37 @@ router.get('/payments/pending', async (req: Request, res: Response) => {
         const { Booking } = require('../modules/booking/booking.model');
         const parentId = getParentId(req);
         const pending = await Booking.find({
-            $or: [{ userId: parentId }, { parentId: parentId }],
+            $or: [
+                { bookedBy: parentId },
+                { familyId: parentId },
+                { userId: parentId },
+                { parentId: parentId },
+            ],
             'payment.status': { $in: ['pending', 'PENDING', 'unpaid', 'UNPAID'] },
             'payment.amount': { $gt: 0 },
-        }).sort({ createdAt: -1 }).limit(50).lean();
+        })
+            .populate({ path: 'programId', select: 'name' })
+            .sort({ createdAt: -1 })
+            .limit(50)
+            .lean();
         res.json({
             success: true,
-            data: pending.map((b: any) => ({
-                id: b._id,
-                child: b.childName || b.customer?.name || 'Student',
-                program: b.programName || b.session?.className || 'Program',
-                amount: b.payment?.amount || 0,
-                dueDate: b.payment?.dueDate || b.session?.date || b.createdAt,
-            })),
+            data: pending.map((b: any) => {
+                const sp: Record<string, string> = {};
+                (b.specialRequests || []).forEach((r: string) => {
+                    if (typeof r !== 'string') return;
+                    const [k, ...v] = r.split(':');
+                    if (k) sp[k] = v.join(':');
+                });
+                const programDoc: any = b.programId && typeof b.programId === 'object' ? b.programId : null;
+                return {
+                    id: b._id,
+                    child: sp.childName || b.childName || b.customer?.name || 'Student',
+                    program: programDoc?.name || sp.program || b.programName || 'Program',
+                    amount: b.payment?.amount || 0,
+                    dueDate: b.payment?.dueDate || b.session?.date || b.createdAt,
+                };
+            }),
         });
     } catch (error: any) {
         console.error('Pending payments error:', error);
@@ -919,7 +1068,12 @@ router.get('/profile', async (req: Request, res: Response) => {
                 ]
             }),
             Booking.countDocuments({
-                $or: [{ userId: parentId }, { parentId: parentId }]
+                $or: [
+                    { bookedBy: parentId },
+                    { familyId: parentId },
+                    { userId: parentId },
+                    { parentId: parentId },
+                ]
             })
         ]);
 
@@ -1039,16 +1193,42 @@ router.put('/children/:childId', async (req: Request, res: Response) => {
         const { User } = require('../modules/iam/user.model');
         const { childId } = req.params;
         const updates = req.body;
+        const parentId = getParentId(req);
 
-        const allowedFields: any = {};
-        if (updates.firstName) allowedFields.firstName = updates.firstName;
-        if (updates.lastName) allowedFields.lastName = updates.lastName;
-        if (updates.dateOfBirth) allowedFields.dateOfBirth = updates.dateOfBirth;
-        if (updates.gender) allowedFields.gender = updates.gender;
-        if (updates.medicalInfo) allowedFields.medicalInfo = updates.medicalInfo;
+        // Load via findById so pre('save') hooks fire (fullName virtual is set
+        // there). findByIdAndUpdate skipped the hook and the dashboard kept
+        // showing the old composed name after edits.
+        const child = await User.findOne({
+            _id: childId,
+            $or: [{ parentId }, { 'family.parentId': parentId }, { createdBy: parentId }],
+        });
+        if (!child) {
+            return res.status(404).json({ success: false, message: 'Child not found or not linked to your account' });
+        }
 
-        const updated = await User.findByIdAndUpdate(childId, { $set: allowedFields }, { new: true }).lean();
-        res.json({ success: true, data: updated });
+        if (updates.firstName) child.firstName = updates.firstName;
+        if (updates.lastName) child.lastName = updates.lastName;
+        if (updates.dateOfBirth) child.dateOfBirth = updates.dateOfBirth;
+        if (updates.gender) child.gender = String(updates.gender).toUpperCase();
+        if (updates.medicalInfo) child.medicalInfo = updates.medicalInfo;
+
+        await child.save();
+
+        const fresh = child.toObject();
+        res.json({
+            success: true,
+            data: {
+                id: fresh._id,
+                firstName: fresh.firstName,
+                lastName: fresh.lastName,
+                name: fresh.fullName || `${fresh.firstName || ''} ${fresh.lastName || ''}`.trim(),
+                age: fresh.dateOfBirth ? Math.floor((Date.now() - new Date(fresh.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 0,
+                dateOfBirth: fresh.dateOfBirth || '',
+                gender: fresh.gender || '',
+                medicalInfo: fresh.medicalInfo || { allergies: [], medications: [], emergencyContact: '' },
+            },
+            message: 'Child updated successfully',
+        });
     } catch (error: any) {
         console.error('Update child error:', error);
         res.status(500).json({ success: false, message: 'Failed to update child' });
@@ -1149,29 +1329,63 @@ router.get('/bookings/:bookingId', async (req: Request, res: Response) => {
         const { Booking } = require('../modules/booking/booking.model');
         const { bookingId } = req.params;
 
-        const booking = await Booking.findById(bookingId).lean();
+        const booking: any = await Booking.findById(bookingId)
+            .populate({ path: 'programId', select: 'name' })
+            .populate({ path: 'locationId', select: 'name' })
+            .populate({
+                path: 'sessionId',
+                select: 'date timeSlot coachAssignments',
+                populate: { path: 'coachAssignments.coachId', select: 'firstName lastName name' },
+            })
+            .lean();
         if (!booking) {
             return res.status(404).json({ success: false, message: 'Booking not found' });
         }
 
+        const sp: Record<string, string> = {};
+        (booking.specialRequests || []).forEach((r: string) => {
+            if (typeof r !== 'string') return;
+            const [k, ...v] = r.split(':');
+            if (k) sp[k] = v.join(':');
+        });
+        const programDoc = booking.programId && typeof booking.programId === 'object' ? booking.programId : null;
+        const locationDoc = booking.locationId && typeof booking.locationId === 'object' ? booking.locationId : null;
+        const sessionDoc = booking.sessionId && typeof booking.sessionId === 'object' ? booking.sessionId : null;
+        const assignments = Array.isArray(sessionDoc?.coachAssignments) ? sessionDoc.coachAssignments : [];
+        const primary = assignments.find((a: any) => a?.role === 'primary') || assignments[0] || {};
+        const c = primary.coachId || {};
+        const coachName = (c.firstName || c.lastName)
+            ? `${c.firstName || ''} ${c.lastName || ''}`.trim()
+            : (c.name || booking.coachName || booking.session?.coach || '');
+
+        const mainParticipant = Array.isArray(booking.participants) ? booking.participants[0] : null;
+
         res.json({
             success: true,
             data: {
-                id: (booking as any)._id,
-                child: (booking as any).childName || (booking as any).customer?.name || 'Student',
-                program: (booking as any).programName || (booking as any).session?.className || 'Class',
-                coach: (booking as any).coachName || (booking as any).session?.coach || '',
-                date: (booking as any).session?.date || (booking as any).date || (booking as any).createdAt,
-                time: (booking as any).session?.startTime || (booking as any).time || '',
-                duration: (booking as any).session?.duration || '1 hour',
-                location: (booking as any).session?.location || (booking as any).location || '',
-                status: ((booking as any).status || 'pending').toLowerCase(),
-                price: (booking as any).payment?.amount || 0,
-                paymentStatus: ((booking as any).payment?.status || 'pending').toLowerCase(),
-                type: (booking as any).type || 'regular',
-                participants: (booking as any).participants || [],
-                specialRequests: (booking as any).specialRequests || '',
-                cancelReason: (booking as any).cancelReason || '',
+                id: booking._id,
+                child: {
+                    id: mainParticipant?.childId || booking.childId || null,
+                    name: mainParticipant?.name || sp.childName || booking.childName || booking.customer?.name || 'Student',
+                },
+                program: {
+                    id: programDoc?._id || (typeof booking.programId === 'string' ? booking.programId : null),
+                    name: programDoc?.name || sp.program || sp.className || booking.programName || 'Class',
+                },
+                coach: { id: primary.coachId?._id || null, name: coachName },
+                date: booking.sessionDate || sessionDoc?.date || booking.session?.date || booking.date || booking.createdAt,
+                time: booking.sessionTime?.startTime || sessionDoc?.timeSlot?.startTime || booking.session?.startTime || sp.timeSlot || booking.time || '',
+                duration: booking.session?.duration || '1 hour',
+                location: locationDoc?.name || sp.location || booking.session?.location || booking.location || '',
+                status: (booking.status || 'pending').toLowerCase(),
+                price: booking.payment?.amount || 0,
+                paymentStatus: (booking.payment?.status || 'pending').toLowerCase(),
+                type: booking.bookingType || booking.type || 'regular',
+                participants: booking.participants || [],
+                specialRequests: Array.isArray(booking.specialRequests)
+                    ? booking.specialRequests.filter((r: any) => typeof r === 'string' && !r.includes(':')).join('\n')
+                    : (booking.specialRequests || ''),
+                cancelReason: booking.cancelReason || '',
             }
         });
     } catch (error: any) {
@@ -1368,22 +1582,47 @@ router.get('/waitlist', async (req: Request, res: Response) => {
         const parentId = getParentId(req);
 
         const waitlistBookings = await Booking.find({
-            $or: [{ userId: parentId }, { parentId: parentId }],
+            $or: [
+                { bookedBy: parentId },
+                { familyId: parentId },
+                { userId: parentId },
+                { parentId: parentId },
+            ],
             status: { $in: ['waitlisted', 'WAITLISTED', 'waitlist'] }
-        }).sort({ createdAt: -1 }).lean();
+        })
+            .populate({ path: 'programId', select: 'name' })
+            .populate({ path: 'locationId', select: 'name' })
+            .populate({
+                path: 'sessionId',
+                select: 'date timeSlot coachAssignments',
+                populate: { path: 'coachAssignments.coachId', select: 'firstName lastName name' },
+            })
+            .sort({ createdAt: -1 })
+            .lean();
 
         res.json({
             success: true,
-            data: waitlistBookings.map((b: any, idx: number) => ({
-                id: b._id,
-                program: b.programName || b.session?.className || 'Class',
-                bookingId: b.bookingId || b._id?.toString().slice(-8).toUpperCase(),
-                date: b.session?.date || b.date || '',
-                time: b.session?.startTime || b.time || '',
-                location: b.session?.location || b.location || '',
-                participants: b.participants || [{ name: b.childName || 'Student' }],
-                position: b.waitlistPosition || idx + 1,
-            }))
+            data: waitlistBookings.map((b: any, idx: number) => {
+                const sp: Record<string, string> = {};
+                (b.specialRequests || []).forEach((r: string) => {
+                    if (typeof r !== 'string') return;
+                    const [k, ...v] = r.split(':');
+                    if (k) sp[k] = v.join(':');
+                });
+                const programDoc: any = b.programId && typeof b.programId === 'object' ? b.programId : null;
+                const locationDoc: any = b.locationId && typeof b.locationId === 'object' ? b.locationId : null;
+                const sessionDoc: any = b.sessionId && typeof b.sessionId === 'object' ? b.sessionId : null;
+                return {
+                    id: b._id,
+                    program: programDoc?.name || sp.program || b.programName || b.session?.className || 'Class',
+                    bookingId: b.bookingId || b._id?.toString().slice(-8).toUpperCase(),
+                    date: b.sessionDate || sessionDoc?.date || b.session?.date || b.date || '',
+                    time: b.sessionTime?.startTime || sessionDoc?.timeSlot?.startTime || b.session?.startTime || b.time || '',
+                    location: locationDoc?.name || sp.location || b.session?.location || b.location || '',
+                    participants: b.participants || [{ name: sp.childName || b.childName || 'Student' }],
+                    position: b.waitlistPosition || idx + 1,
+                };
+            })
         });
     } catch (error: any) {
         console.error('Waitlist error:', error);
@@ -1459,10 +1698,17 @@ router.get('/makeup-credits', async (req: Request, res: Response) => {
 
         // Credits come from cancelled bookings that were paid
         const cancelledPaid = await Booking.find({
-            $or: [{ userId: parentId }, { parentId: parentId }],
+            $or: [
+                { bookedBy: parentId },
+                { familyId: parentId },
+                { userId: parentId },
+                { parentId: parentId },
+            ],
             status: { $in: ['cancelled', 'CANCELLED'] },
             'payment.status': { $in: ['paid', 'COMPLETED', 'completed'] }
-        }).lean();
+        })
+            .populate({ path: 'programId', select: 'name' })
+            .lean();
 
         const now = new Date();
         const credits = cancelledPaid.map((b: any) => {
@@ -1470,11 +1716,18 @@ router.get('/makeup-credits', async (req: Request, res: Response) => {
             const expiryDate = new Date(cancelDate.getTime() + 90 * 24 * 60 * 60 * 1000); // 90 days expiry
             const isExpired = expiryDate < now;
             const isUsed = b.creditUsed === true;
+            const sp: Record<string, string> = {};
+            (b.specialRequests || []).forEach((r: string) => {
+                if (typeof r !== 'string') return;
+                const [k, ...v] = r.split(':');
+                if (k) sp[k] = v.join(':');
+            });
+            const programDoc: any = b.programId && typeof b.programId === 'object' ? b.programId : null;
 
             return {
                 id: b._id,
                 amount: b.payment?.amount || 0,
-                originalBooking: b.programName || b.session?.className || 'Class',
+                originalBooking: programDoc?.name || sp.program || b.programName || b.session?.className || 'Class',
                 cancelDate: cancelDate.toISOString(),
                 expiryDate: expiryDate.toISOString(),
                 status: isUsed ? 'used' : isExpired ? 'expired' : 'available',
@@ -1508,18 +1761,71 @@ router.get('/makeup-credits', async (req: Request, res: Response) => {
 // =============================================
 // NUTRITION
 // =============================================
-router.get('/nutrition', async (_req: Request, res: Response) => {
-    res.json({
-        success: true,
-        data: {
-            mealPlans: [],
-            recommendations: [
-                { id: '1', title: 'Stay Hydrated', description: 'Ensure your child drinks at least 8 glasses of water daily, especially before and after swimming.', priority: 'high' },
-                { id: '2', title: 'Protein Rich Meals', description: 'Include lean protein in every meal to support muscle recovery after training sessions.', priority: 'medium' },
-                { id: '3', title: 'Pre-Training Snack', description: 'A banana or energy bar 30 minutes before class helps maintain energy levels.', priority: 'medium' },
+// Returns recommendations and meal plans for the parent's children. The
+// previous implementation returned three hardcoded recommendation strings
+// regardless of who was logged in — a static placeholder leaking into the
+// dashboard. Now we read the parent's actual children + their nutrition
+// records and surface real data, falling back to an empty list so the UI
+// can render a proper empty state instead of fake recommendations.
+router.get('/nutrition', async (req: Request, res: Response) => {
+    try {
+        const { User } = require('../modules/iam/user.model');
+        const parentId = getParentId(req);
+
+        const children = await User.find({
+            $or: [
+                { parentId },
+                { 'family.parentId': parentId },
+                { role: 'STUDENT', createdBy: parentId },
             ],
+        }).select('firstName lastName medicalInfo nutritionRecommendations mealPlans dateOfBirth').lean();
+
+        const recommendations: any[] = [];
+        const mealPlans: any[] = [];
+        for (const child of children) {
+            const childName = `${child.firstName || ''} ${child.lastName || ''}`.trim() || 'Child';
+            // Pull nutritionist-authored recommendations off the child doc
+            // when present (admins/coaches save them via the Nutrition module).
+            if (Array.isArray(child.nutritionRecommendations)) {
+                child.nutritionRecommendations.forEach((r: any, i: number) => {
+                    recommendations.push({
+                        id: r.id || `${child._id}-rec-${i}`,
+                        childId: child._id,
+                        childName,
+                        title: r.title || r.recommendation || 'Nutrition note',
+                        description: r.description || '',
+                        priority: r.priority || 'medium',
+                        category: r.category || '',
+                    });
+                });
+            }
+            // Surface allergy reminders so the parent always sees
+            // safety-critical info on the nutrition page.
+            const allergies = (child.medicalInfo?.allergies || []).filter(Boolean);
+            if (allergies.length > 0) {
+                recommendations.push({
+                    id: `${child._id}-allergy`,
+                    childId: child._id,
+                    childName,
+                    title: `${childName} — known allergies`,
+                    description: `Avoid: ${allergies.join(', ')}.`,
+                    priority: 'high',
+                    category: 'safety',
+                });
+            }
+            if (Array.isArray(child.mealPlans)) {
+                child.mealPlans.forEach((p: any) => mealPlans.push({ ...p, childId: child._id, childName }));
+            }
         }
-    });
+
+        res.json({
+            success: true,
+            data: { mealPlans, recommendations },
+        });
+    } catch (error: any) {
+        console.error('Parent nutrition error:', error);
+        res.json({ success: true, data: { mealPlans: [], recommendations: [] } });
+    }
 });
 
 export default router;
