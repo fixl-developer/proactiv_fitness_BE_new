@@ -162,6 +162,7 @@ router.get('/dashboard', async (req: Request, res: Response) => {
         const { User } = require('../modules/iam/user.model');
         const { Booking } = require('../modules/booking/booking.model');
         const { AttendanceRecord } = require('../modules/attendance/attendance.model');
+        const { Session } = require('../modules/scheduling/schedule.model');
         const parentId = getParentId(req);
 
         const now = new Date();
@@ -268,7 +269,17 @@ router.get('/dashboard', async (req: Request, res: Response) => {
         const recentPay = recentPaymentsResult.status === 'fulfilled' ? recentPaymentsResult.value : [];
         const attendance = attendanceResult.status === 'fulfilled' ? attendanceResult.value : [];
 
-        const totalSpent = paymentAgg[0]?.totalSpent || 0;
+        // Total Spent reflects the cost of every class the parent has booked
+        // and not cancelled — that matches user expectation ("I booked it,
+        // therefore I owe/spent that amount"). The previous behaviour summed
+        // only `paid` bookings, which was always 0 because /parent/book-class
+        // creates bookings with `payment.status: 'pending'` until a real
+        // payment is recorded. Pending-only amount is still surfaced
+        // separately via `pendingPayments`.
+        const isCancelled = (b: any) => ['cancelled', 'CANCELLED'].includes(b.status);
+        const totalSpent = bookings
+            .filter((b: any) => !isCancelled(b))
+            .reduce((sum: number, b: any) => sum + (b.payment?.amount || 0), 0);
         const completedBookings = bookings.filter((b: any) =>
             ['completed', 'COMPLETED'].includes(b.status)
         ).length;
@@ -276,14 +287,15 @@ router.get('/dashboard', async (req: Request, res: Response) => {
             ['confirmed', 'pending', 'CONFIRMED', 'PENDING'].includes(b.status)
         ).length;
 
-        // Monthly spending
+        // Monthly spending — same "non-cancelled bookings made this month" basis.
         const monthlyBookings = bookings.filter((b: any) => {
             const d = new Date(b.createdAt);
-            return d >= monthStart && ['paid', 'COMPLETED', 'completed'].includes(b.payment?.status);
+            return d >= monthStart && !isCancelled(b);
         });
         const monthlySpent = monthlyBookings.reduce((sum: number, b: any) => sum + (b.payment?.amount || 0), 0);
 
-        // Pending payments
+        // Pending payments — bookings whose payment.status is still pending.
+        // (totalSpent already includes these; this is the "still owed" subset.)
         const pendingBookings = bookings.filter((b: any) =>
             ['pending', 'PENDING'].includes(b.payment?.status)
         );
@@ -292,7 +304,7 @@ router.get('/dashboard', async (req: Request, res: Response) => {
         // Range-scoped stats (driven by timeRange query param)
         const rangeBookings = bookings.filter((b: any) => new Date(b.createdAt) >= rangeStart);
         const rangeSpent = rangeBookings
-            .filter((b: any) => ['paid', 'COMPLETED', 'completed'].includes(b.payment?.status))
+            .filter((b: any) => !isCancelled(b))
             .reduce((sum: number, b: any) => sum + (b.payment?.amount || 0), 0);
         const rangeAttendance = attendance.filter((a: any) => new Date(a.checkInTime || a.createdAt || now) >= rangeStart);
         const rangeCompleted = rangeBookings.filter((b: any) => ['completed', 'COMPLETED'].includes(b.status)).length;
@@ -330,13 +342,174 @@ router.get('/dashboard', async (req: Request, res: Response) => {
             });
         }
 
+        // ---- Per-child enrichment ----
+        // The child User doc carries no live program/coach/progress fields, so
+        // derive them from each child's actual bookings + attendance. This is
+        // what makes the dashboard cards reflect real activity instead of the
+        // placeholder "Enrolled" / random-progress values that were here before.
+        const childIds: string[] = (children as any[]).map((c: any) => String(c._id));
+
+        // Bookings already include all parent's bookings; group them by childId
+        // via the participants array (canonical for parent-flow bookings).
+        const bookingsByChild = new Map<string, any[]>();
+        for (const b of bookings as any[]) {
+            const ps: any[] = Array.isArray(b.participants) ? b.participants : [];
+            for (const p of ps) {
+                const cid = String(p?.childId || '');
+                if (!cid) continue;
+                if (!bookingsByChild.has(cid)) bookingsByChild.set(cid, []);
+                bookingsByChild.get(cid)!.push(b);
+            }
+        }
+
+        // Pull session docs for the unique sessionIds across these bookings so
+        // we can resolve the assigned coach (Session.coachAssignments[].coachId).
+        const sessionIds = Array.from(new Set(
+            (bookings as any[]).map((b: any) => String(b.sessionId || '')).filter(Boolean)
+        ));
+        let sessionMap = new Map<string, any>();
+        if (sessionIds.length > 0) {
+            try {
+                const sessionDocs = await Session.find({ _id: { $in: sessionIds } })
+                    .populate({ path: 'coachAssignments.coachId', select: 'firstName lastName name' })
+                    .lean();
+                sessionMap = new Map(sessionDocs.map((s: any) => [String(s._id), s]));
+            } catch (e: any) {
+                console.error('[parent/dashboard] session populate failed:', e?.message);
+            }
+        }
+
+        // Per-child attendance — the parent-scoped `attendance` query above only
+        // matches userId/parentId === parentId, which never includes child rows.
+        const childAttendanceByChild = new Map<string, any[]>();
+        if (childIds.length > 0) {
+            try {
+                const childAttendance = await AttendanceRecord.find({
+                    $or: [
+                        { userId: { $in: childIds } },
+                        { studentId: { $in: childIds } },
+                    ],
+                }).lean();
+                for (const a of childAttendance as any[]) {
+                    const cid = String(a?.studentId || a?.userId || '');
+                    if (!cid) continue;
+                    if (!childAttendanceByChild.has(cid)) childAttendanceByChild.set(cid, []);
+                    childAttendanceByChild.get(cid)!.push(a);
+                }
+            } catch (e: any) {
+                console.error('[parent/dashboard] child attendance fetch failed:', e?.message);
+            }
+        }
+
+        // Active programs = unique program IDs across confirmed bookings
+        // (was: count of confirmed bookings, which inflated when one program
+        // had multiple sessions booked for the same child).
+        const activeProgramIds = new Set(
+            (bookings as any[])
+                .filter((b: any) => ['confirmed', 'CONFIRMED', 'active'].includes(b.status))
+                .map((b: any) => String(b.programId || ''))
+                .filter(Boolean)
+        );
+
+        const parseSpecial = (b: any): Record<string, string> => {
+            const out: Record<string, string> = {};
+            (b?.specialRequests || []).forEach((r: string) => {
+                const [k, ...v] = r.split(':');
+                if (k) out[k] = v.join(':');
+            });
+            return out;
+        };
+
+        const buildChildCard = (c: any) => {
+            const cid = String(c._id);
+            const cBookings: any[] = bookingsByChild.get(cid) || [];
+            const cAttendance: any[] = childAttendanceByChild.get(cid) || [];
+
+            const sortedByCreated = [...cBookings].sort((a: any, b: any) =>
+                new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+            );
+
+            // Most recent active booking drives "current program" + coach.
+            const activeBookings = cBookings.filter((b: any) =>
+                ['confirmed', 'pending', 'CONFIRMED', 'PENDING', 'active'].includes(b.status)
+            );
+            const latestActive = activeBookings[0] || sortedByCreated[0];
+
+            let programName = 'Not Enrolled';
+            let coachName = '';
+
+            if (latestActive) {
+                const sp = parseSpecial(latestActive);
+                programName = sp.program
+                    || latestActive.programName
+                    || latestActive.session?.className
+                    || 'Class';
+
+                const sessionDoc = sessionMap.get(String(latestActive.sessionId || ''));
+                const assigns = Array.isArray(sessionDoc?.coachAssignments) ? sessionDoc.coachAssignments : [];
+                const primary = assigns.find((a: any) => a?.role === 'primary') || assigns[0];
+                const coach = primary?.coachId;
+                if (coach) {
+                    coachName = `${coach.firstName || ''} ${coach.lastName || ''}`.trim() || coach.name || '';
+                }
+                if (!coachName) {
+                    coachName = latestActive.coachName || latestActive.session?.coach || '';
+                }
+            }
+
+            // Progress = attended / total bookings (0 if no bookings yet).
+            const totalClasses = cBookings.length;
+            const attendedClasses = cAttendance.filter((a: any) =>
+                ['checked_in', 'checked_out', 'present'].includes(a.status)
+            ).length;
+            const progress = totalClasses > 0
+                ? Math.round((attendedClasses / totalClasses) * 100)
+                : 0;
+
+            // Next upcoming class — first active booking sorted by sessionDate.
+            const upcomingForChild = activeBookings
+                .filter((b: any) => {
+                    const d = new Date(b.sessionDate || b.session?.date || 0);
+                    return d.getTime() >= now.getTime();
+                })
+                .sort((a: any, b: any) =>
+                    new Date(a.sessionDate || a.session?.date || 0).getTime() -
+                    new Date(b.sessionDate || b.session?.date || 0).getTime()
+                );
+            let nextClass = '';
+            if (upcomingForChild[0]) {
+                const next = upcomingForChild[0];
+                const d = new Date(next.sessionDate || next.session?.date || 0);
+                const dateStr = isNaN(d.getTime()) ? '' : d.toLocaleDateString();
+                const timeStr = next.sessionTime?.startTime || next.session?.startTime || '';
+                nextClass = [dateStr, timeStr].filter(Boolean).join(' at ');
+            }
+
+            return {
+                id: c._id,
+                name: c.fullName || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Child',
+                age: c.dateOfBirth
+                    ? Math.floor((Date.now() - new Date(c.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+                    : 0,
+                program: programName,
+                level: c.level || 'Beginner',
+                coach: coachName || 'Not Assigned',
+                classes: totalClasses,
+                attendedClasses,
+                rating: c.rating || null,
+                status: c.status || 'ACTIVE',
+                progress,
+                nextClass,
+            };
+        };
+
         res.json({
             success: true,
             data: {
                 timeRange,
                 stats: {
                     totalChildren: children.length,
-                    activePrograms: bookings.filter((b: any) => ['confirmed', 'CONFIRMED', 'active'].includes(b.status)).length,
+                    activePrograms: activeProgramIds.size,
                     totalSpent,
                     monthlySpent,
                     pendingPayments: pendingAmount,
@@ -355,16 +528,7 @@ router.get('/dashboard', async (req: Request, res: Response) => {
                     rangeAttendance: rangeAttendance.length,
                 },
                 alerts,
-                children: children.map((c: any) => ({
-                    id: c._id,
-                    name: c.fullName || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Child',
-                    age: c.dateOfBirth ? Math.floor((Date.now() - new Date(c.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 0,
-                    program: c.currentProgram || 'Enrolled',
-                    level: c.level || 'Beginner',
-                    coach: c.assignedCoach || '',
-                    status: c.status || 'ACTIVE',
-                    progress: c.progress || Math.floor(Math.random() * 30 + 60),
-                })),
+                children: (children as any[]).map(buildChildCard),
                 upcomingClasses: upcoming.map((b: any) => {
                     const sp: Record<string, string> = {};
                     (b.specialRequests || []).forEach((r: string) => {
