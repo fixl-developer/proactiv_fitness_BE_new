@@ -120,9 +120,43 @@ export class EmailNotificationService {
         });
     }
 
+    async sendPasswordResetEmail(toEmail: string, resetLink: string, recipientName?: string): Promise<void> {
+        const greeting = recipientName ? `Hi ${recipientName},` : 'Hello,';
+        const html = `
+            <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1f2937">
+                <h2 style="color:#111827;margin:0 0 16px">Reset your Proactiv Fitness password</h2>
+                <p>${greeting}</p>
+                <p>We received a request to reset the password for your account. Click the button below to choose a new password. This link will expire in 1 hour.</p>
+                <p style="text-align:center;margin:24px 0">
+                    <a href="${resetLink}" style="background:#2563eb;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">Reset Password</a>
+                </p>
+                <p style="color:#6b7280;font-size:13px">If the button doesn't work, copy and paste this link into your browser:</p>
+                <p style="word-break:break-all;font-size:13px"><a href="${resetLink}">${resetLink}</a></p>
+                <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
+                <p style="color:#6b7280;font-size:12px">If you didn't request this, you can safely ignore this email — your password won't change.</p>
+                <p style="color:#6b7280;font-size:12px">— Proactiv Fitness</p>
+            </div>
+        `;
+
+        await this.sendEmail({
+            to: toEmail,
+            subject: 'Reset your Proactiv Fitness password',
+            html,
+        });
+    }
+
+    /**
+     * Whether SMTP credentials are configured. Callers can use this to decide
+     * whether to surface a "check your email" success message vs a dev-only
+     * console log.
+     */
+    isConfigured(): boolean {
+        return Boolean(process.env.SMTP_USER && process.env.SMTP_PASSWORD);
+    }
+
     private async sendEmail(options: EmailOptions): Promise<void> {
         try {
-            if (!process.env.SMTP_USER || !process.env.SMTP_PASSWORD) {
+            if (!this.isConfigured()) {
                 console.warn('Email service not configured. Skipping email:', options.subject);
                 return;
             }

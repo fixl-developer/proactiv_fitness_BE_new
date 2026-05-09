@@ -30,6 +30,15 @@ export interface IUserProgress {
         description: string;
         type: 'class' | 'achievement' | 'milestone' | 'skill';
     }[];
+    goals?: {
+        id: string;
+        goalType: string;
+        target: string;
+        deadline?: Date;
+        notes?: string;
+        status: 'active' | 'completed' | 'cancelled';
+        createdAt: Date;
+    }[];
     createdAt: Date;
     updatedAt: Date;
 }

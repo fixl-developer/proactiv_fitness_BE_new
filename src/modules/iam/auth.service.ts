@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { IUser, IUserLogin, IUserRegister, IAuthResponse, IAuthTokens } from './user.interface';
 import userService from './user.service';
+import { emailNotificationService } from '../support/email-notification.service';
 import { AppError } from '@middleware/error.middleware';
 import { HTTP_STATUS } from '@shared/constants';
 import envConfig from '@config/env.config';
@@ -167,16 +168,43 @@ export class AuthService {
     }
 
     /**
-     * Request password reset
+     * Request password reset.
+     *
+     * Why this signature is silent on "user not found": email enumeration is a
+     * common attack vector. The controller responds with the same success
+     * message regardless of whether the address exists; we only actually
+     * generate-and-send an email when the user is real.
      */
-    async requestPasswordReset(email: string): Promise<string> {
+    async requestPasswordReset(email: string): Promise<void> {
+        const user = await userService.getUserByEmail(email);
+        if (!user) {
+            logger.info('Password reset requested for unknown email', { email });
+            return;
+        }
+
         const token = await userService.generatePasswordResetToken(email);
 
-        // TODO: Send email with reset link
-        // For now, return token (in production, this should be sent via email)
+        // FRONTEND_URL should be the public app origin (set per-environment).
+        // Falls back to localhost for dev so the link is still clickable.
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const resetLink = `${frontendUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(token)}`;
 
-        logger.info('Password reset requested', { email });
-        return token;
+        if (emailNotificationService.isConfigured()) {
+            await emailNotificationService.sendPasswordResetEmail(
+                user.email,
+                resetLink,
+                `${user.firstName || ''} ${user.lastName || ''}`.trim() || undefined
+            );
+            logger.info('Password reset email sent', { email });
+        } else {
+            // Dev fallback — surface the link in server logs so devs can paste it
+            // when no SMTP creds are configured. Production must configure SMTP.
+            logger.warn(
+                'SMTP not configured — printing reset link to console for dev. ' +
+                'Set SMTP_USER + SMTP_PASSWORD to send real emails.',
+                { email, resetLink }
+            );
+        }
     }
 
     /**

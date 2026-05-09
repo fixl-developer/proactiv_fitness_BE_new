@@ -24,10 +24,28 @@ export class WalletService {
     }
 
     async addCredit(data: IAddCreditRequest, userId: string): Promise<IWallet | null> {
-        const wallet = await Wallet.findOne({ userId: data.userId });
+        let wallet = await Wallet.findOne({ userId: data.userId });
 
+        // Auto-create a wallet on the user's first top-up. Previously this threw
+        // "Wallet not found" for any user who hadn't been seeded with a wallet
+        // (BUG_018/019), which made Add Funds fail with a 404 for valid amounts.
         if (!wallet) {
-            throw new AppError('Wallet not found', 404);
+            wallet = await Wallet.create({
+                walletId: uuidv4(),
+                userId: data.userId,
+                totalBalance: 0,
+                creditBuckets: [
+                    { bucketType: data.bucketType, balance: 0 },
+                ],
+                transactions: [],
+                createdBy: userId,
+                updatedBy: userId,
+            });
+        }
+
+        // Ensure the requested bucket exists on the wallet.
+        if (!wallet.creditBuckets.find(b => b.bucketType === data.bucketType)) {
+            wallet.creditBuckets.push({ bucketType: data.bucketType, balance: 0 } as any);
         }
 
         const bucket = wallet.creditBuckets.find(b => b.bucketType === data.bucketType);
@@ -101,8 +119,15 @@ export class WalletService {
     async getWalletBalance(userId: string): Promise<any> {
         const wallet = await Wallet.findOne({ userId });
 
+        // Return a zero-balance shape for users who haven't been seeded with a wallet
+        // yet — old behaviour threw 404 and broke the wallet UI for new users.
         if (!wallet) {
-            throw new AppError('Wallet not found', 404);
+            return {
+                walletId: null,
+                userId,
+                totalBalance: 0,
+                creditBuckets: [],
+            };
         }
 
         return {

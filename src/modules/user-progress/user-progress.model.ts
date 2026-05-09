@@ -33,6 +33,15 @@ const UserProgressSchema = new Schema<IUserProgress & Document>(
             event: String,
             description: String,
             type: { type: String, enum: ['class', 'achievement', 'milestone', 'skill'] }
+        }],
+        goals: [{
+            id: String,
+            goalType: String,
+            target: String,
+            deadline: Date,
+            notes: String,
+            status: { type: String, enum: ['active', 'completed', 'cancelled'], default: 'active' },
+            createdAt: { type: Date, default: Date.now }
         }]
     },
     { timestamps: true, collection: 'user_progress' }

@@ -47,17 +47,20 @@ export class AuthController extends BaseController {
     /**
      * Request password reset
      * POST /api/v1/auth/forgot-password
+     *
+     * Always returns the same success response — even when the email isn't
+     * registered — to avoid leaking which addresses have accounts.
      */
     async forgotPassword(req: Request, res: Response) {
         const { email } = req.body;
-        const token = await authService.requestPasswordReset(email);
-
-        // In production, don't send token in response
-        // Send it via email instead
+        if (!email || typeof email !== 'string') {
+            return this.sendBadRequest(res, 'Email is required');
+        }
+        await authService.requestPasswordReset(email);
         return this.sendSuccess(
             res,
-            { message: 'Password reset link sent to email', token }, // Remove token in production
-            'Password reset email sent'
+            null,
+            'If an account exists for that email, a password reset link has been sent.'
         );
     }
 

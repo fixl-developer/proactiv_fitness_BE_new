@@ -61,6 +61,29 @@ export class UserProgressService {
         const progress = await UserProgressModel.findOne({ userId }, 'performanceMetrics').lean();
         return progress?.performanceMetrics || null;
     }
+
+    async addGoal(userId: string, goalData: any): Promise<any> {
+        const goal = {
+            id: `goal-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+            goalType: goalData.goalType,
+            target: String(goalData.target ?? ''),
+            deadline: goalData.deadline ? new Date(goalData.deadline) : undefined,
+            notes: goalData.notes || '',
+            status: 'active',
+            createdAt: new Date(),
+        };
+        await UserProgressModel.findOneAndUpdate(
+            { userId },
+            { $push: { goals: goal } },
+            { new: true, upsert: true }
+        );
+        return goal;
+    }
+
+    async getGoals(userId: string): Promise<any[]> {
+        const progress = await UserProgressModel.findOne({ userId }, 'goals').lean();
+        return (progress as any)?.goals || [];
+    }
 }
 
 export const userProgressService = new UserProgressService();
