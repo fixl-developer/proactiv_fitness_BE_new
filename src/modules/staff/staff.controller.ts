@@ -21,6 +21,7 @@ import { SupportScheduleService } from '../support-schedules/support-schedule.se
 import { SupportReportService } from '../support-reports/support-report.service';
 import { AutomationRuleService } from '../support-automation/automation-rule.service';
 import { SupportCommunicationService } from '../support-communication/support-communication.service';
+import aiService from '@shared/services/ai.service';
 
 export class StaffController extends BaseController {
     private staffService: StaffService;
@@ -1165,6 +1166,53 @@ export class StaffController extends BaseController {
         if (!userId) throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
         await this.automationRuleService.delete(ruleId);
         return this.sendSuccess(res, { message: 'Automation rule deleted' });
+    });
+
+    /**
+     * AI-suggest a starter automation rule based on a plain-language goal.
+     * Returns a structured rule object the frontend can prefill into its form
+     * (the parent still clicks Create to actually persist).
+     */
+    aiSuggestAutomationRule = asyncHandler(async (req: Request, res: Response) => {
+        const userId = req.user?.id;
+        if (!userId) throw new AppError('User not authenticated', HTTP_STATUS.UNAUTHORIZED);
+        const description = String(req.body?.description || '').trim();
+        if (!description) {
+            throw new AppError('description is required', HTTP_STATUS.BAD_REQUEST);
+        }
+        try {
+            const suggestion = await aiService.jsonCompletion<{
+                name: string;
+                description: string;
+                trigger: 'ticket_created' | 'ticket_updated' | 'ticket_escalated' | 'sla_breached';
+                conditions: { field: string; operator: 'equals' | 'contains' | 'greater_than'; value: string }[];
+                actions: { type: 'assign' | 'notify' | 'escalate' | 'update_status'; value: string }[];
+                isActive: boolean;
+            }>({
+                systemPrompt: `You design support-ticket automation rules for a fitness academy CRM. Given a parent's plain-language goal, return ONE rule as valid JSON matching: { "name": string, "description": string, "trigger": "ticket_created"|"ticket_updated"|"ticket_escalated"|"sla_breached", "conditions": [{"field": "priority"|"status"|"category"|"customer"|"assignedTo", "operator": "equals"|"contains"|"greater_than", "value": string}], "actions": [{"type": "assign"|"notify"|"escalate"|"update_status", "value": string}], "isActive": true }. Keep names concise (max 60 chars). Pick exactly ONE condition + ONE action that fit the goal.`,
+                userPrompt: description,
+                module: 'support-automation',
+                temperature: 0.3,
+            });
+            return this.sendSuccess(res, { message: 'Suggested rule generated', data: { rule: suggestion, aiPowered: true } });
+        } catch (err: any) {
+            // AI failed — return a deterministic stub the parent can edit so
+            // the UI never gets stuck. Flagged with aiPowered:false.
+            return this.sendSuccess(res, {
+                message: 'AI unavailable — returning a starter template',
+                data: {
+                    rule: {
+                        name: description.slice(0, 60),
+                        description,
+                        trigger: 'ticket_created',
+                        conditions: [{ field: 'priority', operator: 'equals', value: 'high' }],
+                        actions: [{ type: 'notify', value: 'support-leads' }],
+                        isActive: true,
+                    },
+                    aiPowered: false,
+                },
+            });
+        }
     });
 
     // Quality Assurance

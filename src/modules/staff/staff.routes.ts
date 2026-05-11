@@ -87,6 +87,7 @@ router.get('/reports/:type', staffController.getReports);
 // Automation
 router.get('/automation/rules', staffController.getAutomationRules);
 router.post('/automation/rules', staffController.createAutomationRule);
+router.post('/automation/rules/ai-suggest', staffController.aiSuggestAutomationRule);
 router.put('/automation/rules/:ruleId', staffController.updateAutomationRule);
 router.delete('/automation/rules/:ruleId', staffController.deleteAutomationRule);
 
