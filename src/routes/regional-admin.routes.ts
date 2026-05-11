@@ -427,22 +427,76 @@ router.get('/staff', async (req: Request, res: Response) => {
             : [];
         const locationMap = new Map(locations.map((l: any) => [l._id.toString(), l.name]));
 
-        const enriched = staff.map((s: any) => ({
-            id: s._id.toString(),
-            name: s.fullName || `${s.firstName || ''} ${s.lastName || ''}`.trim() || s.email,
-            firstName: s.firstName || '',
-            lastName: s.lastName || '',
-            email: s.email,
-            phone: s.phone || '',
-            role: s.role,
-            location: s.locationId ? (locationMap.get(s.locationId.toString()) || 'Unknown') : 'Unassigned',
-            locationId: s.locationId?.toString() || '',
-            status: s.status || 'ACTIVE',
-            joinDate: s.createdAt,
-            performance: Math.floor(Math.random() * 20) + 75, // placeholder until real performance tracking
-            utilization: Math.floor(Math.random() * 25) + 70,
-            satisfaction: (Math.random() * 1 + 4).toFixed(1)
-        }));
+        // Compute derived performance metrics from real data. We previously
+        // generated Math.random() values which leaked random "Performance / Utilization
+        // / Satisfaction" numbers into the admin UI on every request — the
+        // admin couldn't trust the dashboard. Now we read what's actually
+        // available and surface 0/null when there's nothing to report.
+        const staffIds = staff.map((s: any) => s._id);
+        const { Booking } = require('../modules/booking/booking.model');
+        const { AttendanceRecord } = require('../modules/attendance/attendance.model');
+        const { Staff } = require('../modules/staff/staff.model');
+
+        const [bookingCounts, attendanceCounts, staffRecords] = await Promise.all([
+            // Bookings completed assigned to the staff member (coach perspective)
+            Booking.aggregate([
+                { $match: { 'session.coachId': { $in: staffIds }, status: { $in: ['completed', 'COMPLETED'] } } },
+                { $group: { _id: '$session.coachId', count: { $sum: 1 } } },
+            ]).catch(() => []),
+            // Attendance check-ins by the staff member themselves
+            AttendanceRecord.aggregate([
+                { $match: { userId: { $in: staffIds }, status: { $in: ['present', 'CHECKED_IN', 'checked_in'] } } },
+                { $group: { _id: '$userId', count: { $sum: 1 } } },
+            ]).catch(() => []),
+            // Staff documents carry the canonical performanceMetrics + satisfaction rating
+            Staff.find({ userId: { $in: staffIds } }).select('userId performanceMetrics').lean().catch(() => []),
+        ]);
+
+        const bookingMap = new Map<string, number>(
+            bookingCounts.map((b: any) => [String(b._id), b.count])
+        );
+        const attendanceMap = new Map<string, number>(
+            attendanceCounts.map((a: any) => [String(a._id), a.count])
+        );
+        const staffMap = new Map<string, any>(
+            staffRecords.map((s: any) => [String(s.userId), s])
+        );
+
+        const enriched = staff.map((s: any) => {
+            const sid = String(s._id);
+            const staffDoc = staffMap.get(sid);
+            const perfMetrics = Array.isArray(staffDoc?.performanceMetrics) && staffDoc.performanceMetrics.length > 0
+                ? staffDoc.performanceMetrics[0]
+                : null;
+            const classesAssigned = perfMetrics?.classesAssigned || 0;
+            const classesCompleted = perfMetrics?.classesCompleted || bookingMap.get(sid) || 0;
+            const performance = classesAssigned > 0
+                ? Math.round((classesCompleted / classesAssigned) * 100)
+                : (classesCompleted > 0 ? 100 : 0);
+            const utilization = perfMetrics?.utilizationRate
+                ?? (classesAssigned > 0 ? Math.round((classesCompleted / Math.max(classesAssigned, 1)) * 100) : 0);
+            const satisfaction = perfMetrics?.studentSatisfactionRating
+                ? Number(perfMetrics.studentSatisfactionRating).toFixed(1)
+                : '0.0';
+            return {
+                id: sid,
+                name: s.fullName || `${s.firstName || ''} ${s.lastName || ''}`.trim() || s.email,
+                firstName: s.firstName || '',
+                lastName: s.lastName || '',
+                email: s.email,
+                phone: s.phone || '',
+                role: s.role,
+                location: s.locationId ? (locationMap.get(s.locationId.toString()) || 'Unknown') : 'Unassigned',
+                locationId: s.locationId?.toString() || '',
+                status: s.status || 'ACTIVE',
+                joinDate: s.createdAt,
+                performance,
+                utilization,
+                satisfaction,
+                classesCompleted,
+                attendanceCount: attendanceMap.get(sid) || 0,
+            };
+        });
 
         res.json({
             success: true,
@@ -576,45 +630,91 @@ router.get('/analytics', async (req: Request, res: Response) => {
             default: startDate.setDate(now.getDate() - 30); break;
         }
 
-        const [totalStudents, totalStaff, locations, staffByRole] = await Promise.all([
+        const { Booking } = require('../modules/booking/booking.model');
+        const [totalStudents, totalStaff, locations, staffByRole, totalRevAgg, perLocBookings] = await Promise.all([
             User.countDocuments({ role: { $in: ['USER', 'PARENT'] }, status: 'ACTIVE' }),
             User.countDocuments({ role: { $in: ['COACH', 'LOCATION_MANAGER', 'SUPPORT_STAFF'] }, status: 'ACTIVE' }),
             Location.find({ status: 'ACTIVE' }).select('name capacity').lean(),
             User.aggregate([
                 { $match: { role: { $in: ['COACH', 'LOCATION_MANAGER', 'SUPPORT_STAFF'] }, status: 'ACTIVE' } },
                 { $group: { _id: '$role', count: { $sum: 1 } } }
-            ])
+            ]),
+            Booking.aggregate([
+                { $match: { 'payment.status': { $in: ['paid', 'COMPLETED', 'completed'] } } },
+                { $group: { _id: null, total: { $sum: '$payment.amount' } } },
+            ]).catch(() => []),
+            // Per-location revenue + enrollment from real bookings.
+            Booking.aggregate([
+                {
+                    $facet: {
+                        revenue: [
+                            { $match: { 'payment.status': { $in: ['paid', 'completed', 'COMPLETED'] } } },
+                            { $group: { _id: '$locationId', revenue: { $sum: '$payment.amount' } } },
+                        ],
+                        enrollment: [
+                            { $match: { status: { $in: ['confirmed', 'CONFIRMED', 'completed', 'COMPLETED', 'active'] } } },
+                            { $group: { _id: '$locationId', uniqueParents: { $addToSet: '$bookedBy' } } },
+                            { $project: { count: { $size: '$uniqueParents' } } },
+                        ],
+                    },
+                },
+            ]).catch(() => []),
         ]);
 
-        // Revenue data
-        let totalRevenue = 0;
-        try {
-            const { Booking } = require('../modules/booking/booking.model');
-            const agg = await Booking.aggregate([
-                { $match: { 'payment.status': { $in: ['paid', 'COMPLETED', 'completed'] } } },
-                { $group: { _id: null, total: { $sum: '$payment.amount' } } }
-            ]);
-            totalRevenue = agg[0]?.total || 0;
-        } catch {}
+        const totalRevenue = totalRevAgg[0]?.total || 0;
 
-        // Generate monthly data
-        const revenueMonthly = generateMonthlyData('revenue');
-        const studentMonthly = generateMonthlyData('students');
+        // Revenue + enrollment trend (last 6 months) computed from real Bookings.
+        const revenueMonthly = await computeMonthlyRevenue(Booking).catch(() => []);
+        const studentMonthly = await computeMonthlyEnrollment().catch(() => []);
 
-        // Location performance
-        const locationPerf = locations.map((loc: any) => ({
-            location: loc.name,
-            revenue: Math.round(totalRevenue / Math.max(locations.length, 1)),
-            enrollment: Math.round(totalStudents / Math.max(locations.length, 1)),
-            occupancy: loc.capacity > 0 ? Math.min(95, Math.round(Math.random() * 30 + 65)) : 0
-        }));
+        const revByLoc = new Map<string, number>(
+            (perLocBookings[0]?.revenue || []).map((r: any) => [String(r._id), Number(r.revenue) || 0])
+        );
+        const enrolByLoc = new Map<string, number>(
+            (perLocBookings[0]?.enrollment || []).map((e: any) => [String(e._id), e.count])
+        );
 
-        // Staff by role
+        // Location performance — real numbers; occupancy from capacity vs enrollment.
+        let totalCapacity = 0, totalEnrolled = 0;
+        const locationPerf = locations.map((loc: any) => {
+            const id = String(loc._id);
+            const revenue = Math.round(revByLoc.get(id) || 0);
+            const enrollment = enrolByLoc.get(id) || 0;
+            const capacity = Number(loc.capacity) || 0;
+            const occupancy = capacity > 0 ? Math.min(100, Math.round((enrollment / capacity) * 100)) : 0;
+            totalCapacity += capacity;
+            totalEnrolled += enrollment;
+            return { location: loc.name, revenue, enrollment, occupancy };
+        });
+
+        // Staff utilization: completed coach bookings / capacity per role.
+        // No fabricated number — leave as 0 when nothing tracked yet, so the
+        // UI's empty-state shows "—" instead of a random percentage.
         const staffRoles = staffByRole.map((r: any) => ({
             role: r._id,
             count: r.count,
-            utilization: Math.round(Math.random() * 20 + 70)
+            utilization: 0,
+            satisfaction: 0,
+            retention: 0,
         }));
+
+        // Revenue growth: this month vs last month from real bookings.
+        const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const [thisMonthAgg, lastMonthAgg] = await Promise.all([
+            Booking.aggregate([
+                { $match: { createdAt: { $gte: thisMonthStart }, 'payment.status': { $in: ['paid', 'completed', 'COMPLETED'] } } },
+                { $group: { _id: null, total: { $sum: '$payment.amount' } } },
+            ]).catch(() => []),
+            Booking.aggregate([
+                { $match: { createdAt: { $gte: lastMonthStart, $lt: thisMonthStart }, 'payment.status': { $in: ['paid', 'completed', 'COMPLETED'] } } },
+                { $group: { _id: null, total: { $sum: '$payment.amount' } } },
+            ]).catch(() => []),
+        ]);
+        const thisMonth = thisMonthAgg[0]?.total || 0;
+        const lastMonth = lastMonthAgg[0]?.total || 0;
+        const revenueGrowth = lastMonth > 0 ? Number((((thisMonth - lastMonth) / lastMonth) * 100).toFixed(1)) : 0;
+        const occupancyRate = totalCapacity > 0 ? Math.round((totalEnrolled / totalCapacity) * 100) : 0;
 
         res.json({
             success: true,
@@ -641,8 +741,8 @@ router.get('/analytics', async (req: Request, res: Response) => {
                 },
                 totalRevenue,
                 totalStudents,
-                revenueGrowth: 12.5,
-                occupancyRate: 78
+                revenueGrowth,
+                occupancyRate,
             }
         });
     } catch (error: any) {
@@ -729,39 +829,38 @@ router.get('/approvals', async (req: Request, res: Response) => {
         const pageNum = parseInt(page as string);
         const limit = parseInt(pageSize as string);
 
-        // Get pending users as approval items
-        const pendingUsers = await User.find({ status: 'PENDING' })
-            .select('firstName lastName email role createdAt locationId')
+        // Pending users surfaced as "staff hiring" approval items. We also
+        // include ACTIVE/SUSPENDED users so the list reflects approve/reject
+        // history (status filtered below).
+        const allUsers = await User.find({ status: { $in: ['PENDING', 'ACTIVE', 'SUSPENDED'] } })
+            .select('firstName lastName email role createdAt locationId status')
             .sort({ createdAt: -1 })
+            .limit(50)
             .lean();
 
-        let approvals = pendingUsers.map((u: any, idx: number) => ({
+        const userBackedApprovals = allUsers.map((u: any, idx: number) => ({
             id: u._id.toString(),
             type: 'STAFF_HIRING',
             title: `New ${u.role} - ${u.firstName} ${u.lastName}`,
             description: `Approval for new ${u.role?.toLowerCase()} hire`,
             requestedBy: u.email,
             requestedDate: u.createdAt,
-            status: 'PENDING',
+            status: u.status === 'ACTIVE' ? 'APPROVED' : u.status === 'SUSPENDED' ? 'REJECTED' : 'PENDING',
             priority: idx === 0 ? 'HIGH' : 'MEDIUM',
             location: 'Regional',
             details: `Hiring ${u.firstName} ${u.lastName} as ${u.role}`
         }));
 
-        // Merge user-created approvals from Region metadata
+        // Custom approvals stored in Region.metadata — these now also carry
+        // APPROVED/REJECTED state after the backend was wired to persist it.
+        let customApprovals: any[] = [];
         try {
             const region = await Region.findOne({ isActive: true }).lean();
             const custom: any = (region as any)?.metadata?.customApprovals;
-            if (Array.isArray(custom) && custom.length > 0) approvals = [...custom, ...approvals];
+            if (Array.isArray(custom)) customApprovals = custom;
         } catch {}
 
-        // Add some system-generated approvals if none exist
-        if (approvals.length === 0) {
-            approvals = [
-                { id: 'sys-1', type: 'BUDGET_ALLOCATION', title: 'Q2 Budget Allocation', description: 'Budget approval for Q2 operations', requestedBy: 'Finance Team', requestedDate: new Date().toISOString(), status: 'PENDING', priority: 'HIGH', location: 'All Locations', details: 'Quarterly budget review' },
-                { id: 'sys-2', type: 'FACILITY_UPGRADE', title: 'Equipment Upgrade', description: 'New equipment purchase approval', requestedBy: 'Operations', requestedDate: new Date().toISOString(), status: 'PENDING', priority: 'MEDIUM', location: 'Main Location', details: 'Equipment replacement' }
-            ];
-        }
+        let approvals = [...customApprovals, ...userBackedApprovals];
 
         if (status && status !== 'all') approvals = approvals.filter(a => a.status === status);
         if (type && type !== 'all') approvals = approvals.filter(a => a.type === type);
@@ -813,12 +912,31 @@ router.post('/approvals', async (req: Request, res: Response) => {
     }
 });
 
+// Helper: persist approve/reject for custom approvals stored in Region.metadata.
+async function updateCustomApprovalStatus(id: string, newStatus: 'APPROVED' | 'REJECTED', extra: { notes?: string; reason?: string }) {
+    const region = await Region.findOne({ isActive: true });
+    if (!region) return null;
+    const list = Array.isArray((region as any).metadata?.customApprovals) ? (region as any).metadata.customApprovals : [];
+    const idx = list.findIndex((a: any) => String(a.id) === String(id));
+    if (idx === -1) return null;
+    list[idx] = {
+        ...list[idx],
+        status: newStatus,
+        ...(newStatus === 'APPROVED' ? { approvedAt: new Date().toISOString(), notes: extra.notes || '' } : {}),
+        ...(newStatus === 'REJECTED' ? { rejectedAt: new Date().toISOString(), reason: extra.reason || '' } : {}),
+    };
+    (region as any).metadata = { ...((region as any).metadata || {}), customApprovals: list };
+    region.markModified('metadata');
+    await region.save();
+    return list[idx];
+}
+
 router.post('/approvals/:id/approve', async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         const { notes } = req.body;
 
-        // If it's a user approval, activate the user
+        // 1) User-based approval (id is a User ObjectId) — activate the user.
         if (mongoose.Types.ObjectId.isValid(id)) {
             const user = await User.findByIdAndUpdate(id, { status: 'ACTIVE' }, { new: true })
                 .select('-password -passwordHistory -refreshToken').lean();
@@ -827,7 +945,14 @@ router.post('/approvals/:id/approve', async (req: Request, res: Response) => {
             }
         }
 
-        res.json({ success: true, message: 'Approval granted', data: { id, status: 'APPROVED', notes } });
+        // 2) Custom approval (id like "req-..." stored in Region.metadata).
+        const updated = await updateCustomApprovalStatus(id, 'APPROVED', { notes });
+        if (updated) {
+            return res.json({ success: true, message: 'Approval granted', data: updated });
+        }
+
+        // 3) Unknown id — return 404 so the client knows it didn't persist.
+        return res.status(404).json({ success: false, message: 'Approval request not found' });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -838,6 +963,7 @@ router.post('/approvals/:id/reject', async (req: Request, res: Response) => {
         const { id } = req.params;
         const { reason } = req.body;
 
+        // 1) User-based approval — mark suspended.
         if (mongoose.Types.ObjectId.isValid(id)) {
             const user = await User.findByIdAndUpdate(id, { status: 'SUSPENDED' }, { new: true })
                 .select('-password -passwordHistory -refreshToken').lean();
@@ -846,7 +972,15 @@ router.post('/approvals/:id/reject', async (req: Request, res: Response) => {
             }
         }
 
-        res.json({ success: true, message: 'Request rejected', data: { id, status: 'REJECTED', reason } });
+        // 2) Custom approval — persist REJECTED into Region.metadata so the
+        //    status survives a page refresh (fixes the QA bug where reject
+        //    appeared to revert after reload).
+        const updated = await updateCustomApprovalStatus(id, 'REJECTED', { reason });
+        if (updated) {
+            return res.json({ success: true, message: 'Request rejected', data: updated });
+        }
+
+        return res.status(404).json({ success: false, message: 'Approval request not found' });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -969,11 +1103,50 @@ router.get('/budget', async (req: Request, res: Response) => {
             notes: i.notes || ''
         }));
 
+        // Per-location budget: distribute the configured total allocated
+        // evenly across active locations (no per-location override yet), and
+        // compute real "spent" from completed/paid bookings at each location
+        // within the requested period. Pre-fix this was Math.random() values
+        // that changed on every page refresh.
+        const periodStr = String(period || '').trim();
+        const periodMatch = periodStr.match(/^Q([1-4])-(\d{4})$/);
+        let periodStart: Date, periodEnd: Date;
+        if (periodMatch) {
+            const q = Number(periodMatch[1]);
+            const year = Number(periodMatch[2]);
+            periodStart = new Date(year, (q - 1) * 3, 1);
+            periodEnd = new Date(year, q * 3, 0, 23, 59, 59, 999);
+        } else {
+            const now = new Date();
+            periodStart = new Date(now.getFullYear(), 0, 1);
+            periodEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+        }
+
+        const { Booking } = require('../modules/booking/booking.model');
+        const totalAllocated_forSplit = budgetItems.reduce((sum: number, i: any) => sum + (i.allocated || 0), 0);
+        const perLocationAllocated = locations.length > 0
+            ? Math.round(totalAllocated_forSplit / locations.length)
+            : 0;
+        const locationIdsForBudget = locations.map((l: any) => l._id);
+        const spentAgg = await Booking.aggregate([
+            {
+                $match: {
+                    locationId: { $in: locationIdsForBudget },
+                    createdAt: { $gte: periodStart, $lte: periodEnd },
+                    'payment.status': { $in: ['paid', 'completed', 'COMPLETED'] },
+                },
+            },
+            { $group: { _id: '$locationId', spent: { $sum: '$payment.amount' } } },
+        ]).catch(() => []);
+        const spentByLocation = new Map<string, number>(
+            spentAgg.map((s: any) => [String(s._id), Number(s.spent) || 0])
+        );
+
         const locationBudgets = locations.map((loc: any) => ({
             locationId: loc._id.toString(),
             locationName: loc.name,
-            allocated: Math.round(Math.random() * 50000 + 50000),
-            spent: Math.round(Math.random() * 40000 + 20000),
+            allocated: perLocationAllocated,
+            spent: Math.round(spentByLocation.get(loc._id.toString()) || 0),
         }));
 
         const totalAllocated = budgetItems.reduce((sum: number, i: any) => sum + (i.allocated || 0), 0);
@@ -1183,25 +1356,34 @@ async function loadBenchmarkTargets(): Promise<any[]> {
 
 router.get('/benchmarks', async (_req: Request, res: Response) => {
     try {
-        const [totalStudents, totalStaff, totalLocations] = await Promise.all([
+        const { Booking } = require('../modules/booking/booking.model');
+        const [totalStudents, totalStaff, totalLocations, revenueAgg] = await Promise.all([
             User.countDocuments({ role: { $in: ['USER', 'PARENT'] }, status: 'ACTIVE' }),
             User.countDocuments({ role: { $in: ['COACH', 'LOCATION_MANAGER', 'SUPPORT_STAFF'] }, status: 'ACTIVE' }),
-            Location.countDocuments({ status: 'ACTIVE' })
+            Location.countDocuments({ status: 'ACTIVE' }),
+            // Total paid/completed booking revenue → used to compute revenue/location.
+            Booking.aggregate([
+                { $match: { 'payment.status': { $in: ['paid', 'completed', 'COMPLETED'] } } },
+                { $group: { _id: null, total: { $sum: '$payment.amount' } } },
+            ]).catch(() => []),
         ]);
 
-        const revenuePerLocation = totalLocations > 0 ? Math.round(850000 / totalLocations) : 0;
+        const totalRevenue = revenueAgg[0]?.total || 0;
+        const revenuePerLocation = totalLocations > 0 ? Math.round(totalRevenue / totalLocations) : 0;
         const studentsPerLocation = totalLocations > 0 ? Math.round(totalStudents / totalLocations) : 0;
 
         const targets = await loadBenchmarkTargets();
 
-        // Compute actual values per metric dynamically where possible
+        // Compute actual values per metric dynamically. Items we don't have
+        // first-class tracking for (utilization/satisfaction/etc) report 0 so
+        // the dashboard makes it visible rather than fabricating numbers.
         const actualMap: Record<string, number> = {
             'Revenue/Location': revenuePerLocation,
             'Student Enrollment': studentsPerLocation,
-            'Staff Utilization': 83,
-            'Customer Satisfaction': 4.5,
-            'Class Occupancy': 78,
-            'Retention Rate': 92,
+            'Staff Utilization': 0,
+            'Customer Satisfaction': 0,
+            'Class Occupancy': 0,
+            'Retention Rate': 0,
         };
 
         const metrics = targets.map((t: any) => {
@@ -1220,15 +1402,53 @@ router.get('/benchmarks', async (_req: Request, res: Response) => {
         });
 
         const locations = await Location.find({ status: 'ACTIVE' }).select('name capacity').lean();
-        const locationBenchmarks = locations.map((loc: any) => ({
-            location: loc.name,
-            revenueTarget: 150000,
-            revenueActual: Math.round(Math.random() * 50000 + 120000),
-            enrollmentTarget: 250,
-            enrollmentActual: Math.round(Math.random() * 100 + 180),
-            occupancyTarget: 80,
-            occupancyActual: Math.round(Math.random() * 20 + 65)
-        }));
+        const locationIdsForBench = locations.map((l: any) => l._id);
+        // Real revenue + enrollment per location from bookings.
+        const [perLocationRevenue, perLocationEnrollment] = await Promise.all([
+            Booking.aggregate([
+                {
+                    $match: {
+                        locationId: { $in: locationIdsForBench },
+                        'payment.status': { $in: ['paid', 'completed', 'COMPLETED'] },
+                    },
+                },
+                { $group: { _id: '$locationId', revenue: { $sum: '$payment.amount' } } },
+            ]).catch(() => []),
+            Booking.aggregate([
+                {
+                    $match: {
+                        locationId: { $in: locationIdsForBench },
+                        status: { $in: ['confirmed', 'CONFIRMED', 'completed', 'COMPLETED', 'active'] },
+                    },
+                },
+                { $group: { _id: '$locationId', enrolled: { $addToSet: '$bookedBy' } } },
+                { $project: { count: { $size: '$enrolled' } } },
+            ]).catch(() => []),
+        ]);
+        const revByLoc = new Map<string, number>(perLocationRevenue.map((r: any) => [String(r._id), Number(r.revenue) || 0]));
+        const enrolByLoc = new Map<string, number>(perLocationEnrollment.map((e: any) => [String(e._id), e.count]));
+
+        // Targets pulled from benchmark targets so the dashboard rows agree
+        // with the configured numbers (was hardcoded 150000/250/80 before).
+        const revenueTargetGlobal = Number((targets.find((t: any) => t.metric === 'Revenue/Location') || {}).target) || 0;
+        const enrollmentTargetGlobal = Number((targets.find((t: any) => t.metric === 'Student Enrollment') || {}).target) || 0;
+        const occupancyTargetGlobal = Number((targets.find((t: any) => t.metric === 'Class Occupancy') || {}).target) || 0;
+
+        const locationBenchmarks = locations.map((loc: any) => {
+            const id = loc._id.toString();
+            const enrollmentActual = enrolByLoc.get(id) || 0;
+            const capacity = Number(loc.capacity) || 0;
+            const occupancyActual = capacity > 0 ? Math.round((enrollmentActual / capacity) * 100) : 0;
+            return {
+                location: loc.name,
+                revenueTarget: revenueTargetGlobal,
+                revenueActual: Math.round(revByLoc.get(id) || 0),
+                enrollmentTarget: enrollmentTargetGlobal,
+                enrollmentActual,
+                occupancyTarget: occupancyTargetGlobal,
+                occupancyActual,
+            };
+        });
 
         res.json({
             success: true,
@@ -1305,19 +1525,85 @@ router.delete('/benchmarks/:id', async (req: Request, res: Response) => {
 // =============================================
 // HELPER FUNCTIONS
 // =============================================
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// Real-data monthly revenue: rolling 6-month window from now.
+async function computeMonthlyRevenue(Booking: any): Promise<any[]> {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    const agg = await Booking.aggregate([
+        {
+            $match: {
+                createdAt: { $gte: start },
+                'payment.status': { $in: ['paid', 'completed', 'COMPLETED'] },
+            },
+        },
+        {
+            $group: {
+                _id: { y: { $year: '$createdAt' }, m: { $month: '$createdAt' } },
+                revenue: { $sum: '$payment.amount' },
+            },
+        },
+    ]);
+    const lookup = new Map<string, number>();
+    for (const row of agg) {
+        lookup.set(`${row._id.y}-${row._id.m}`, Number(row.revenue) || 0);
+    }
+    const out: any[] = [];
+    for (let i = 0; i < 6; i++) {
+        const d = new Date(start.getFullYear(), start.getMonth() + i, 1);
+        const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
+        const revenue = lookup.get(key) || 0;
+        out.push({ month: MONTH_NAMES[d.getMonth()], revenue, target: Math.round(revenue * 1.1) });
+    }
+    return out;
+}
+
+// Real-data monthly enrollment: count active students by creation month.
+async function computeMonthlyEnrollment(): Promise<any[]> {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    const agg = await User.aggregate([
+        {
+            $match: {
+                role: { $in: ['USER', 'PARENT'] },
+                status: 'ACTIVE',
+                createdAt: { $gte: start },
+            },
+        },
+        {
+            $group: {
+                _id: { y: { $year: '$createdAt' }, m: { $month: '$createdAt' } },
+                count: { $sum: 1 },
+            },
+        },
+    ]);
+    const lookup = new Map<string, number>();
+    for (const row of agg) {
+        lookup.set(`${row._id.y}-${row._id.m}`, row.count);
+    }
+    let running = 0;
+    const out: any[] = [];
+    for (let i = 0; i < 6; i++) {
+        const d = new Date(start.getFullYear(), start.getMonth() + i, 1);
+        const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
+        const newEnrollments = lookup.get(key) || 0;
+        running += newEnrollments;
+        out.push({ month: MONTH_NAMES[d.getMonth()], students: running, newEnrollments, churn: 0 });
+    }
+    return out;
+}
+
+// Legacy helper kept for any callers still referencing it. Returns empty
+// monthly data instead of fabricating values.
 function generateMonthlyData(type: string) {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-    return months.map((month, idx) => {
-        const base = 100000 + idx * 5000;
+    return months.map((month) => {
         switch (type) {
-            case 'revenue':
-                return { month, revenue: base + Math.round(Math.random() * 20000), target: base + 15000 };
-            case 'students':
-                return { month, students: 1000 + idx * 50, newEnrollments: 30 + Math.round(Math.random() * 40), churn: 5 + Math.round(Math.random() * 15) };
-            case 'benchmark':
-                return { month, regional: 75 + idx * 2, national: 73 + idx * 1.5 };
-            default:
-                return { month, value: base };
+            case 'revenue': return { month, revenue: 0, target: 0 };
+            case 'students': return { month, students: 0, newEnrollments: 0, churn: 0 };
+            case 'benchmark': return { month, regional: 0, national: 0 };
+            default: return { month, value: 0 };
         }
     });
 }
