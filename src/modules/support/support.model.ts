@@ -207,6 +207,8 @@ export interface ICustomerInquiry extends Document {
     type: 'general' | 'billing' | 'technical' | 'complaint' | 'suggestion';
     status: 'new' | 'in-progress' | 'resolved' | 'closed';
     priority: 'low' | 'medium' | 'high';
+    // Optional location scope so location managers only see their own inquiries.
+    locationId?: string;
     assignedTo?: string;
     assignedAt?: Date;
     responses: {
@@ -227,8 +229,8 @@ export interface ICustomerInquiry extends Document {
 const CustomerInquirySchema = new Schema<ICustomerInquiry>({
     inquiryId: { type: String, required: true, unique: true },
     customerName: { type: String, required: true },
-    customerEmail: { type: String, required: true },
-    customerPhone: String,
+    customerEmail: { type: String, default: '' },
+    customerPhone: { type: String, default: '' },
     subject: { type: String, required: true },
     message: { type: String, required: true },
     type: {
@@ -246,13 +248,15 @@ const CustomerInquirySchema = new Schema<ICustomerInquiry>({
         enum: ['low', 'medium', 'high'],
         default: 'medium'
     },
+    // Location-scoped so per-location-manager pages only see their own inquiries.
+    locationId: { type: String, index: true },
     assignedTo: String,
     assignedAt: Date,
     responses: [{
         responseId: { type: String, required: true },
         message: { type: String, required: true },
         author: { type: String, required: true },
-        authorType: { type: String, enum: ['staff', 'customer'], required: true },
+        authorType: { type: String, enum: ['staff', 'customer'], default: 'staff' },
         isInternal: { type: Boolean, default: false },
         timestamp: { type: Date, default: Date.now }
     }],

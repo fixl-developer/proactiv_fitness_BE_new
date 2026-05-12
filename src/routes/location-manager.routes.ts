@@ -1545,28 +1545,32 @@ router.get('/inquiries', async (req: Request, res: Response) => {
         if (locationId) filter.locationId = locationId;
         if (status && status !== 'all') filter.status = String(status).toLowerCase();
         if (search) {
-            filter.$or = [
-                { subject: { $regex: search, $options: 'i' } },
-                { 'customer.name': { $regex: search, $options: 'i' } },
-                { 'customer.email': { $regex: search, $options: 'i' } },
+            const s = String(search).trim();
+            if (s) filter.$or = [
+                { subject: { $regex: s, $options: 'i' } },
+                { customerName: { $regex: s, $options: 'i' } },
+                { customerEmail: { $regex: s, $options: 'i' } },
+                { customerPhone: { $regex: s, $options: 'i' } },
+                { message: { $regex: s, $options: 'i' } },
             ];
         }
         const pageNum = parseInt(String(page));
         const limit = parseInt(String(pageSize));
         const skip = (pageNum - 1) * limit;
 
-        const [docs, total] = await Promise.all([
+        const [docs, total, allForStats] = await Promise.all([
             CustomerInquiry.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean().catch(() => []),
             CustomerInquiry.countDocuments(filter).catch(() => 0),
+            CustomerInquiry.find(locationId ? { locationId } : {}).select('status').lean().catch(() => []),
         ]);
         const items = docs.map((d: any) => ({
             id: d._id,
             inquiryId: d.inquiryId,
             subject: d.subject,
             message: d.message,
-            customerName: d.customer?.name || d.customerName || '',
-            customerEmail: d.customer?.email || d.customerEmail || '',
-            customerPhone: d.customer?.phone || d.customerPhone || '',
+            customerName: d.customerName || '',
+            customerEmail: d.customerEmail || '',
+            customerPhone: d.customerPhone || '',
             type: d.type || 'general',
             status: d.status || 'new',
             priority: d.priority || 'medium',
@@ -1574,14 +1578,17 @@ router.get('/inquiries', async (req: Request, res: Response) => {
             createdAt: d.createdAt,
             updatedAt: d.updatedAt,
         }));
+        // Stats from ALL docs in this location (not just the current page) so the
+        // KPI cards show the real picture even when a filter narrows the list.
         const stats = {
-            total,
-            new: docs.filter((d: any) => d.status === 'new').length,
-            inProgress: docs.filter((d: any) => d.status === 'in-progress').length,
-            resolved: docs.filter((d: any) => d.status === 'resolved').length,
+            total: allForStats.length || total,
+            new: allForStats.filter((d: any) => d.status === 'new').length,
+            inProgress: allForStats.filter((d: any) => d.status === 'in-progress').length,
+            resolved: allForStats.filter((d: any) => d.status === 'resolved').length,
         };
         res.json({ success: true, data: { items, stats, total, page: pageNum, pageSize: limit, totalPages: Math.max(1, Math.ceil(total / limit)) } });
     } catch (error: any) {
+        console.error('Get inquiries error:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 });
@@ -1590,25 +1597,56 @@ router.post('/inquiries', async (req: Request, res: Response) => {
     try {
         const { CustomerInquiry } = require('../modules/support/support.model');
         const userId = (req as any).user?.id;
+        const userEmail = (req as any).user?.email;
         const locationId = getLocationId(req);
         const { subject, message, customerName, customerEmail, customerPhone, type, priority } = req.body || {};
-        if (!subject || !message || !customerName) return res.status(400).json({ success: false, message: 'subject, message, and customerName are required' });
+
+        // Validate
+        const subj = (subject || '').toString().trim();
+        const msg = (message || '').toString().trim();
+        const name = (customerName || '').toString().trim();
+        if (!subj) return res.status(400).json({ success: false, message: 'Subject is required' });
+        if (!msg) return res.status(400).json({ success: false, message: 'Message is required' });
+        if (!name) return res.status(400).json({ success: false, message: 'Customer name is required' });
+
+        // Model fields are FLAT (customerName/customerEmail/customerPhone) — not nested.
+        // Email defaulted to '' (empty) — schema accepts it because we relaxed the required.
         const doc = await CustomerInquiry.create({
             inquiryId: `IQ-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
-            subject,
-            message,
-            customer: { name: customerName, email: customerEmail || '', phone: customerPhone || '' },
-            type: type || 'general',
-            priority: priority || 'medium',
+            subject: subj,
+            message: msg,
+            customerName: name,
+            customerEmail: (customerEmail || '').toString().trim(),
+            customerPhone: (customerPhone || '').toString().trim(),
+            type: (type || 'general').toString().toLowerCase(),
+            priority: (priority || 'medium').toString().toLowerCase(),
             status: 'new',
             locationId: locationId || undefined,
-            createdBy: userId,
-            updatedBy: userId,
+            createdBy: userId || userEmail || 'system',
+            updatedBy: userId || userEmail || 'system',
             responses: [],
         });
-        res.status(201).json({ success: true, data: doc, message: 'Inquiry logged' });
+
+        // Map back to UI shape so the new entry slots straight into the list refresh
+        const result = {
+            id: doc._id,
+            inquiryId: doc.inquiryId,
+            subject: doc.subject,
+            message: doc.message,
+            customerName: doc.customerName,
+            customerEmail: doc.customerEmail,
+            customerPhone: doc.customerPhone,
+            type: doc.type,
+            status: doc.status,
+            priority: doc.priority,
+            responses: doc.responses || [],
+            createdAt: (doc as any).createdAt,
+            updatedAt: (doc as any).updatedAt,
+        };
+        res.status(201).json({ success: true, data: result, message: 'Inquiry logged' });
     } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message });
+        console.error('Create inquiry error:', error);
+        res.status(400).json({ success: false, message: error.message || 'Failed to log inquiry' });
     }
 });
 
@@ -1618,23 +1656,26 @@ router.post('/inquiries/:id/respond', async (req: Request, res: Response) => {
         const userId = (req as any).user?.id;
         const userEmail = (req as any).user?.email;
         const { message, isInternal = false } = req.body || {};
-        if (!message || !message.trim()) return res.status(400).json({ success: false, message: 'message is required' });
+        if (!message || !message.trim()) return res.status(400).json({ success: false, message: 'Message is required' });
         const doc = await CustomerInquiry.findById(req.params.id);
         if (!doc) return res.status(404).json({ success: false, message: 'Inquiry not found' });
+        // Match schema: responseId + author + authorType required
         const response = {
-            id: `R-${Date.now().toString(36)}`,
+            responseId: `R-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
             message: message.trim(),
             author: userEmail || 'Manager',
-            timestamp: new Date(),
+            authorType: 'staff' as const,
             isInternal: !!isInternal,
+            timestamp: new Date(),
         };
-        doc.responses = [...(doc.responses || []), response];
+        doc.responses = [...(doc.responses || []), response as any];
         if (doc.status === 'new') doc.status = 'in-progress';
-        doc.updatedBy = userId;
+        doc.updatedBy = userId || userEmail || 'system';
         await doc.save();
         res.json({ success: true, data: doc, message: 'Response sent' });
     } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message });
+        console.error('Respond inquiry error:', error);
+        res.status(400).json({ success: false, message: error.message });
     }
 });
 

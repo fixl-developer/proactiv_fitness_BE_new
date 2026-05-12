@@ -37,6 +37,11 @@ const DELETE_HIERARCHY: Record<string, string[]> = {
 // Who can update status of whom
 const STATUS_HIERARCHY: Record<string, string[]> = { ...DELETE_HIERARCHY };
 
+// Who can UPDATE (edit details of) whom — admin must be able to edit
+// self-registered PARENT/USER/STUDENT accounts (phone, name, etc.) without
+// having to use the CREATE hierarchy which intentionally excludes those roles.
+const UPDATE_HIERARCHY: Record<string, string[]> = { ...DELETE_HIERARCHY };
+
 /**
  * Check if the authenticated user's role can create the requested role.
  * Reads the target role from req.body.role.
@@ -242,12 +247,14 @@ export const canUpdateUser = () => {
                 );
             }
 
-            // If updating someone else, check hierarchy
+            // If updating someone else, check hierarchies separately:
+            //  - UPDATE_HIERARCHY: who can EDIT (includes self-register PARENT/USER/STUDENT)
+            //  - ROLE_HIERARCHY:   who can ASSIGN a new role (excludes self-register roles)
             if (req.user.id !== targetUserId) {
-                const allowedRoles = ROLE_HIERARCHY[requesterRole] || [];
+                const updateAllowed = UPDATE_HIERARCHY[requesterRole] || [];
 
                 // Must be able to manage the target user's current role
-                if (!allowedRoles.includes(targetUser.role)) {
+                if (!updateAllowed.includes(targetUser.role)) {
                     return next(
                         new AppError(
                             `Role '${requesterRole}' cannot update users with role '${targetUser.role}'`,
@@ -256,14 +263,18 @@ export const canUpdateUser = () => {
                     );
                 }
 
-                // If changing role, must also be able to assign the new role
-                if (newRole && newRole !== targetUser.role && !allowedRoles.includes(newRole)) {
-                    return next(
-                        new AppError(
-                            `Role '${requesterRole}' cannot assign role '${newRole}'`,
-                            HTTP_STATUS.FORBIDDEN
-                        )
-                    );
+                // If changing role, must also be able to assign the new role —
+                // use the create hierarchy here (self-register roles cannot be assigned).
+                if (newRole && newRole !== targetUser.role) {
+                    const assignAllowed = ROLE_HIERARCHY[requesterRole] || [];
+                    if (!assignAllowed.includes(newRole)) {
+                        return next(
+                            new AppError(
+                                `Role '${requesterRole}' cannot assign role '${newRole}'`,
+                                HTTP_STATUS.FORBIDDEN
+                            )
+                        );
+                    }
                 }
             }
 

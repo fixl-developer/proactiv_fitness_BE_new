@@ -79,9 +79,13 @@ router.get('/revenue', authenticate, async (req: Request, res: Response) => {
             if (endDate) filter.date.$lte = new Date(endDate);
         }
 
-        const [docs, total] = await Promise.all([
+        const [docs, total, sumAgg] = await Promise.all([
             RevenueRecordModel.find(filter).sort({ date: -1, createdAt: -1 }).skip(skip).limit(limit).lean(),
             RevenueRecordModel.countDocuments(filter),
+            RevenueRecordModel.aggregate([
+                { $match: filter },
+                { $group: { _id: null, totalAmount: { $sum: '$amount' } } },
+            ]),
         ]);
 
         const data = docs.map((d: any) => ({
@@ -96,9 +100,12 @@ router.get('/revenue', authenticate, async (req: Request, res: Response) => {
             createdAt: d.createdAt,
         }));
 
+        const totalAmount = (sumAgg && sumAgg[0] && sumAgg[0].totalAmount) || 0;
+
         res.json({
             success: true,
             data,
+            summary: { totalAmount, totalEntries: total },
             pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
         });
     } catch (error: any) {

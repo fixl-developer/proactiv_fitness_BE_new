@@ -11,6 +11,7 @@ export interface IAuditVaultDocument extends Document {
     reason?: string;
     ipAddress?: string;
     userAgent?: string;
+    status: 'SUCCESS' | 'FAILED';
     createdAt: Date;
 }
 
@@ -26,6 +27,7 @@ const auditVaultSchema = new Schema<IAuditVaultDocument>(
         reason: String,
         ipAddress: String,
         userAgent: String,
+        status: { type: String, enum: ['SUCCESS', 'FAILED'], default: 'SUCCESS', index: true },
     },
     { timestamps: { createdAt: true, updatedAt: false } }
 );
