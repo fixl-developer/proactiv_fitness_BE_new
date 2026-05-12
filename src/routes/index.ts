@@ -481,6 +481,82 @@ router.get('/system/analytics', async (_req: Request, res: Response) => {
     }
 });
 
+// =========================================================================
+// GET /admin/organization/overview
+// Aggregates real counts for the admin Organization page:
+//   business units, total/active locations, staff members, growth-rate.
+// Frontend: /admin/organization
+// =========================================================================
+router.get('/admin/organization/overview', async (_req: Request, res: Response) => {
+    try {
+        const { User } = require('../modules/iam/user.model');
+        const { Location } = require('../modules/bcms/location.model');
+        const { BusinessUnit } = require('../modules/bcms/business-unit.model');
+        const STAFF_ROLES = ['COACH', 'SUPPORT_STAFF', 'LOCATION_MANAGER', 'REGIONAL_ADMIN', 'FRANCHISE_OWNER', 'STAFF', 'ADMIN'];
+
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const yearStart = new Date(now.getFullYear(), 0, 1);
+
+        const [
+            businessUnits,
+            totalLocations,
+            activeLocations,
+            totalStaff,
+            staffThisMonth,
+            locationsThisYear,
+            usersThisMonth,
+            usersPrevMonth,
+        ] = await Promise.all([
+            BusinessUnit.countDocuments({ isDeleted: { $ne: true } }).catch(() => 0),
+            Location.countDocuments({ isDeleted: { $ne: true } }).catch(() => 0),
+            Location.countDocuments({ status: { $ne: 'INACTIVE' }, isDeleted: { $ne: true } }).catch(() => 0),
+            User.countDocuments({ role: { $in: STAFF_ROLES }, status: 'ACTIVE', isDeleted: { $ne: true } }).catch(() => 0),
+            User.countDocuments({ role: { $in: STAFF_ROLES }, createdAt: { $gte: monthStart }, isDeleted: { $ne: true } }).catch(() => 0),
+            Location.countDocuments({ createdAt: { $gte: yearStart }, isDeleted: { $ne: true } }).catch(() => 0),
+            User.countDocuments({ createdAt: { $gte: monthStart }, isDeleted: { $ne: true } }).catch(() => 0),
+            User.countDocuments({ createdAt: { $gte: prevMonthStart, $lt: monthStart }, isDeleted: { $ne: true } }).catch(() => 0),
+        ]);
+
+        const utilizationPct = totalLocations > 0
+            ? Number(((activeLocations / totalLocations) * 100).toFixed(1))
+            : 0;
+        const growthRate = usersPrevMonth > 0
+            ? Number((((usersThisMonth - usersPrevMonth) / usersPrevMonth) * 100).toFixed(1))
+            : (usersThisMonth > 0 ? 100 : 0);
+
+        res.json({
+            success: true,
+            data: {
+                businessUnits,
+                totalLocations,
+                activeLocations,
+                utilizationPct,
+                totalStaff,
+                staffThisMonth,
+                locationsThisYear,
+                growthRate,
+            },
+        });
+    } catch (error: any) {
+        console.error('Error in /admin/organization/overview:', error?.message);
+        res.json({
+            success: true,
+            data: {
+                businessUnits: 0,
+                totalLocations: 0,
+                activeLocations: 0,
+                utilizationPct: 0,
+                totalStaff: 0,
+                staffThisMonth: 0,
+                locationsThisYear: 0,
+                growthRate: 0,
+            },
+        });
+    }
+});
+
 // AI Chatbot
 router.use('/ai', aiChatbotRoutes);
 
@@ -533,6 +609,7 @@ router.use('/', missingModulesRoutes);
 router.get('/audit/logs', async (req: Request, res: Response) => {
     try {
         const { AuditVaultModel } = require('../modules/audit-vault/audit-vault.model');
+        const { User } = require('../modules/iam/user.model');
         const { action, status, search, startDate, endDate, limit: limitStr } = req.query;
         const filter: any = {};
         if (action && action !== 'All') {
@@ -542,14 +619,50 @@ router.get('/audit/logs', async (req: Request, res: Response) => {
         }
         if (status && status !== 'All') {
             const s = String(status).toUpperCase();
-            filter.status = { $in: [s, status, String(status).toLowerCase()] };
+            const variants = [s, status, String(status).toLowerCase()];
+            // Treat documents with missing/null status as SUCCESS (schema default).
+            // Old audit rows written before the status field existed have no status set.
+            if (s === 'SUCCESS') {
+                filter.$and = [
+                    ...(filter.$and || []),
+                    { $or: [{ status: { $in: variants } }, { status: { $exists: false } }, { status: null }] },
+                ];
+            } else {
+                filter.status = { $in: variants };
+            }
         }
-        if (search) filter.$or = [
-            { action: { $regex: search, $options: 'i' } },
-            { entityType: { $regex: search, $options: 'i' } },
-            { reason: { $regex: search, $options: 'i' } },
-            { userId: { $regex: search, $options: 'i' } },
-        ];
+        if (search) {
+            const term = String(search);
+            // Try to also resolve userIds matching the search term against User.name / User.email
+            // so that searching by user name/email returns audit rows for that user.
+            let matchedUserIds: string[] = [];
+            try {
+                const matchedUsers = await User.find({
+                    $or: [
+                        { name: { $regex: term, $options: 'i' } },
+                        { email: { $regex: term, $options: 'i' } },
+                        { firstName: { $regex: term, $options: 'i' } },
+                        { lastName: { $regex: term, $options: 'i' } },
+                    ],
+                }).select('_id').limit(50).lean();
+                matchedUserIds = (matchedUsers || []).map((u: any) => String(u._id));
+            } catch {
+                matchedUserIds = [];
+            }
+            filter.$or = [
+                { action: { $regex: term, $options: 'i' } },
+                { entityType: { $regex: term, $options: 'i' } },
+                { entityId: { $regex: term, $options: 'i' } },
+                { reason: { $regex: term, $options: 'i' } },
+                { userId: { $regex: term, $options: 'i' } },
+                { userAgent: { $regex: term, $options: 'i' } },
+                { ipAddress: { $regex: term, $options: 'i' } },
+                { auditId: { $regex: term, $options: 'i' } },
+            ];
+            if (matchedUserIds.length > 0) {
+                filter.$or.push({ userId: { $in: matchedUserIds } });
+            }
+        }
         // Date range filtering on createdAt
         if (startDate || endDate) {
             filter.createdAt = {};
@@ -569,7 +682,40 @@ router.get('/audit/logs', async (req: Request, res: Response) => {
         }
         const limit = parseInt(limitStr as string) || 100;
         const logs = await AuditVaultModel.find(filter).sort({ createdAt: -1 }).limit(limit).lean();
-        res.json({ success: true, data: logs });
+
+        // Manual user-ref resolution: userId is stored as a String (not a real ref),
+        // so we batch-fetch the referenced users and attach name/email/role to each log.
+        const userIds = Array.from(
+            new Set((logs || []).map((l: any) => l.userId).filter((id: any) => id && id !== 'anonymous' && id !== 'system'))
+        );
+        let userMap: Record<string, { name?: string; email?: string; role?: string }> = {};
+        if (userIds.length > 0) {
+            try {
+                const users = await User.find({ _id: { $in: userIds } })
+                    .select('_id name email firstName lastName role')
+                    .lean();
+                userMap = (users || []).reduce((acc: any, u: any) => {
+                    const fullName = u.name || [u.firstName, u.lastName].filter(Boolean).join(' ').trim();
+                    acc[String(u._id)] = { name: fullName || undefined, email: u.email, role: u.role };
+                    return acc;
+                }, {});
+            } catch {
+                userMap = {};
+            }
+        }
+        const enriched = (logs || []).map((l: any) => {
+            const u = userMap[String(l.userId)];
+            return {
+                ...l,
+                user: u?.name || u?.email || (l.userId === 'system' || l.userId === 'anonymous' ? 'System' : l.userId),
+                userName: u?.name,
+                userEmail: u?.email,
+                userRole: u?.role,
+                resource: l.entityType,
+                details: l.reason || `${l.action} on ${l.entityType}`,
+            };
+        });
+        res.json({ success: true, data: enriched });
     } catch (error: any) {
         res.json({ success: true, data: [] });
     }
