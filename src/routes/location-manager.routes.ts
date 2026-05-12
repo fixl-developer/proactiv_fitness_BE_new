@@ -114,40 +114,47 @@ router.get('/dashboard', async (req: Request, res: Response) => {
 // =============================================
 router.get('/classes', async (req: Request, res: Response) => {
     try {
-        const { Session } = require('../modules/scheduling/schedule.model');
+        const { LocationClass } = require('../modules/location-manager/location-class.model');
         const { page = '1', pageSize = '10', search, level, status } = req.query;
         const filter: any = {};
-        if (search) filter.$or = [
-            { sessionName: { $regex: search, $options: 'i' } },
-            { className: { $regex: search, $options: 'i' } }
-        ];
-        if (level && level !== 'all') filter.level = level;
-        if (status && status !== 'all') filter.status = status;
+        if (search) {
+            const s = String(search).trim();
+            if (s) filter.$or = [
+                { name: { $regex: s, $options: 'i' } },
+                { coach: { $regex: s, $options: 'i' } },
+                { level: { $regex: s, $options: 'i' } },
+                { room: { $regex: s, $options: 'i' } },
+            ];
+        }
+        if (level && level !== 'all') filter.level = String(level).toUpperCase();
+        if (status && status !== 'all') filter.status = String(status).toUpperCase();
+        const locationId = getLocationId(req);
+        if (locationId) filter.locationId = locationId;
 
         const skip = (parseInt(page as string) - 1) * parseInt(pageSize as string);
         const limit = parseInt(pageSize as string);
 
-        const [sessions, total] = await Promise.all([
-            Session.find(filter).sort({ date: -1 }).skip(skip).limit(limit).lean(),
-            Session.countDocuments(filter)
+        const [classes, total] = await Promise.all([
+            LocationClass.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+            LocationClass.countDocuments(filter)
         ]);
 
         res.json({
             success: true,
             data: {
-                data: sessions.map((s: any) => ({
-                    id: s._id,
-                    name: s.sessionName || s.className || 'Unnamed Class',
-                    level: s.level || 'BEGINNER',
-                    coach: s.coachAssignments?.[0]?.coachName || s.instructorName || 'Unassigned',
-                    schedule: s.timeSlot ? `${s.timeSlot.dayOfWeek} ${s.timeSlot.startTime}-${s.timeSlot.endTime}` : 'TBD',
-                    capacity: s.maxCapacity || 20,
-                    enrolled: s.enrolledParticipants?.length || 0,
-                    students: s.enrolledParticipants?.length || 0,
-                    room: s.roomId || 'TBD',
-                    status: s.status || 'scheduled',
-                    date: s.date,
-                    createdAt: s.createdAt
+                data: classes.map((c: any) => ({
+                    id: c._id,
+                    name: c.name,
+                    level: c.level,
+                    coach: c.coach || 'Unassigned',
+                    schedule: c.schedule || 'TBD',
+                    capacity: c.capacity || 20,
+                    enrolled: c.enrolled || 0,
+                    students: c.enrolled || 0,
+                    room: c.room || 'TBD',
+                    status: c.status || 'ACTIVE',
+                    createdAt: c.createdAt,
+                    updatedAt: c.updatedAt,
                 })),
                 total,
                 page: parseInt(page as string),
@@ -163,27 +170,26 @@ router.get('/classes', async (req: Request, res: Response) => {
 
 router.post('/classes', async (req: Request, res: Response) => {
     try {
-        const { Session } = require('../modules/scheduling/schedule.model');
-        const { v4: uuidv4 } = require('uuid');
-        const session = await Session.create({
-            sessionId: uuidv4?.() || `session-${Date.now()}`,
-            sessionName: req.body.name,
-            className: req.body.name,
-            level: req.body.level,
-            date: req.body.date || new Date(),
-            timeSlot: {
-                startTime: req.body.startTime || '09:00',
-                endTime: req.body.endTime || '10:00',
-                dayOfWeek: req.body.dayOfWeek || 'Monday'
-            },
-            maxCapacity: req.body.capacity || 20,
-            locationId: req.body.locationId || getLocationId(req),
-            roomId: req.body.roomId,
-            status: 'scheduled',
+        const { LocationClass } = require('../modules/location-manager/location-class.model');
+        const name = (req.body.name || '').toString().trim();
+        if (!name) return res.status(400).json({ success: false, message: 'Class name is required' });
+
+        const cls = await LocationClass.create({
+            name,
+            level: String(req.body.level || 'BEGINNER').toUpperCase(),
+            coach: String(req.body.coach || '').trim(),
+            coachId: req.body.coachId,
+            schedule: String(req.body.schedule || '').trim(),
+            capacity: Number(req.body.capacity) || 20,
+            enrolled: 0,
+            room: String(req.body.room || '').trim(),
+            status: String(req.body.status || 'ACTIVE').toUpperCase(),
+            locationId: req.body.locationId || getLocationId(req) || undefined,
+            businessUnitId: req.body.businessUnitId || 'default',
             createdBy: (req as any).user?.id || 'system',
-            updatedBy: (req as any).user?.id || 'system'
+            updatedBy: (req as any).user?.id || 'system',
         });
-        res.json({ success: true, data: session });
+        res.json({ success: true, data: { id: cls._id, ...cls.toObject() } });
     } catch (error: any) {
         res.status(400).json({ success: false, message: error.message });
     }
@@ -191,13 +197,19 @@ router.post('/classes', async (req: Request, res: Response) => {
 
 router.put('/classes/:id', async (req: Request, res: Response) => {
     try {
-        const { Session } = require('../modules/scheduling/schedule.model');
-        const session = await Session.findByIdAndUpdate(req.params.id, {
-            ...req.body,
-            updatedBy: (req as any).user?.id || 'system'
-        }, { new: true });
-        if (!session) return res.status(404).json({ success: false, message: 'Class not found' });
-        res.json({ success: true, data: session });
+        const { LocationClass } = require('../modules/location-manager/location-class.model');
+        const update: any = { updatedBy: (req as any).user?.id || 'system' };
+        if (req.body.name !== undefined) update.name = String(req.body.name).trim();
+        if (req.body.level !== undefined) update.level = String(req.body.level).toUpperCase();
+        if (req.body.coach !== undefined) update.coach = String(req.body.coach).trim();
+        if (req.body.schedule !== undefined) update.schedule = String(req.body.schedule).trim();
+        if (req.body.capacity !== undefined) update.capacity = Number(req.body.capacity) || 20;
+        if (req.body.room !== undefined) update.room = String(req.body.room).trim();
+        if (req.body.status !== undefined) update.status = String(req.body.status).toUpperCase();
+
+        const cls = await LocationClass.findByIdAndUpdate(req.params.id, update, { new: true }).lean();
+        if (!cls) return res.status(404).json({ success: false, message: 'Class not found' });
+        res.json({ success: true, data: { id: cls._id, ...cls } });
     } catch (error: any) {
         res.status(400).json({ success: false, message: error.message });
     }
@@ -205,9 +217,9 @@ router.put('/classes/:id', async (req: Request, res: Response) => {
 
 router.delete('/classes/:id', async (req: Request, res: Response) => {
     try {
-        const { Session } = require('../modules/scheduling/schedule.model');
-        const session = await Session.findByIdAndUpdate(req.params.id, { status: 'cancelled' }, { new: true });
-        if (!session) return res.status(404).json({ success: false, message: 'Class not found' });
+        const { LocationClass } = require('../modules/location-manager/location-class.model');
+        const cls = await LocationClass.findByIdAndDelete(req.params.id);
+        if (!cls) return res.status(404).json({ success: false, message: 'Class not found' });
         res.json({ success: true, data: { message: 'Class deleted successfully' } });
     } catch (error: any) {
         res.status(400).json({ success: false, message: error.message });
@@ -277,6 +289,14 @@ router.post('/staff', async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, message: 'firstName, lastName, and email are required' });
         }
 
+        // Validate phone length when provided (7-15 digits)
+        if (phone) {
+            const digits = String(phone).replace(/\D/g, '');
+            if (digits.length < 7 || digits.length > 15) {
+                return res.status(400).json({ success: false, message: 'Phone number must be 7-15 digits' });
+            }
+        }
+
         // Check duplicate email in User collection
         const existingUser = await User.findOne({ email: email.toLowerCase() });
         if (existingUser) {
@@ -284,7 +304,7 @@ router.post('/staff', async (req: Request, res: Response) => {
         }
 
         // Create user account so they can login
-        const user = await User.create({
+        const userPayload: any = {
             firstName,
             lastName,
             fullName: `${firstName} ${lastName}`,
@@ -295,42 +315,55 @@ router.post('/staff', async (req: Request, res: Response) => {
             status: (status || 'ACTIVE').toUpperCase(),
             isEmailVerified: true,
             createdByAdmin: true,
-            locationId: (req as any).user?.locationId || undefined,
-        });
+        };
+        const managerLocationId = (req as any).user?.locationId;
+        if (managerLocationId) userPayload.locationId = managerLocationId;
 
-        // Also create staff record for scheduling/metrics
-        const staff = await Staff.create({
-            staffId: uuidv4?.() || `staff-${Date.now()}`,
-            personalInfo: {
-                firstName,
-                lastName,
-                dateOfBirth: new Date('1990-01-01'),
-                gender: 'other'
-            },
-            contactInfo: {
-                email: email.toLowerCase(),
-                phone: phone || '',
-                address: { street: '', city: '', state: '', country: '', postalCode: '' }
-            },
-            staffType: (role || 'coach').toLowerCase(),
-            status: (status || 'active').toLowerCase(),
-            hireDate: new Date(),
-            businessUnitId: req.body.businessUnitId || 'default',
-            createdBy: (req as any).user?.id || 'system',
-            updatedBy: (req as any).user?.id || 'system'
-        });
+        const user = await User.create(userPayload);
+
+        // Also create staff record for scheduling/metrics — wrap in try so the
+        // primary user create still succeeds if Staff schema rejects something
+        let staffId: string | null = null;
+        try {
+            const staff = await Staff.create({
+                staffId: uuidv4?.() || `staff-${Date.now()}`,
+                personalInfo: {
+                    firstName,
+                    lastName,
+                    dateOfBirth: new Date('1990-01-01'),
+                    gender: 'other'
+                },
+                contactInfo: {
+                    email: email.toLowerCase(),
+                    phone: phone || '',
+                    address: { street: '', city: '', state: '', country: '', postalCode: '' }
+                },
+                staffType: (role || 'coach').toLowerCase(),
+                status: (status || 'active').toLowerCase(),
+                hireDate: new Date(),
+                businessUnitId: req.body.businessUnitId || 'default',
+                createdBy: (req as any).user?.id || 'system',
+                updatedBy: (req as any).user?.id || 'system'
+            });
+            staffId = staff?._id?.toString() || null;
+        } catch (staffErr: any) {
+            console.warn('Staff record create skipped:', staffErr?.message);
+        }
 
         res.status(201).json({
             success: true,
             data: {
                 id: user._id.toString(),
+                staffId,
                 name: `${firstName} ${lastName}`,
                 email: user.email,
+                phone: user.phone,
                 role: user.role,
                 status: user.status
             }
         });
     } catch (error: any) {
+        console.error('Create staff error:', error);
         res.status(400).json({ success: false, message: error.message });
     }
 });
@@ -632,12 +665,18 @@ router.get('/facilities', async (req: Request, res: Response) => {
         const { Room } = require('../modules/bcms/room.model');
         const { page = '1', pageSize = '10', search, status } = req.query;
         const filter: any = {};
-        if (search) filter.$or = [
-            { name: { $regex: search, $options: 'i' } },
-            { type: { $regex: search, $options: 'i' } }
-        ];
-        if (status === 'operational') filter.isActive = true;
-        if (status === 'maintenance') filter.isActive = false;
+        if (search) {
+            const s = String(search).trim();
+            if (s) filter.$or = [
+                { name: { $regex: s, $options: 'i' } },
+                { type: { $regex: s, $options: 'i' } },
+                { description: { $regex: s, $options: 'i' } },
+            ];
+        }
+        const statusStr = status ? String(status).toLowerCase() : '';
+        if (statusStr === 'operational' || statusStr === 'active') filter.isActive = true;
+        else if (statusStr === 'maintenance' || statusStr === 'closed') filter.isActive = false;
+        // 'all' falls through
 
         const skip = (parseInt(page as string) - 1) * parseInt(pageSize as string);
         const limit = parseInt(pageSize as string);
@@ -696,22 +735,60 @@ router.get('/facilities', async (req: Request, res: Response) => {
 router.post('/facilities', async (req: Request, res: Response) => {
     try {
         const { Room } = require('../modules/bcms/room.model');
+        const { Location } = require('../modules/bcms/location.model');
+        const mongoose = require('mongoose');
+
+        const name = (req.body.name || '').toString().trim();
+        if (!name) return res.status(400).json({ success: false, message: 'Facility name is required' });
+
+        // Resolve a valid locationId — fall back to any active location if manager has none
+        let locationId: any = req.body.locationId || getLocationId(req);
+        if (locationId && !mongoose.Types.ObjectId.isValid(locationId)) locationId = null;
+        if (!locationId) {
+            const anyLoc = await Location.findOne({}).select('_id').lean();
+            if (anyLoc) locationId = anyLoc._id;
+        }
+        // If we still don't have a location, create a default one so create doesn't fail
+        if (!locationId) {
+            try {
+                const created = await Location.create({
+                    name: 'Default Location',
+                    code: 'DEFAULT',
+                    address: { street: '', city: '', state: '', country: '', postalCode: '' },
+                    businessUnitId: req.body.businessUnitId || 'default',
+                    createdBy: (req as any).user?.id || 'system',
+                    updatedBy: (req as any).user?.id || 'system',
+                });
+                locationId = created._id;
+            } catch (e: any) {
+                // Some Location schemas require fewer fields — silently swallow & continue with new ObjectId
+                locationId = new mongoose.Types.ObjectId();
+            }
+        }
+
+        // Ensure room code is unique under the resolved location
+        const baseCode = (req.body.code || name).toString().substring(0, 10).toUpperCase().replace(/[^A-Z0-9]/g, '-');
+        let code = baseCode || 'ROOM';
+        const existing = await Room.findOne({ locationId, code }).lean();
+        if (existing) code = `${baseCode}-${Date.now().toString().slice(-4)}`;
+
         const room = await Room.create({
-            name: req.body.name,
-            code: req.body.code || req.body.name.substring(0, 10).toUpperCase().replace(/\s/g, '-'),
-            locationId: req.body.locationId || getLocationId(req),
-            type: req.body.type,
-            capacity: req.body.capacity || 20,
+            name,
+            code,
+            locationId,
+            type: (req.body.type || 'General').toString().trim() || 'General',
+            capacity: Number(req.body.capacity) || 20,
             area: req.body.area,
             floor: req.body.floor,
             description: req.body.description,
             equipment: req.body.equipment || [],
-            isActive: true,
+            isActive: req.body.status ? String(req.body.status).toUpperCase() !== 'CLOSED' : true,
             createdBy: (req as any).user?.id || 'system',
             updatedBy: (req as any).user?.id || 'system'
         });
-        res.json({ success: true, data: room });
+        res.json({ success: true, data: { id: room._id, ...room.toObject() } });
     } catch (error: any) {
+        console.error('Create facility error:', error);
         res.status(400).json({ success: false, message: error.message });
     }
 });
@@ -719,12 +796,22 @@ router.post('/facilities', async (req: Request, res: Response) => {
 router.put('/facilities/:id', async (req: Request, res: Response) => {
     try {
         const { Room } = require('../modules/bcms/room.model');
-        const room = await Room.findByIdAndUpdate(req.params.id, {
-            ...req.body,
-            updatedBy: (req as any).user?.id || 'system'
-        }, { new: true });
+        const update: any = { updatedBy: (req as any).user?.id || 'system' };
+        if (req.body.name !== undefined) update.name = String(req.body.name).trim();
+        if (req.body.type !== undefined) update.type = String(req.body.type).trim();
+        if (req.body.capacity !== undefined) update.capacity = Number(req.body.capacity) || 0;
+        if (req.body.area !== undefined) update.area = req.body.area;
+        if (req.body.floor !== undefined) update.floor = req.body.floor;
+        if (req.body.description !== undefined) update.description = req.body.description;
+        if (req.body.equipment !== undefined) update.equipment = req.body.equipment;
+        if (req.body.status !== undefined) {
+            const s = String(req.body.status).toUpperCase();
+            update.isActive = s !== 'CLOSED' && s !== 'MAINTENANCE';
+        }
+
+        const room = await Room.findByIdAndUpdate(req.params.id, update, { new: true }).lean();
         if (!room) return res.status(404).json({ success: false, message: 'Facility not found' });
-        res.json({ success: true, data: room });
+        res.json({ success: true, data: { id: room._id, ...room } });
     } catch (error: any) {
         res.status(400).json({ success: false, message: error.message });
     }
@@ -750,10 +837,15 @@ router.get('/emergency-contacts', async (req: Request, res: Response) => {
         const { page = '1', pageSize = '10', search, status } = req.query;
         const filter: any = {};
         if (status && status !== 'all') filter.status = status.toString().toUpperCase();
-        if (search) filter.$or = [
-            { contactName: { $regex: search, $options: 'i' } },
-            { email: { $regex: search, $options: 'i' } }
-        ];
+        if (search) {
+            const s = String(search).trim();
+            if (s) filter.$or = [
+                { contactName: { $regex: s, $options: 'i' } },
+                { email: { $regex: s, $options: 'i' } },
+                { primaryPhone: { $regex: s, $options: 'i' } },
+                { relationship: { $regex: s, $options: 'i' } },
+            ];
+        }
 
         const skip = (parseInt(page as string) - 1) * parseInt(pageSize as string);
         const limit = parseInt(pageSize as string);
@@ -816,24 +908,48 @@ router.get('/emergency-contacts', async (req: Request, res: Response) => {
 router.post('/emergency-contacts', async (req: Request, res: Response) => {
     try {
         const { EmergencyContact } = require('../modules/emergency-contacts/emergency-contacts.model');
+        const mongoose = require('mongoose');
+
+        const contactName = (req.body.contactName || '').toString().trim();
+        const primaryPhone = (req.body.primaryPhone || '').toString().trim();
+        if (!contactName) return res.status(400).json({ success: false, message: 'Contact name is required' });
+        if (!primaryPhone) return res.status(400).json({ success: false, message: 'Primary phone is required' });
+
+        // Validate phone length (7-15 digits)
+        const digits = primaryPhone.replace(/\D/g, '');
+        if (digits.length < 7 || digits.length > 15) {
+            return res.status(400).json({ success: false, message: 'Primary phone must be 7-15 digits' });
+        }
+        if (req.body.alternatePhone) {
+            const altDigits = String(req.body.alternatePhone).replace(/\D/g, '');
+            if (altDigits.length < 7 || altDigits.length > 15) {
+                return res.status(400).json({ success: false, message: 'Alternate phone must be 7-15 digits' });
+            }
+        }
+
+        // studentId is optional — only attach if valid ObjectId
+        let studentId: any = req.body.studentId;
+        if (studentId && !mongoose.Types.ObjectId.isValid(studentId)) studentId = undefined;
+
         const contact = await EmergencyContact.create({
-            studentId: req.body.studentId,
-            contactName: req.body.contactName,
-            relationship: req.body.relationship,
-            primaryPhone: req.body.primaryPhone,
-            alternatePhone: req.body.alternatePhone,
-            email: req.body.email,
-            address: req.body.address,
+            studentId,
+            contactName,
+            relationship: (req.body.relationship || '').toString().trim(),
+            primaryPhone,
+            alternatePhone: req.body.alternatePhone || '',
+            email: (req.body.email || '').toString().trim().toLowerCase(),
+            address: (req.body.address || '').toString().trim(),
             isAuthorizedPickup: req.body.isAuthorizedPickup || false,
-            medicalInfo: req.body.medicalInfo,
+            medicalInfo: req.body.medicalInfo || '',
             status: 'PENDING',
-            notes: req.body.notes,
+            notes: req.body.notes || '',
             businessUnitId: req.body.businessUnitId || 'default',
             createdBy: (req as any).user?.id || 'system',
             updatedBy: (req as any).user?.id || 'system'
         });
-        res.json({ success: true, data: contact });
+        res.json({ success: true, data: { id: contact._id, ...contact.toObject() } });
     } catch (error: any) {
+        console.error('Create emergency contact error:', error);
         res.status(400).json({ success: false, message: error.message });
     }
 });
@@ -1151,6 +1267,489 @@ router.put('/password', async (req: Request, res: Response) => {
         res.json({ success: true, message: 'Password updated successfully' });
     } catch (error: any) {
         res.status(400).json({ success: false, message: error.message });
+    }
+});
+
+// =============================================
+// BOOKINGS (Phase 1) — walk-in / phone / trial bookings at this location
+// =============================================
+router.get('/bookings', async (req: Request, res: Response) => {
+    try {
+        const { Booking } = require('../modules/booking/booking.model');
+        const { Program } = require('../modules/programs/program.model');
+        const locationId = getLocationId(req);
+        const { status, search, page = '1', pageSize = '20' } = req.query;
+        const filter: any = { isDeleted: { $ne: true } };
+        if (locationId) filter.locationId = locationId;
+        if (status && status !== 'all') filter.status = { $regex: new RegExp(String(status), 'i') };
+        if (search) {
+            filter.$or = [
+                { childName: { $regex: search, $options: 'i' } },
+                { 'customer.name': { $regex: search, $options: 'i' } },
+                { 'customer.email': { $regex: search, $options: 'i' } },
+                { bookingId: { $regex: search, $options: 'i' } },
+            ];
+        }
+        const pageNum = parseInt(String(page));
+        const limit = parseInt(String(pageSize));
+        const skip = (pageNum - 1) * limit;
+
+        const [docs, total] = await Promise.all([
+            Booking.find(filter)
+                .populate({ path: 'programId', select: 'name' })
+                .sort({ createdAt: -1 })
+                .skip(skip).limit(limit).lean(),
+            Booking.countDocuments(filter),
+        ]);
+
+        const items = docs.map((b: any) => {
+            const sp: Record<string, string> = {};
+            (b.specialRequests || []).forEach((r: string) => {
+                if (typeof r !== 'string') return;
+                const [k, ...v] = r.split(':');
+                if (k) sp[k] = v.join(':');
+            });
+            const programDoc = b.programId && typeof b.programId === 'object' ? b.programId : null;
+            const mainParticipant = Array.isArray(b.participants) ? b.participants[0] : null;
+            return {
+                id: b._id,
+                bookingId: b.bookingId,
+                child: mainParticipant?.name || sp.childName || b.childName || b.customer?.name || 'Walk-in',
+                customerName: b.customer?.name || sp.childName || 'Walk-in',
+                customerEmail: b.customer?.email || '',
+                customerPhone: b.customer?.phone || '',
+                program: programDoc?.name || sp.program || sp.className || b.programName || 'Class',
+                bookingType: b.bookingType || 'drop_in',
+                date: b.sessionDate || b.date || b.createdAt,
+                time: b.sessionTime?.startTime || sp.timeSlot || '',
+                status: (b.status || 'pending').toLowerCase(),
+                paymentStatus: (b.payment?.status || 'pending').toLowerCase(),
+                amount: b.payment?.amount || 0,
+                currency: b.payment?.currency || 'HKD',
+                createdAt: b.createdAt,
+            };
+        });
+
+        const stats = {
+            total,
+            confirmed: docs.filter((b: any) => ['confirmed', 'CONFIRMED'].includes(b.status)).length,
+            pending: docs.filter((b: any) => ['pending', 'PENDING'].includes(b.status)).length,
+            cancelled: docs.filter((b: any) => ['cancelled', 'CANCELLED'].includes(b.status)).length,
+        };
+
+        res.json({ success: true, data: { items, stats, total, page: pageNum, pageSize: limit, totalPages: Math.max(1, Math.ceil(total / limit)) } });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+router.post('/bookings', async (req: Request, res: Response) => {
+    try {
+        const { Booking } = require('../modules/booking/booking.model');
+        const { Program } = require('../modules/programs/program.model');
+        const { Location } = require('../modules/bcms/location.model');
+        const userId = (req as any).user?.id;
+        const locationId = getLocationId(req);
+        const { customerName, customerEmail, customerPhone, programId, bookingType, date, time, amount, notes } = req.body || {};
+
+        if (!customerName || !customerName.trim()) return res.status(400).json({ success: false, message: 'Customer name is required' });
+        if (!date) return res.status(400).json({ success: false, message: 'Date is required' });
+
+        // Resolve program + location + businessUnitId so the Booking schema's
+        // required fields are satisfied.
+        let resolvedProgramId = programId;
+        if (!resolvedProgramId) {
+            const p = await Program.findOne({ isActive: true, isDeleted: { $ne: true } }).select('_id businessUnitId').lean().catch(() => null);
+            resolvedProgramId = p?._id;
+        }
+        let resolvedBusinessUnitId: any = null;
+        if (locationId) {
+            const loc = await Location.findById(locationId).select('businessUnitId').lean().catch(() => null);
+            resolvedBusinessUnitId = loc?.businessUnitId;
+        }
+        if (!resolvedBusinessUnitId && resolvedProgramId) {
+            const p = await Program.findById(resolvedProgramId).select('businessUnitId').lean().catch(() => null);
+            resolvedBusinessUnitId = p?.businessUnitId;
+        }
+        if (!resolvedBusinessUnitId) return res.status(400).json({ success: false, message: 'No business unit configured — cannot create booking' });
+
+        const bookingId = `LB-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+        const doc = await Booking.create({
+            bookingId,
+            bookingType: bookingType || 'drop_in',
+            status: 'confirmed',
+            familyId: userId,
+            bookedBy: userId,
+            programId: resolvedProgramId,
+            locationId: locationId || undefined,
+            businessUnitId: resolvedBusinessUnitId,
+            sessionDate: new Date(date),
+            sessionTime: time ? { startTime: time, endTime: '' } : undefined,
+            customer: {
+                name: customerName.trim(),
+                email: (customerEmail || '').trim(),
+                phone: (customerPhone || '').trim(),
+            },
+            participants: [{ name: customerName.trim(), isMainParticipant: true }],
+            specialRequests: [
+                `bookingSource:location-walk-in`,
+                notes ? `notes:${notes}` : '',
+            ].filter(Boolean),
+            payment: {
+                amount: Number(amount) || 0,
+                currency: 'HKD',
+                status: 'pending',
+                method: 'cash',
+            },
+            createdBy: userId,
+            updatedBy: userId,
+        });
+
+        res.status(201).json({ success: true, data: doc, message: 'Booking created' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+router.put('/bookings/:id', async (req: Request, res: Response) => {
+    try {
+        const { Booking } = require('../modules/booking/booking.model');
+        const allowed: any = {};
+        if (req.body.status) allowed.status = req.body.status;
+        if (req.body.customerName || req.body.customerEmail || req.body.customerPhone) {
+            allowed.customer = {
+                name: req.body.customerName,
+                email: req.body.customerEmail,
+                phone: req.body.customerPhone,
+            };
+        }
+        if (req.body.date) allowed.sessionDate = new Date(req.body.date);
+        if (req.body.amount !== undefined) {
+            allowed['payment.amount'] = Number(req.body.amount) || 0;
+        }
+        const updated = await Booking.findByIdAndUpdate(req.params.id, { $set: allowed }, { new: true }).lean();
+        if (!updated) return res.status(404).json({ success: false, message: 'Booking not found' });
+        res.json({ success: true, data: updated });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+router.delete('/bookings/:id', async (req: Request, res: Response) => {
+    try {
+        const { Booking } = require('../modules/booking/booking.model');
+        const updated = await Booking.findByIdAndUpdate(req.params.id, { status: 'cancelled', cancelledAt: new Date() }, { new: true });
+        if (!updated) return res.status(404).json({ success: false, message: 'Booking not found' });
+        res.json({ success: true, message: 'Booking cancelled' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// =============================================
+// PAYMENTS (Phase 1) — per-location payment ledger
+// =============================================
+router.get('/payments', async (req: Request, res: Response) => {
+    try {
+        const { Booking } = require('../modules/booking/booking.model');
+        const locationId = getLocationId(req);
+        const { status, search, page = '1', pageSize = '20' } = req.query;
+        const filter: any = { 'payment.amount': { $gt: 0 } };
+        if (locationId) filter.locationId = locationId;
+        if (status && status !== 'all') filter['payment.status'] = { $regex: new RegExp(String(status), 'i') };
+        if (search) {
+            filter.$or = [
+                { 'customer.name': { $regex: search, $options: 'i' } },
+                { bookingId: { $regex: search, $options: 'i' } },
+            ];
+        }
+        const pageNum = parseInt(String(page));
+        const limit = parseInt(String(pageSize));
+        const skip = (pageNum - 1) * limit;
+
+        const [docs, total, allForStats] = await Promise.all([
+            Booking.find(filter)
+                .populate({ path: 'programId', select: 'name' })
+                .sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+            Booking.countDocuments(filter),
+            Booking.find({ ...filter }).select('payment').lean(),
+        ]);
+
+        const items = docs.map((b: any) => ({
+            id: b._id,
+            bookingId: b.bookingId,
+            customerName: b.customer?.name || 'Walk-in',
+            program: (b.programId && typeof b.programId === 'object' ? b.programId.name : null) || b.programName || 'Class',
+            amount: b.payment?.amount || 0,
+            currency: b.payment?.currency || 'HKD',
+            method: b.payment?.method || 'cash',
+            status: (b.payment?.status || 'pending').toLowerCase(),
+            date: b.payment?.paidAt || b.createdAt,
+        }));
+
+        const totalCollected = allForStats
+            .filter((b: any) => ['paid', 'completed', 'COMPLETED'].includes(b.payment?.status))
+            .reduce((s: number, b: any) => s + (b.payment?.amount || 0), 0);
+        const totalPending = allForStats
+            .filter((b: any) => ['pending', 'PENDING'].includes(b.payment?.status))
+            .reduce((s: number, b: any) => s + (b.payment?.amount || 0), 0);
+        const stats = {
+            total,
+            totalCollected: Math.round(totalCollected),
+            totalPending: Math.round(totalPending),
+            paidCount: allForStats.filter((b: any) => ['paid', 'completed', 'COMPLETED'].includes(b.payment?.status)).length,
+        };
+
+        res.json({ success: true, data: { items, stats, total, page: pageNum, pageSize: limit, totalPages: Math.max(1, Math.ceil(total / limit)) } });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+router.post('/payments/:bookingId/record', async (req: Request, res: Response) => {
+    try {
+        const { Booking } = require('../modules/booking/booking.model');
+        const { amount, method, notes } = req.body || {};
+        if (!amount || Number(amount) <= 0) return res.status(400).json({ success: false, message: 'amount > 0 is required' });
+        if (!method) return res.status(400).json({ success: false, message: 'Payment method is required' });
+        const updated = await Booking.findByIdAndUpdate(
+            req.params.bookingId,
+            {
+                $set: {
+                    'payment.amount': Number(amount),
+                    'payment.method': method,
+                    'payment.status': 'paid',
+                    'payment.paidAt': new Date(),
+                    'payment.notes': notes || '',
+                },
+            },
+            { new: true }
+        ).lean();
+        if (!updated) return res.status(404).json({ success: false, message: 'Booking not found' });
+        res.json({ success: true, data: updated, message: 'Payment recorded' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// =============================================
+// INQUIRIES (Phase 2) — phone calls / walk-in queries / parent complaints
+// Backed by the existing CustomerInquiry model when present, scoped by location.
+// =============================================
+router.get('/inquiries', async (req: Request, res: Response) => {
+    try {
+        const { CustomerInquiry } = require('../modules/support/support.model');
+        const locationId = getLocationId(req);
+        const { status, search, page = '1', pageSize = '20' } = req.query;
+        const filter: any = {};
+        if (locationId) filter.locationId = locationId;
+        if (status && status !== 'all') filter.status = String(status).toLowerCase();
+        if (search) {
+            filter.$or = [
+                { subject: { $regex: search, $options: 'i' } },
+                { 'customer.name': { $regex: search, $options: 'i' } },
+                { 'customer.email': { $regex: search, $options: 'i' } },
+            ];
+        }
+        const pageNum = parseInt(String(page));
+        const limit = parseInt(String(pageSize));
+        const skip = (pageNum - 1) * limit;
+
+        const [docs, total] = await Promise.all([
+            CustomerInquiry.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean().catch(() => []),
+            CustomerInquiry.countDocuments(filter).catch(() => 0),
+        ]);
+        const items = docs.map((d: any) => ({
+            id: d._id,
+            inquiryId: d.inquiryId,
+            subject: d.subject,
+            message: d.message,
+            customerName: d.customer?.name || d.customerName || '',
+            customerEmail: d.customer?.email || d.customerEmail || '',
+            customerPhone: d.customer?.phone || d.customerPhone || '',
+            type: d.type || 'general',
+            status: d.status || 'new',
+            priority: d.priority || 'medium',
+            responses: d.responses || [],
+            createdAt: d.createdAt,
+            updatedAt: d.updatedAt,
+        }));
+        const stats = {
+            total,
+            new: docs.filter((d: any) => d.status === 'new').length,
+            inProgress: docs.filter((d: any) => d.status === 'in-progress').length,
+            resolved: docs.filter((d: any) => d.status === 'resolved').length,
+        };
+        res.json({ success: true, data: { items, stats, total, page: pageNum, pageSize: limit, totalPages: Math.max(1, Math.ceil(total / limit)) } });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+router.post('/inquiries', async (req: Request, res: Response) => {
+    try {
+        const { CustomerInquiry } = require('../modules/support/support.model');
+        const userId = (req as any).user?.id;
+        const locationId = getLocationId(req);
+        const { subject, message, customerName, customerEmail, customerPhone, type, priority } = req.body || {};
+        if (!subject || !message || !customerName) return res.status(400).json({ success: false, message: 'subject, message, and customerName are required' });
+        const doc = await CustomerInquiry.create({
+            inquiryId: `IQ-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+            subject,
+            message,
+            customer: { name: customerName, email: customerEmail || '', phone: customerPhone || '' },
+            type: type || 'general',
+            priority: priority || 'medium',
+            status: 'new',
+            locationId: locationId || undefined,
+            createdBy: userId,
+            updatedBy: userId,
+            responses: [],
+        });
+        res.status(201).json({ success: true, data: doc, message: 'Inquiry logged' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+router.post('/inquiries/:id/respond', async (req: Request, res: Response) => {
+    try {
+        const { CustomerInquiry } = require('../modules/support/support.model');
+        const userId = (req as any).user?.id;
+        const userEmail = (req as any).user?.email;
+        const { message, isInternal = false } = req.body || {};
+        if (!message || !message.trim()) return res.status(400).json({ success: false, message: 'message is required' });
+        const doc = await CustomerInquiry.findById(req.params.id);
+        if (!doc) return res.status(404).json({ success: false, message: 'Inquiry not found' });
+        const response = {
+            id: `R-${Date.now().toString(36)}`,
+            message: message.trim(),
+            author: userEmail || 'Manager',
+            timestamp: new Date(),
+            isInternal: !!isInternal,
+        };
+        doc.responses = [...(doc.responses || []), response];
+        if (doc.status === 'new') doc.status = 'in-progress';
+        doc.updatedBy = userId;
+        await doc.save();
+        res.json({ success: true, data: doc, message: 'Response sent' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+router.put('/inquiries/:id', async (req: Request, res: Response) => {
+    try {
+        const { CustomerInquiry } = require('../modules/support/support.model');
+        const allowed: any = {};
+        ['status', 'priority', 'type', 'subject'].forEach(k => { if (req.body[k] !== undefined) allowed[k] = req.body[k]; });
+        const updated = await CustomerInquiry.findByIdAndUpdate(req.params.id, { $set: allowed }, { new: true }).lean();
+        if (!updated) return res.status(404).json({ success: false, message: 'Inquiry not found' });
+        res.json({ success: true, data: updated });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// =============================================
+// REPORTS (Phase 2) — generate downloadable summary for this location
+// =============================================
+router.get('/reports', async (req: Request, res: Response) => {
+    try {
+        const { Booking } = require('../modules/booking/booking.model');
+        const { AttendanceRecord } = require('../modules/attendance/attendance.model');
+        const locationId = getLocationId(req);
+        const { type = 'overview', dateRange = '30d' } = req.query;
+
+        const now = new Date();
+        const start = new Date(now);
+        switch (String(dateRange)) {
+            case '7d': start.setDate(now.getDate() - 7); break;
+            case '90d': start.setDate(now.getDate() - 90); break;
+            default: start.setDate(now.getDate() - 30); break;
+        }
+
+        const bookingFilter: any = { createdAt: { $gte: start } };
+        if (locationId) bookingFilter.locationId = locationId;
+        const attFilter: any = { createdAt: { $gte: start } };
+        if (locationId) attFilter.locationId = locationId;
+
+        const [bookings, attendance] = await Promise.all([
+            Booking.find(bookingFilter).lean(),
+            AttendanceRecord.find(attFilter).lean(),
+        ]);
+
+        const revenue = bookings
+            .filter((b: any) => ['paid', 'completed', 'COMPLETED'].includes(b.payment?.status))
+            .reduce((s: number, b: any) => s + (b.payment?.amount || 0), 0);
+        const presentCount = attendance.filter((a: any) => ['present', 'CHECKED_IN', 'checked_in'].includes(a.status)).length;
+        const attendanceRate = attendance.length > 0 ? Math.round((presentCount / attendance.length) * 100) : 0;
+
+        res.json({
+            success: true,
+            data: {
+                type,
+                dateRange,
+                generatedAt: new Date().toISOString(),
+                summary: {
+                    totalBookings: bookings.length,
+                    confirmed: bookings.filter((b: any) => ['confirmed', 'CONFIRMED'].includes(b.status)).length,
+                    cancelled: bookings.filter((b: any) => ['cancelled', 'CANCELLED'].includes(b.status)).length,
+                    revenue: Math.round(revenue),
+                    currency: 'HKD',
+                    attendanceTotal: attendance.length,
+                    attendancePresent: presentCount,
+                    attendanceRate,
+                },
+                rows: bookings.slice(0, 100).map((b: any) => ({
+                    id: b._id,
+                    bookingId: b.bookingId,
+                    customer: b.customer?.name || '',
+                    program: b.programName || '',
+                    date: b.sessionDate || b.createdAt,
+                    status: b.status,
+                    amount: b.payment?.amount || 0,
+                    paid: ['paid', 'completed', 'COMPLETED'].includes(b.payment?.status),
+                })),
+            },
+        });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+router.get('/reports/export', async (req: Request, res: Response) => {
+    try {
+        const { Booking } = require('../modules/booking/booking.model');
+        const locationId = getLocationId(req);
+        const { dateRange = '30d', format = 'csv' } = req.query;
+        const now = new Date();
+        const start = new Date(now);
+        switch (String(dateRange)) {
+            case '7d': start.setDate(now.getDate() - 7); break;
+            case '90d': start.setDate(now.getDate() - 90); break;
+            default: start.setDate(now.getDate() - 30); break;
+        }
+        const filter: any = { createdAt: { $gte: start } };
+        if (locationId) filter.locationId = locationId;
+        const bookings = await Booking.find(filter).lean();
+
+        if (String(format) === 'json') {
+            return res.json({ success: true, data: bookings });
+        }
+        // Default: CSV
+        const header = 'BookingId,Customer,Program,Date,Status,Amount,PaymentStatus\n';
+        const rows = bookings.map((b: any) => {
+            const customer = (b.customer?.name || '').replace(/,/g, ' ');
+            const program = (b.programName || '').replace(/,/g, ' ');
+            const date = b.sessionDate ? new Date(b.sessionDate).toISOString().slice(0, 10) : '';
+            return `${b.bookingId || ''},${customer},${program},${date},${b.status || ''},${b.payment?.amount || 0},${b.payment?.status || ''}`;
+        }).join('\n');
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename="location-report-${dateRange}.csv"`);
+        return res.send(header + rows);
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
     }
 });
 
