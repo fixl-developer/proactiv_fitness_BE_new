@@ -27,22 +27,26 @@ export class SmartNutritionService {
                 userPrompt: prompt.user,
                 module: 'smart-nutrition',
                 temperature: 0.7,
-                maxTokens: 3000,
+                maxTokens: 6000, // 7-day meal plans need more tokens to avoid mid-JSON truncation
             });
+
+            // Defensive destructure — if Gemini returned truncated JSON, AIService's
+            // jsonCompletion fell back to FALLBACK_RESPONSES which may lack dailyTotals.
+            const totals = aiResult.dailyTotals || { avgCalories: 1800, avgProtein: 80, avgCarbs: 200, avgFats: 60 };
 
             const plan = {
                 ...planData,
                 type: 'meal-plan',
-                meals: aiResult.meals,
+                meals: aiResult.meals || [],
                 macros: {
-                    protein: aiResult.dailyTotals.avgProtein,
-                    carbs: aiResult.dailyTotals.avgCarbs,
-                    fats: aiResult.dailyTotals.avgFats,
+                    protein: totals.avgProtein,
+                    carbs: totals.avgCarbs,
+                    fats: totals.avgFats,
                 },
-                dailyTotals: aiResult.dailyTotals,
-                notes: aiResult.notes,
-                hydrationTip: aiResult.hydrationTip,
-                aiPowered: true,
+                dailyTotals: totals,
+                notes: aiResult.notes || '',
+                hydrationTip: aiResult.hydrationTip || '',
+                aiPowered: !!aiResult.dailyTotals,
                 createdAt: new Date(),
             };
 
