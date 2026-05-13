@@ -53,12 +53,13 @@ export const authenticate = async (req: Request, _res: Response, next: NextFunct
             throw new AppError('User account is not active', HTTP_STATUS.FORBIDDEN);
         }
 
-        // Attach user to request
+        // Attach user to request — fall back to defaultTenant so AI module saves
+        // (which require tenantId) don't fail for seeded/legacy users with no tenant.
         req.user = {
             id: user._id.toString(),
             email: user.email,
             role: user.role,
-            tenantId: user.tenantId,
+            tenantId: user.tenantId || envConfig.get().defaultTenant,
             organizationId: user.organizationId?.toString(),
             locationId: user.locationId?.toString(),
         };
@@ -129,7 +130,7 @@ export const optionalAuth = async (req: Request, _res: Response, next: NextFunct
                     id: user._id.toString(),
                     email: user.email,
                     role: user.role,
-                    tenantId: user.tenantId,
+                    tenantId: user.tenantId || envConfig.get().defaultTenant,
                     organizationId: user.organizationId?.toString(),
                     locationId: user.locationId?.toString(),
                 };
