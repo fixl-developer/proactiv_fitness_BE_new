@@ -176,10 +176,14 @@ interface ResolvedProvider {
 
 // ─── AI Service Singleton ──────────────────────────────────────
 
+interface ProviderRuntime {
+    info: ResolvedProvider;
+    client: OpenAI;
+}
+
 class AIService {
     private static instance: AIService;
-    private client: OpenAI | null = null;
-    private provider: ResolvedProvider | null = null;
+    private providers: ProviderRuntime[] = [];
     private config = EnvConfig.get();
     private requestCount = 0;
     private requestWindowStart = Date.now();
@@ -190,33 +194,37 @@ class AIService {
             return;
         }
 
-        this.provider = this.resolveProvider();
+        this.providers = this.resolveProviders();
 
-        if (!this.provider) {
+        if (this.providers.length === 0) {
             logger.warn('⚠️ AI Service running in fallback mode (no provider key found — set GEMINI_API_KEY, GROQ_API_KEY, or OPENAI_API_KEY)');
             return;
         }
 
-        this.client = new OpenAI({
-            apiKey: this.provider.apiKey,
-            baseURL: this.provider.baseURL,
-        });
-
-        logger.info(`🤖 AI Service initialized with provider="${this.provider.name}" model="${this.provider.model}"`);
+        const list = this.providers.map(p => `${p.info.name}(${p.info.model})`).join(' → ');
+        logger.info(`🤖 AI Service initialized with provider chain: ${list}`);
     }
 
-    private resolveProvider(): ResolvedProvider | null {
+    // Build the FULL chain of providers in failover priority order so
+    // request-time fallback can hop from Gemini → Groq → OpenAI when the
+    // primary hits 429 / 5xx. Order honours AI_PROVIDER: if it pins a single
+    // provider that one is first; the others are tried after as backup.
+    private resolveProviders(): ProviderRuntime[] {
         const requested = this.config.aiProvider;
-        const candidates: ProviderName[] =
+        const all: ProviderName[] = ['gemini', 'groq', 'openai'];
+        const order: ProviderName[] =
             requested === 'auto' || !requested
-                ? ['gemini', 'groq', 'openai']
-                : [requested];
+                ? all
+                : [requested, ...all.filter(n => n !== requested)];
 
-        for (const name of candidates) {
-            const built = this.buildProvider(name);
-            if (built) return built;
+        const runtimes: ProviderRuntime[] = [];
+        for (const name of order) {
+            const info = this.buildProvider(name);
+            if (!info) continue;
+            const client = new OpenAI({ apiKey: info.apiKey, baseURL: info.baseURL });
+            runtimes.push({ info, client });
         }
-        return null;
+        return runtimes;
     }
 
     private buildProvider(name: ProviderName): ResolvedProvider | null {
@@ -253,29 +261,65 @@ class AIService {
         return AIService.instance;
     }
 
-    // ─── Retry on transient errors (429, 503) ──────────────────
+    // ─── Retry on transient errors (429, 503) for one provider ──
 
-    private async callWithRetry(
-        params: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming,
+    private async callOneProvider(
+        runtime: ProviderRuntime,
+        baseParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming,
         moduleId: string,
-        maxAttempts = 4
+        maxAttempts: number,
     ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
+        const params = { ...baseParams, model: runtime.info.model };
         let lastError: any;
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
-                return await this.client!.chat.completions.create(params);
+                return await runtime.client.chat.completions.create(params);
             } catch (err: any) {
                 lastError = err;
                 const status = err?.status;
-                const isTransient = status === 429 || status === 503;
+                // Also retry on bare network errors (no status, e.g. "Connection
+                // error" from OpenAI SDK during cold-start or transient DNS).
+                const isNetwork = !status && /connection|network|ECONN|ETIMEDOUT|fetch failed/i.test(err?.message || '');
+                const isTransient = status === 429 || status === 503 || status === 502 || status === 504 || isNetwork;
                 if (!isTransient || attempt === maxAttempts) throw err;
-                // Gemini free tier has a 60s RPM window — short waits don't recover from 429.
-                // Use 6s/12s/24s on 429 so a burst of dashboard calls smooths over the window
-                // instead of collapsing to canned fallbacks.
-                const base = status === 429 ? 6000 : 1000;
+                // 429: free tiers have a 60s RPM window — short waits don't recover.
+                // 6s/12s/24s lets a burst smooth over the window before giving up.
+                const base = status === 429 ? 6000 : 1500;
                 const delayMs = base * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 500);
-                logger.warn(`🤖 AI [${moduleId}] transient error ${status} (attempt ${attempt}/${maxAttempts}) — retrying in ${delayMs}ms`);
+                const tag = status || (isNetwork ? 'network' : 'unknown');
+                logger.warn(`🤖 AI [${moduleId}] provider=${runtime.info.name} transient ${tag} (attempt ${attempt}/${maxAttempts}) — retrying in ${delayMs}ms`);
                 await new Promise(r => setTimeout(r, delayMs));
+            }
+        }
+        throw lastError;
+    }
+
+    // Try each configured provider in priority order. If primary hits 429/5xx
+    // after retries, hop to the next provider (Gemini → Groq → OpenAI) instead
+    // of collapsing to the canned fallback. Returns both the completion and
+    // which provider actually answered so the caller can label it correctly.
+    private async callWithProviderFailover(
+        baseParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming,
+        moduleId: string,
+    ): Promise<{ completion: OpenAI.Chat.Completions.ChatCompletion; runtime: ProviderRuntime }> {
+        let lastError: any;
+        // Per-provider attempts: try primary harder (4), backups quicker (2)
+        // so we don't blow the request budget on a fully-down primary.
+        for (let i = 0; i < this.providers.length; i++) {
+            const runtime = this.providers[i];
+            const attempts = i === 0 ? 4 : 2;
+            try {
+                const completion = await this.callOneProvider(runtime, baseParams, moduleId, attempts);
+                if (i > 0) {
+                    logger.info(`🤖 AI [${moduleId}] succeeded via failover to provider="${runtime.info.name}"`);
+                }
+                return { completion, runtime };
+            } catch (err: any) {
+                lastError = err;
+                const status = err?.status;
+                if (i < this.providers.length - 1) {
+                    logger.warn(`🤖 AI [${moduleId}] provider="${runtime.info.name}" exhausted (status ${status}) — failing over to "${this.providers[i + 1].info.name}"`);
+                }
             }
         }
         throw lastError;
@@ -302,14 +346,13 @@ class AIService {
     // ─── Core: Chat Completion ─────────────────────────────────
 
     async chatCompletion(options: AIChatOptions): Promise<AIChatResponse> {
-        if (!this.client || !this.config.enableAi || !this.provider) {
+        if (this.providers.length === 0 || !this.config.enableAi) {
             return this.getFallbackResponse(options);
         }
 
         this.checkRateLimit();
 
         const startTime = Date.now();
-        const model = options.model || this.provider.model;
         const temperature = options.temperature ?? this.config.openaiTemperature;
         const maxTokens = options.maxTokens || this.config.openaiMaxTokens;
 
@@ -326,8 +369,10 @@ class AIService {
         messages.push({ role: 'user', content: options.userPrompt });
 
         try {
+            // Note: model is set per-provider by callOneProvider; the model
+            // here is a placeholder that gets overwritten in the retry loop.
             const params: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
-                model,
+                model: options.model || this.providers[0].info.model,
                 messages,
                 temperature,
                 max_tokens: maxTokens,
@@ -337,24 +382,25 @@ class AIService {
                 params.response_format = { type: 'json_object' };
             }
 
-            // Retry on 429 (rate limit) and 503 (service unavailable) with
-            // exponential backoff. Gemini 2.5 free tier is 10 RPM, so a brief
-            // wait recovers without falling back to canned data.
-            const response = await this.callWithRetry(params, options.module);
+            // Try primary provider with 4 retries, then fail over to next
+            // configured provider (Gemini → Groq → OpenAI). Each provider gets
+            // its own retry budget so 429 on Gemini's 10 RPM free tier no longer
+            // collapses to canned data when Groq/OpenAI keys are present.
+            const { completion, runtime } = await this.callWithProviderFailover(params, options.module);
             const latencyMs = Date.now() - startTime;
 
             const result: AIChatResponse = {
-                content: response.choices[0]?.message?.content || '',
+                content: completion.choices[0]?.message?.content || '',
                 usage: {
-                    promptTokens: response.usage?.prompt_tokens || 0,
-                    completionTokens: response.usage?.completion_tokens || 0,
-                    totalTokens: response.usage?.total_tokens || 0,
+                    promptTokens: completion.usage?.prompt_tokens || 0,
+                    completionTokens: completion.usage?.completion_tokens || 0,
+                    totalTokens: completion.usage?.total_tokens || 0,
                 },
-                model: response.model,
+                model: completion.model,
                 latencyMs,
             };
 
-            logger.info(`🤖 AI [${options.module}] completed in ${latencyMs}ms | Tokens: ${result.usage.totalTokens} | Model: ${model}`);
+            logger.info(`🤖 AI [${options.module}] completed in ${latencyMs}ms | Tokens: ${result.usage.totalTokens} | Provider: ${runtime.info.name} | Model: ${completion.model}`);
 
             return result;
         } catch (error: any) {
@@ -366,7 +412,7 @@ class AIService {
             });
 
             if (error.status === 401) {
-                const providerName = this.provider?.name ?? 'unknown';
+                const providerName = this.providers[0]?.info.name ?? 'unknown';
                 logger.error(`🤖 AI [${options.module}] authentication failed for provider="${providerName}" — check API key in .env`);
                 return this.getFallbackResponse(options);
             }
@@ -473,7 +519,7 @@ class AIService {
     }
 
     isEnabled(): boolean {
-        return !!(this.client && this.config.enableAi);
+        return this.providers.length > 0 && this.config.enableAi;
     }
 
     estimateTokens(text: string): number {
