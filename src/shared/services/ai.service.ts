@@ -258,7 +258,7 @@ class AIService {
     private async callWithRetry(
         params: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming,
         moduleId: string,
-        maxAttempts = 3
+        maxAttempts = 4
     ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
         let lastError: any;
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -269,7 +269,11 @@ class AIService {
                 const status = err?.status;
                 const isTransient = status === 429 || status === 503;
                 if (!isTransient || attempt === maxAttempts) throw err;
-                const delayMs = 1000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 500);
+                // Gemini free tier has a 60s RPM window — short waits don't recover from 429.
+                // Use 6s/12s/24s on 429 so a burst of dashboard calls smooths over the window
+                // instead of collapsing to canned fallbacks.
+                const base = status === 429 ? 6000 : 1000;
+                const delayMs = base * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 500);
                 logger.warn(`🤖 AI [${moduleId}] transient error ${status} (attempt ${attempt}/${maxAttempts}) — retrying in ${delayMs}ms`);
                 await new Promise(r => setTimeout(r, delayMs));
             }

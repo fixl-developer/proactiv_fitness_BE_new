@@ -129,6 +129,11 @@ export class CapacityOptimizerService {
                 capacity,
                 status,
                 rebalanceRecommendations: this.generateFallbackRecommendations(capacity, status),
+                aiAnalysis: {
+                    peakHoursAnalysis: 'AI capacity analysis unavailable — using default recommendations.',
+                    overallAssessment: 'Manual review recommended.',
+                    aiPowered: false,
+                },
                 nextCheckDue: new Date(Date.now() + 24 * 60 * 60 * 1000),
                 businessUnitId: 'bu-001',
                 locationId: 'loc-001',
