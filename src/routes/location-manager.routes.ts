@@ -1,6 +1,19 @@
 import { Router, Request, Response } from 'express';
+import { authenticate, authorize } from '../modules/iam/auth.middleware';
+import { UserRole } from '@shared/enums';
 
 const router = Router();
+
+// All location-manager routes require authentication. ADMIN can supervise any
+// location; LOCATION_MANAGER, FRANCHISE_OWNER and REGIONAL_ADMIN can also reach
+// their assigned location(s).
+router.use(authenticate);
+router.use(authorize(
+    UserRole.ADMIN,
+    UserRole.REGIONAL_ADMIN,
+    UserRole.FRANCHISE_OWNER,
+    UserRole.LOCATION_MANAGER,
+));
 
 // Helper to get locationId from user context or query
 function getLocationId(req: Request): string | null {
@@ -297,6 +310,18 @@ router.post('/staff', async (req: Request, res: Response) => {
             }
         }
 
+        // Role hierarchy enforcement — mirror ROLE_HIERARCHY from rbac.middleware.ts
+        const { ROLE_HIERARCHY } = require('../modules/iam/rbac.middleware');
+        const requesterRole = (req as any).user?.role || 'LOCATION_MANAGER';
+        const allowedRoles: string[] = ROLE_HIERARCHY[requesterRole] || [];
+        const targetRole = (role || 'COACH').toUpperCase();
+        if (!allowedRoles.includes(targetRole)) {
+            return res.status(403).json({
+                success: false,
+                message: `Role '${requesterRole}' cannot create users with role '${targetRole}'. Allowed: ${allowedRoles.join(', ')}`,
+            });
+        }
+
         // Check duplicate email in User collection
         const existingUser = await User.findOne({ email: email.toLowerCase() });
         if (existingUser) {
@@ -310,7 +335,7 @@ router.post('/staff', async (req: Request, res: Response) => {
             fullName: `${firstName} ${lastName}`,
             email: email.toLowerCase(),
             phone: phone || '',
-            role: (role || 'COACH').toUpperCase(),
+            role: targetRole,
             password: password || 'Staff@123456',
             status: (status || 'ACTIVE').toUpperCase(),
             isEmailVerified: true,

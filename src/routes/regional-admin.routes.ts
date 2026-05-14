@@ -550,9 +550,16 @@ router.post('/staff', async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, message: 'firstName, lastName, email, and role are required' });
         }
 
-        const allowedRoles = ['COACH', 'LOCATION_MANAGER', 'SUPPORT_STAFF', 'FRANCHISE_OWNER'];
-        if (!allowedRoles.includes(role.toUpperCase())) {
-            return res.status(400).json({ success: false, message: `Role must be one of: ${allowedRoles.join(', ')}` });
+        // Mirror ROLE_HIERARCHY['REGIONAL_ADMIN'] from rbac.middleware.ts
+        const { ROLE_HIERARCHY } = require('../modules/iam/rbac.middleware');
+        const requesterRole = (req as any).user?.role || 'REGIONAL_ADMIN';
+        const allowedRoles: string[] = ROLE_HIERARCHY[requesterRole] || [];
+        const targetRole = role.toUpperCase();
+        if (!allowedRoles.includes(targetRole)) {
+            return res.status(403).json({
+                success: false,
+                message: `Role '${requesterRole}' cannot create users with role '${targetRole}'. Allowed: ${allowedRoles.join(', ')}`,
+            });
         }
 
         const existing = await User.findOne({ email: email.toLowerCase() });
@@ -566,11 +573,12 @@ router.post('/staff', async (req: Request, res: Response) => {
             fullName: `${firstName} ${lastName}`,
             email: email.toLowerCase(),
             phone: phone || '',
-            role: role.toUpperCase(),
+            role: targetRole,
             locationId: locationId || undefined,
             password: password || 'Staff@123456',
             status: 'ACTIVE',
-            isEmailVerified: true
+            isEmailVerified: true,
+            createdByAdmin: true,
         });
 
         res.status(201).json({
