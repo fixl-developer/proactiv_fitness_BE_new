@@ -8,8 +8,15 @@ import {
     FranchiseSettings,
     FranchiseExpense,
 } from '../modules/franchise-owner/franchise-owner.models';
+import { authenticate, authorize } from '../modules/iam/auth.middleware';
+import { UserRole } from '@shared/enums';
 
 const router = Router();
+
+// All franchise-owner routes require authentication. ADMIN can act on behalf
+// of any franchise; FRANCHISE_OWNER can only act within their own scope.
+router.use(authenticate);
+router.use(authorize(UserRole.ADMIN, UserRole.FRANCHISE_OWNER));
 
 // =============================================
 // EXPORT HELPERS (CSV / XLSX / PDF)
@@ -762,7 +769,8 @@ router.delete('/locations/:id', async (req: Request, res: Response) => {
 // =============================================
 // STAFF (User-model backed — franchise owners manage COACH / LOCATION_MANAGER users)
 // =============================================
-const STAFF_ROLES = ['COACH', 'LOCATION_MANAGER'];
+// Mirrored from ROLE_HIERARCHY['FRANCHISE_OWNER'] in rbac.middleware.ts
+const STAFF_ROLES = ['LOCATION_MANAGER', 'COACH', 'SUPPORT_STAFF'];
 
 // Normalize phone to E.164: strip whitespace, dashes, parens, dots; preserve leading +
 // User schema validator is /^\+?[1-9]\d{1,14}$/

@@ -5,33 +5,41 @@ import { UserRole } from '@shared/enums';
 import userService from './user.service';
 
 // Role hierarchy map - each role can create roles listed in its array.
-// PARENT / USER / STUDENT are self-register roles (created via /auth/register),
-// so they are intentionally excluded from admin-creatable roles here.
+// 9 effective roles in this product: ADMIN, REGIONAL_ADMIN, FRANCHISE_OWNER,
+// LOCATION_MANAGER, COACH, SUPPORT_STAFF, PARTNER_ADMIN, PARENT, USER.
+// MANAGER, SUPER_ADMIN, STAFF and STUDENT have been retired from the create
+// hierarchy (any legacy users with those roles can still be deleted below).
+// STUDENT is conceptually folded into USER; treat them as the same auth role.
+// PARENT / USER are self-register roles (created via /auth/register), so they
+// are intentionally excluded from admin-creatable roles here.
 const ROLE_HIERARCHY: Record<string, string[]> = {
     'ADMIN': [
         'ADMIN', 'REGIONAL_ADMIN', 'FRANCHISE_OWNER', 'LOCATION_MANAGER',
-        'MANAGER', 'COACH', 'STAFF', 'SUPPORT_STAFF', 'PARTNER_ADMIN'
+        'COACH', 'SUPPORT_STAFF', 'PARTNER_ADMIN'
     ],
-    'REGIONAL_ADMIN': ['FRANCHISE_OWNER', 'LOCATION_MANAGER', 'COACH', 'STAFF', 'SUPPORT_STAFF'],
-    'FRANCHISE_OWNER': ['LOCATION_MANAGER', 'COACH', 'STAFF'],
-    'LOCATION_MANAGER': ['COACH', 'STAFF'],
+    'REGIONAL_ADMIN': ['FRANCHISE_OWNER', 'LOCATION_MANAGER', 'COACH', 'SUPPORT_STAFF'],
+    'FRANCHISE_OWNER': ['LOCATION_MANAGER', 'COACH', 'SUPPORT_STAFF'],
+    'LOCATION_MANAGER': ['COACH', 'SUPPORT_STAFF'],
     'COACH': [],
+    'SUPPORT_STAFF': [],
+    'PARTNER_ADMIN': [],
     'PARENT': [],
     'USER': [],
-    'PARTNER_ADMIN': [],
-    'SUPPORT_STAFF': [],
 };
 
 // Who can delete whom — admin can also clean up self-registered PARENT/USER accounts.
+// Legacy MANAGER / SUPER_ADMIN / STAFF / STUDENT roles included so admins can
+// still remove old records that exist in the DB but are no longer creatable.
 const DELETE_HIERARCHY: Record<string, string[]> = {
     'ADMIN': [
         'ADMIN', 'REGIONAL_ADMIN', 'FRANCHISE_OWNER', 'LOCATION_MANAGER',
-        'MANAGER', 'COACH', 'STAFF', 'SUPPORT_STAFF', 'PARTNER_ADMIN',
-        'PARENT', 'STUDENT', 'USER'
+        'COACH', 'SUPPORT_STAFF', 'PARTNER_ADMIN',
+        'PARENT', 'USER',
+        'MANAGER', 'SUPER_ADMIN', 'STAFF', 'STUDENT'
     ],
-    'REGIONAL_ADMIN': ['FRANCHISE_OWNER', 'LOCATION_MANAGER', 'COACH', 'STAFF', 'PARENT', 'STUDENT', 'USER'],
-    'FRANCHISE_OWNER': ['LOCATION_MANAGER', 'COACH', 'STAFF', 'PARENT', 'STUDENT', 'USER'],
-    'LOCATION_MANAGER': ['COACH', 'STAFF', 'PARENT', 'STUDENT', 'USER'],
+    'REGIONAL_ADMIN': ['FRANCHISE_OWNER', 'LOCATION_MANAGER', 'COACH', 'SUPPORT_STAFF', 'PARENT', 'USER', 'STAFF', 'STUDENT'],
+    'FRANCHISE_OWNER': ['LOCATION_MANAGER', 'COACH', 'SUPPORT_STAFF', 'PARENT', 'USER', 'STAFF', 'STUDENT'],
+    'LOCATION_MANAGER': ['COACH', 'SUPPORT_STAFF', 'PARENT', 'USER', 'STAFF', 'STUDENT'],
 };
 
 // Who can update status of whom
